@@ -52,7 +52,10 @@ export default function PlayerPage() {
   }, [me, votes, currentQ]);
 
   const effectiveVote: Choice | null =
-    myVote?.choice ?? (optimisticVote?.qid === currentQ?.id ? optimisticVote.choice : null);
+    myVote?.choice ??
+    (optimisticVote && currentQ && optimisticVote.qid === currentQ.id
+      ? optimisticVote.choice
+      : null);
 
   async function vote(choice: Choice) {
     if (!room || !me || !currentQ || submitting) return;
