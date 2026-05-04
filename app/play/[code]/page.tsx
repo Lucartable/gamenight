@@ -17,7 +17,7 @@ export default function PlayerPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, loading, error } = useRoom(code);
+  const { room, players, votes, loading, error, refresh } = useRoom(code);
   const [submitting, setSubmitting] = useState<Choice | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
   // Vote optimiste : si la realtime ne propage pas tout de suite,
@@ -74,6 +74,7 @@ export default function PlayerPage() {
       );
       if (error) throw error;
       setOptimisticVote({ qid: currentQ.id, choice });
+      await refresh();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur de vote.");
     } finally {

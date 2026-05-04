@@ -88,8 +88,14 @@ create policy "asked_questions_all" on public.asked_questions
 -- =========================================================================
 -- REALTIME
 -- Active la diffusion temps réel sur les tables qui changent pendant la
--- partie.
+-- partie. REPLICA IDENTITY FULL fait que les UPDATE remontent toute la
+-- ligne (sinon on n'a que la PK, ce qui casse les filtres `room_id=eq...`).
 -- =========================================================================
+alter table public.rooms           replica identity full;
+alter table public.players         replica identity full;
+alter table public.votes           replica identity full;
+alter table public.asked_questions replica identity full;
+
 do $$
 begin
   if not exists (

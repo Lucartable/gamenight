@@ -26,7 +26,7 @@ export default function HostPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, askedQuestionIds, loading, error } = useRoom(code);
+  const { room, players, votes, askedQuestionIds, loading, error, refresh } = useRoom(code);
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -114,6 +114,7 @@ export default function HostPage() {
         })
         .eq("id", room.id);
       if (rErr) throw rErr;
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
     } finally {
@@ -139,6 +140,7 @@ export default function HostPage() {
         .update({ status: "reveal" })
         .eq("id", room.id);
       if (error) throw error;
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
     } finally {
@@ -159,6 +161,7 @@ export default function HostPage() {
         })
         .eq("id", room.id);
       if (error) throw error;
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
     } finally {
@@ -181,6 +184,7 @@ export default function HostPage() {
         })
         .eq("id", room.id);
       if (error) throw error;
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
     } finally {
@@ -222,6 +226,7 @@ export default function HostPage() {
         .eq("id", room.id);
       if (e3) throw e3;
       setShowTransfer(false);
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
     } finally {
@@ -244,6 +249,7 @@ export default function HostPage() {
         { onConflict: "room_id,player_id,question_id" }
       );
       if (error) throw error;
+      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur de vote.");
     }
