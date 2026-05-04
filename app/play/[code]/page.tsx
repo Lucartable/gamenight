@@ -60,11 +60,14 @@ export default function PlayerPage() {
     return votes.find((v) => v.player_id === me.id && v.question_id === currentQ.id);
   }, [me, votes, currentQ]);
 
+  // L'optimistic prime sur le DB : il représente l'intention courante du
+  // joueur. Sans ça, changer A→B ne se voit pas tant que la BDD n'a pas
+  // encore renvoyé la nouvelle ligne (≈200ms-1.5s), donc l'écran reste
+  // figé sur l'ancien choix et on a l'impression que le clic ne fait rien.
   const effectiveVote: Choice | null =
-    myVote?.choice ??
-    (optimisticVote && currentQ && optimisticVote.qid === currentQ.id
+    optimisticVote && currentQ && optimisticVote.qid === currentQ.id
       ? optimisticVote.choice
-      : null);
+      : myVote?.choice ?? null;
 
   async function vote(choice: Choice) {
     console.log("[GameNight] vote()", choice, {

@@ -287,12 +287,12 @@ export default function HostPage() {
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" action={{ label: "Retour", href: "/" }} />;
 
-  const dbVote = me ? currentVotes.find((v) => v.player_id === me.id)?.choice ?? null : null;
+  // L'optimistic prime sur le DB (mêmes raisons que côté joueur — voir play page).
+  const dbVote: Choice | null = me ? currentVotes.find((v) => v.player_id === me.id)?.choice ?? null : null;
   const myVote: Choice | null =
-    dbVote ??
-    (optimisticHostVote && currentQ && optimisticHostVote.qid === currentQ.id
+    optimisticHostVote && currentQ && optimisticHostVote.qid === currentQ.id
       ? optimisticHostVote.choice
-      : null);
+      : dbVote;
   const otherPlayers = players.filter((p) => p.client_id !== room.host_client_id);
 
   return (
