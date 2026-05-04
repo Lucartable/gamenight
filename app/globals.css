@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: radial-gradient(ellipse at top, #1a0b2e 0%, #0b0613 55%, #06030c 100%);
+  color: #f3e8ff;
+  min-height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior-y: contain;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center font-bold tracking-wide
+           rounded-2xl transition active:scale-95 select-none disabled:opacity-50
+           disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn px-6 py-4 text-lg bg-neon-pink text-white shadow-glow-pink
+           hover:brightness-110;
+  }
+  .btn-secondary {
+    @apply btn px-6 py-4 text-lg bg-bg-card text-white border border-white/10
+           hover:bg-bg-soft;
+  }
+  .btn-ghost {
+    @apply btn px-4 py-2 text-sm text-white/80 hover:text-white;
+  }
+  .input {
+    @apply w-full rounded-2xl bg-bg-card border border-white/10 px-5 py-4
+           text-lg text-white placeholder-white/30 outline-none
+           focus:border-neon-pink focus:ring-2 focus:ring-neon-pink/30;
+  }
+  .card {
+    @apply rounded-3xl bg-bg-card/80 backdrop-blur border border-white/10
+           shadow-xl;
+  }
+  .chip {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm
+           bg-white/5 border border-white/10 text-white/80;
+  }
+}
+
+/* Évite que le clavier mobile ne fasse zoomer iOS sur les inputs. */
+@media (max-width: 640px) {
+  input, button, textarea, select { font-size: 16px; }
+}
