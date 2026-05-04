@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
-import { getQuestion } from "@/lib/questions";
+import { Category, getCategory, getQuestion } from "@/lib/questions";
 import {
   DEBATE_DURATION_SEC,
   VOTE_DURATION_SEC,
@@ -19,6 +19,10 @@ export default function PlayerPage() {
   const router = useRouter();
   const { room, players, votes, loading, error } = useRoom(code);
   const [submitting, setSubmitting] = useState<Choice | null>(null);
+  const [voteError, setVoteError] = useState<string | null>(null);
+  // Vote optimiste : si la realtime ne propage pas tout de suite,
+  // on affiche quand même le retour visuel.
+  const [optimisticVote, setOptimisticVote] = useState<{ qid: number; choice: Choice } | null>(null);
 
   const me = useMemo<Player | undefined>(() => {
     if (!players.length) return undefined;
@@ -26,36 +30,71 @@ export default function PlayerPage() {
     return players.find((p) => p.client_id === id);
   }, [players]);
 
+  // Auto-redirect : si l'hôte t'a transmis le rôle, basculer en /host.
+  useEffect(() => {
+    if (!room) return;
+    const id = getOrCreateClientId();
+    if (id === room.host_client_id) router.replace(`/host/${code}`);
+  }, [room?.host_client_id, code, room, router]);
+
   const currentQ = getQuestion(room?.current_question_id);
+
+  // Reset vote optimiste quand on change de question.
+  useEffect(() => {
+    if (!currentQ || (optimisticVote && optimisticVote.qid !== currentQ.id)) {
+      setOptimisticVote(null);
+    }
+  }, [currentQ?.id, optimisticVote]);
+
   const myVote = useMemo<Vote | undefined>(() => {
     if (!me || !currentQ) return undefined;
     return votes.find((v) => v.player_id === me.id && v.question_id === currentQ.id);
   }, [me, votes, currentQ]);
 
+  const effectiveVote: Choice | null =
+    myVote?.choice ?? (optimisticVote?.qid === currentQ?.id ? optimisticVote.choice : null);
+
   async function vote(choice: Choice) {
     if (!room || !me || !currentQ || submitting) return;
     setSubmitting(choice);
-    const supabase = getSupabase();
-    await supabase.from("votes").upsert(
-      {
-        room_id: room.id,
-        player_id: me.id,
-        question_id: currentQ.id,
-        choice,
-      },
-      { onConflict: "room_id,player_id,question_id" }
-    );
-    setSubmitting(null);
+    setVoteError(null);
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase.from("votes").upsert(
+        {
+          room_id: room.id,
+          player_id: me.id,
+          question_id: currentQ.id,
+          choice,
+        },
+        { onConflict: "room_id,player_id,question_id" }
+      );
+      if (error) throw error;
+      setOptimisticVote({ qid: currentQ.id, choice });
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : "Erreur de vote.");
+    } finally {
+      setSubmitting(null);
+    }
   }
 
   if (loading) return <CenteredMessage title="Chargement..." />;
-  if (error || !room) return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
-  if (!me) return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
-  if (room.status === "ended") return <CenteredMessage title="Partie terminée" subtitle="Merci d'avoir joué !" action={{ label: "Retour", href: "/" }} />;
+  if (error || !room)
+    return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
+  if (!me)
+    return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
+  if (room.status === "ended")
+    return <CenteredMessage title="Partie terminée" subtitle="Merci d'avoir joué !" action={{ label: "Retour", href: "/" }} />;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
       <PlayerHeader code={room.code} me={me} totalPlayers={players.length} />
+
+      {voteError && (
+        <div className="card mb-3 border-neon-pink/60 bg-neon-pink/10 p-3 text-center text-neon-pink">
+          {voteError}
+        </div>
+      )}
 
       {room.status === "lobby" && <Lobby players={players} />}
 
@@ -64,7 +103,7 @@ export default function PlayerPage() {
           question={currentQ}
           startedAt={room.question_started_at}
           onVote={vote}
-          myVote={myVote?.choice ?? null}
+          myVote={effectiveVote}
           submitting={submitting}
         />
       )}
@@ -94,7 +133,7 @@ function PlayerHeader({
   totalPlayers: number;
 }) {
   return (
-    <header className="card mb-5 flex items-center justify-between p-4">
+    <header className="card mb-4 flex items-center justify-between p-4">
       <div>
         <div className="text-xs uppercase tracking-wider text-white/50">Salle</div>
         <div className="text-xl font-black tracking-widest">{code}</div>
@@ -135,19 +174,23 @@ function VoteScreen({
   myVote,
   submitting,
 }: {
-  question: { id: number; optionA: string; optionB: string };
+  question: { id: number; optionA: string; optionB: string; category: Category };
   startedAt: string | null;
   onVote: (c: Choice) => void;
   myVote: Choice | null;
   submitting: Choice | null;
 }) {
   const left = useCountdown(startedAt, VOTE_DURATION_SEC);
+  const cat = getCategory(question.category);
 
   return (
     <section className="flex flex-1 flex-col">
-      <div className="card mb-3 p-3 text-center">
-        <span className="text-3xl font-black tabular-nums">{left}</span>
-        <span className="ml-2 text-white/60">sec</span>
+      <div className="card mb-3 flex items-center justify-between p-3 px-4">
+        <span className="chip">{cat?.emoji} {cat?.label}</span>
+        <div>
+          <span className="text-3xl font-black tabular-nums">{left}</span>
+          <span className="ml-2 text-white/60">sec</span>
+        </div>
       </div>
 
       <div className="grid flex-1 gap-3">
@@ -193,14 +236,8 @@ function ChoiceButton({
   loading: boolean;
   onClick: () => void;
 }) {
-  const base =
-    accent === "pink"
-      ? "border-neon-pink/40 bg-neon-pink/10"
-      : "border-neon-cyan/40 bg-neon-cyan/10";
-  const sel =
-    accent === "pink"
-      ? "ring-4 ring-neon-pink shadow-glow-pink"
-      : "ring-4 ring-neon-cyan shadow-glow-cyan";
+  const base = accent === "pink" ? "border-neon-pink/40 bg-neon-pink/10" : "border-neon-cyan/40 bg-neon-cyan/10";
+  const sel  = accent === "pink" ? "ring-4 ring-neon-pink shadow-glow-pink" : "ring-4 ring-neon-cyan shadow-glow-cyan";
   const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
 
   return (
@@ -225,13 +262,14 @@ function Reveal({
   isDebate,
   debateStartedAt,
 }: {
-  question: { id: number; optionA: string; optionB: string };
+  question: { id: number; optionA: string; optionB: string; category: Category };
   players: Player[];
   votes: Vote[];
   isDebate: boolean;
   debateStartedAt: string | null;
 }) {
   const debateLeft = useCountdown(isDebate ? debateStartedAt : null, DEBATE_DURATION_SEC);
+  const cat = getCategory(question.category);
   const namesFor = (c: Choice) =>
     votes
       .filter((v) => v.choice === c)
@@ -242,8 +280,9 @@ function Reveal({
 
   return (
     <section className="flex flex-1 flex-col">
-      <div className="card mb-3 p-4 text-center">
-        <div className="text-xs uppercase tracking-wider text-white/50">Résultats</div>
+      <div className="card mb-3 flex items-center justify-between p-3 px-4">
+        <span className="chip">{cat?.emoji} {cat?.label}</span>
+        <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
       </div>
 
       <div className="grid flex-1 gap-3">

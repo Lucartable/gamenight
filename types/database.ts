@@ -37,9 +37,3 @@ export interface AskedQuestion {
   question_id: number;
   asked_at: string;
 }
-
-export interface Question {
-  id: number;
-  optionA: string;
-  optionB: string;
-}

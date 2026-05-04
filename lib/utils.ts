@@ -37,3 +37,23 @@ export function secondsLeft(startIso: string | null, durationSec: number): numbe
   const elapsed = (Date.now() - new Date(startIso).getTime()) / 1000;
   return Math.max(0, Math.ceil(durationSec - elapsed));
 }
+
+// Persistance des catégories sélectionnées par l'hôte (par salle).
+const CATEGORIES_KEY_PREFIX = "gn_cats_";
+
+export function loadCategories(roomCode: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CATEGORIES_KEY_PREFIX + roomCode);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCategories(roomCode: string, categories: string[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CATEGORIES_KEY_PREFIX + roomCode, JSON.stringify(categories));
+}

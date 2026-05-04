@@ -110,4 +110,10 @@ begin
   ) then
     alter publication supabase_realtime add table public.votes;
   end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'asked_questions'
+  ) then
+    alter publication supabase_realtime add table public.asked_questions;
+  end if;
 end $$;
