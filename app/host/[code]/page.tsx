@@ -33,6 +33,7 @@ export default function HostPage() {
   const [showAllQuestions, setShowAllQuestions] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
+  const [optimisticHostVote, setOptimisticHostVote] = useState<{ qid: number; choice: Choice } | null>(null);
 
   // Charge les catégories sauvegardées pour cette salle.
   useEffect(() => {
@@ -70,6 +71,13 @@ export default function HostPage() {
       (q) => cats.includes(q.category) && !askedQuestionIds.includes(q.id)
     );
   }, [selectedCategories, askedQuestionIds]);
+
+  // Reset du vote optimiste quand on change de question.
+  useEffect(() => {
+    if (!currentQ || (optimisticHostVote && optimisticHostVote.qid !== currentQ.id)) {
+      setOptimisticHostVote(null);
+    }
+  }, [currentQ?.id, optimisticHostVote]);
 
   // Bascule auto vers la révélation quand le timer atteint 0.
   const voteLeft = useCountdown(
@@ -236,8 +244,18 @@ export default function HostPage() {
 
   // Vote de l'hôte (en tant que joueur).
   async function castVote(choice: Choice) {
-    if (!room || !me || !currentQ) return;
     setActionError(null);
+    if (!room) { setActionError("Salle non chargée."); return; }
+    if (!currentQ) { setActionError("Aucune question active."); return; }
+    if (!me) {
+      setActionError(
+        `Tu n'es pas dans la liste des joueurs (${players.length} chargé${players.length > 1 ? "s" : ""}). Recrée la salle.`
+      );
+      return;
+    }
+
+    setOptimisticHostVote({ qid: currentQ.id, choice });
+
     try {
       const { error } = await getSupabase().from("votes").upsert(
         {
@@ -251,7 +269,9 @@ export default function HostPage() {
       if (error) throw error;
       await refresh();
     } catch (err) {
+      console.error("[GameNight] host vote failed:", err);
       setActionError(err instanceof Error ? err.message : "Erreur de vote.");
+      setOptimisticHostVote(null);
     }
   }
 
@@ -261,7 +281,12 @@ export default function HostPage() {
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" action={{ label: "Retour", href: "/" }} />;
 
-  const myVote = me ? currentVotes.find((v) => v.player_id === me.id)?.choice : null;
+  const dbVote = me ? currentVotes.find((v) => v.player_id === me.id)?.choice ?? null : null;
+  const myVote: Choice | null =
+    dbVote ??
+    (optimisticHostVote && currentQ && optimisticHostVote.qid === currentQ.id
+      ? optimisticHostVote.choice
+      : null);
   const otherPlayers = players.filter((p) => p.client_id !== room.host_client_id);
 
   return (

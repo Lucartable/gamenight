@@ -58,12 +58,23 @@ export default function PlayerPage() {
       : null);
 
   async function vote(choice: Choice) {
-    if (!room || !me || !currentQ || submitting) return;
-    setSubmitting(choice);
     setVoteError(null);
+    if (!room) { setVoteError("Salle non chargée. Rafraîchis la page."); return; }
+    if (!currentQ) { setVoteError("Aucune question active."); return; }
+    if (!me) {
+      setVoteError(
+        `Tu n'es pas dans la liste des joueurs (${players.length} chargé${players.length > 1 ? "s" : ""}). Reviens à l'accueil pour rejoindre à nouveau.`
+      );
+      return;
+    }
+    if (submitting) return;
+
+    // On affiche le vote tout de suite, on rollback en cas d'échec.
+    setSubmitting(choice);
+    setOptimisticVote({ qid: currentQ.id, choice });
+
     try {
-      const supabase = getSupabase();
-      const { error } = await supabase.from("votes").upsert(
+      const { error } = await getSupabase().from("votes").upsert(
         {
           room_id: room.id,
           player_id: me.id,
@@ -73,10 +84,11 @@ export default function PlayerPage() {
         { onConflict: "room_id,player_id,question_id" }
       );
       if (error) throw error;
-      setOptimisticVote({ qid: currentQ.id, choice });
       await refresh();
     } catch (err) {
-      setVoteError(err instanceof Error ? err.message : "Erreur de vote.");
+      console.error("[GameNight] vote failed:", err);
+      setVoteError(err instanceof Error ? err.message : "Erreur d'enregistrement du vote.");
+      setOptimisticVote(null);
     } finally {
       setSubmitting(null);
     }
