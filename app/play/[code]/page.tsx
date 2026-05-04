@@ -39,12 +39,21 @@ export default function PlayerPage() {
 
   const currentQ = getQuestion(room?.current_question_id);
 
-  // Reset vote optimiste quand on change de question.
+  // Reset des états transitoires quand on change de question.
   useEffect(() => {
     if (!currentQ || (optimisticVote && optimisticVote.qid !== currentQ.id)) {
       setOptimisticVote(null);
     }
-  }, [currentQ?.id, optimisticVote]);
+    setSubmitting(null);
+  }, [currentQ?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filet de sécurité : si pour une raison quelconque `submitting` reste bloqué,
+  // on le libère après 5s pour que les boutons ne soient jamais figés.
+  useEffect(() => {
+    if (!submitting) return;
+    const t = setTimeout(() => setSubmitting(null), 5000);
+    return () => clearTimeout(t);
+  }, [submitting]);
 
   const myVote = useMemo<Vote | undefined>(() => {
     if (!me || !currentQ) return undefined;
@@ -58,6 +67,13 @@ export default function PlayerPage() {
       : null);
 
   async function vote(choice: Choice) {
+    console.log("[GameNight] vote()", choice, {
+      hasRoom: !!room,
+      hasCurrentQ: !!currentQ,
+      hasMe: !!me,
+      submitting,
+      playersCount: players.length,
+    });
     setVoteError(null);
     if (!room) { setVoteError("Salle non chargée. Rafraîchis la page."); return; }
     if (!currentQ) { setVoteError("Aucune question active."); return; }
@@ -67,9 +83,10 @@ export default function PlayerPage() {
       );
       return;
     }
-    if (submitting) return;
+    // Note : on n'early-return PAS sur `submitting`. L'upsert est idempotent
+    // (replace même row) — on laisse l'utilisateur re-cliquer librement.
 
-    // On affiche le vote tout de suite, on rollback en cas d'échec.
+    // Optimiste : feedback visuel immédiat, rollback si échec.
     setSubmitting(choice);
     setOptimisticVote({ qid: currentQ.id, choice });
 
@@ -258,15 +275,19 @@ function ChoiceButton({
 
   return (
     <button
-      onClick={onClick}
-      disabled={loading}
-      className={`flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
+      type="button"
+      onClick={() => {
+        console.log("[GameNight] ChoiceButton click", label);
+        try { onClick(); } catch (e) { console.error("[GameNight] click handler threw", e); }
+      }}
+      style={{ touchAction: "manipulation" }}
+      className={`flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
     >
-      <span className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>
+      <span className={`pointer-events-none text-sm font-bold uppercase tracking-widest ${labelColor}`}>
         Option {label}
       </span>
-      <span className="mt-3 text-2xl font-bold leading-tight">{text}</span>
-      {loading && <span className="mt-3 text-sm text-white/60">Envoi...</span>}
+      <span className="pointer-events-none mt-3 text-2xl font-bold leading-tight">{text}</span>
+      {loading && <span className="pointer-events-none mt-3 text-sm text-white/60">Envoi...</span>}
     </button>
   );
 }

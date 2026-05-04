@@ -244,6 +244,12 @@ export default function HostPage() {
 
   // Vote de l'hôte (en tant que joueur).
   async function castVote(choice: Choice) {
+    console.log("[GameNight] host castVote()", choice, {
+      hasRoom: !!room,
+      hasCurrentQ: !!currentQ,
+      hasMe: !!me,
+      playersCount: players.length,
+    });
     setActionError(null);
     if (!room) { setActionError("Salle non chargée."); return; }
     if (!currentQ) { setActionError("Aucune question active."); return; }
@@ -647,12 +653,17 @@ function HostVoteButton({
   const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
   return (
     <button
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
+      type="button"
+      onClick={() => {
+        console.log("[GameNight] HostVoteButton click", label);
+        try { onClick(); } catch (e) { console.error("[GameNight] click handler threw", e); }
+      }}
+      style={{ touchAction: "manipulation" }}
+      className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
     >
-      <span className={`text-xs font-bold uppercase tracking-widest ${labelColor}`}>Option {label}</span>
-      <span className="mt-2 text-base font-bold leading-tight">{text}</span>
-      {selected && <span className="mt-2 text-xs text-white/70">✓ Ton vote</span>}
+      <span className={`pointer-events-none text-xs font-bold uppercase tracking-widest ${labelColor}`}>Option {label}</span>
+      <span className="pointer-events-none mt-2 text-base font-bold leading-tight">{text}</span>
+      {selected && <span className="pointer-events-none mt-2 text-xs text-white/70">✓ Ton vote</span>}
     </button>
   );
 }
