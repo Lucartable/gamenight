@@ -45,16 +45,23 @@ export function useRoom(code: string): UseRoomState {
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let roomId: string | null = null;
+    // Compteur de séquence pour ignorer les résultats de fetch obsolètes.
+    // Sans ça, un fetch lent du polling peut revenir APRÈS une action récente
+    // et écraser l'état frais avec des données périmées (race condition).
+    let fetchSeq = 0;
 
     async function doRefresh() {
       if (!roomId || cancelled) return;
+      const mySeq = ++fetchSeq;
       const [p, v, r, aq] = await Promise.all([
         supabase.from("players").select("*").eq("room_id", roomId).order("joined_at"),
         supabase.from("votes").select("*").eq("room_id", roomId),
         supabase.from("rooms").select("*").eq("id", roomId).single(),
         supabase.from("asked_questions").select("question_id").eq("room_id", roomId),
       ]);
-      if (cancelled) return;
+      // Si un autre refresh plus récent a démarré entre-temps, on jette nos
+      // résultats — ils sont peut-être plus vieux que ce qui est déjà affiché.
+      if (cancelled || mySeq !== fetchSeq) return;
       if (p.data) setPlayers(p.data as Player[]);
       if (v.data) setVotes(v.data as Vote[]);
       if (r.data) setRoom(r.data as Room);
