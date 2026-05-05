@@ -614,10 +614,12 @@ function VotingView({
     <section className="card flex flex-1 flex-col p-5 text-center">
       <div className="flex items-center justify-center gap-2">
         <span className="chip">{cat?.emoji} {cat?.label}</span>
-        <span className="text-xs uppercase tracking-wider text-white/50">Vote en cours</span>
+        <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
+          🗳️ Vote ouvert
+        </span>
       </div>
       <div className="mt-4 text-7xl font-black tabular-nums text-white">{voteLeft}</div>
-      <div className="text-sm text-white/50">secondes</div>
+      <div className="text-sm text-white/50">secondes — clique sur ton choix !</div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <HostVoteButton
@@ -640,7 +642,13 @@ function VotingView({
         {votedCount} / {totalPlayers} {totalPlayers > 1 ? "ont voté" : "a voté"}
       </div>
 
-      <button onClick={onRevealNow} disabled={busy} className="btn-secondary mt-4">
+      <button
+        type="button"
+        onClick={() => { console.log("[GameNight] Révéler click"); onRevealNow(); }}
+        disabled={busy}
+        style={{ cursor: busy ? "not-allowed" : "pointer", position: "relative", zIndex: 10 }}
+        className="btn-secondary mt-4"
+      >
         Révéler tout de suite
       </button>
     </section>
@@ -731,16 +739,34 @@ function RevealView({
         <div className="mt-6 rounded-2xl border border-neon-yellow/50 bg-neon-yellow/10 p-4 text-center">
           <div className="text-xs uppercase text-neon-yellow">Mode débat</div>
           <div className="mt-1 text-4xl font-black tabular-nums">{formatMMSS(debateLeft)}</div>
-          <button onClick={onNext} disabled={busy} className="btn-primary mt-4 w-full">
+          <button
+            type="button"
+            onClick={() => { console.log("[GameNight] Passer à la suite click"); onNext(); }}
+            disabled={busy}
+            style={{ cursor: busy ? "not-allowed" : "pointer", position: "relative", zIndex: 10 }}
+            className="btn-primary mt-4 w-full"
+          >
             Passer à la suite
           </button>
         </div>
       ) : (
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button onClick={onDebate} disabled={busy} className="btn-secondary">
+          <button
+            type="button"
+            onClick={() => { console.log("[GameNight] Débat click"); onDebate(); }}
+            disabled={busy}
+            style={{ cursor: busy ? "not-allowed" : "pointer", position: "relative", zIndex: 10 }}
+            className="btn-secondary"
+          >
             🔥 Débat (2 min)
           </button>
-          <button onClick={onNext} disabled={busy} className="btn-primary">
+          <button
+            type="button"
+            onClick={() => { console.log("[GameNight] Question suivante click"); onNext(); }}
+            disabled={busy}
+            style={{ cursor: busy ? "not-allowed" : "pointer", position: "relative", zIndex: 10 }}
+            className="btn-primary"
+          >
             Question suivante →
           </button>
         </div>
@@ -760,24 +786,24 @@ function ColumnReveal({
   text: string;
   names: string[];
 }) {
-  const border = accent === "pink" ? "border-neon-pink/40" : "border-neon-cyan/40";
-  const bg = accent === "pink" ? "bg-neon-pink/10" : "bg-neon-cyan/10";
-  const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
+  // NB : volontairement très différent des boutons de vote (border dashed,
+  // bg neutre, pas de hover) pour qu'on ne puisse plus les confondre.
+  const labelColor = accent === "pink" ? "text-neon-pink/70" : "text-neon-cyan/70";
   return (
-    <div className={`rounded-2xl border ${border} ${bg} p-4`}>
-      <div className={`text-xs uppercase ${labelColor}`}>{label}</div>
-      <div className="mt-1 text-lg font-bold">{text}</div>
-      <div className="mt-3 text-sm text-white/60">
-        {names.length} vote{names.length > 1 ? "s" : ""}
+    <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4">
+      <div className={`flex items-center justify-between text-xs uppercase ${labelColor}`}>
+        <span>📊 {label}</span>
+        <span className="text-white/40">{names.length} vote{names.length > 1 ? "s" : ""}</span>
       </div>
+      <div className="mt-2 text-base font-semibold text-white/90">{text}</div>
       {names.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-2">
+        <ul className="mt-3 flex flex-wrap gap-2">
           {names.map((n, i) => (
             <li key={i} className="chip">{n}</li>
           ))}
         </ul>
       ) : (
-        <div className="mt-2 text-white/40">Personne</div>
+        <div className="mt-3 text-sm text-white/40">— Personne</div>
       )}
     </div>
   );

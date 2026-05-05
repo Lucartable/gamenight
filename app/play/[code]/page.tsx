@@ -222,7 +222,9 @@ function VoteScreen({
   return (
     <section className="flex flex-1 flex-col">
       <div className="card mb-3 flex items-center justify-between p-3 px-4">
-        <span className="chip">{cat?.emoji} {cat?.label}</span>
+        <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
+          🗳️ Vote !
+        </span>
         <div>
           <span className="text-3xl font-black tabular-nums">{left}</span>
           <span className="ml-2 text-white/60">sec</span>
@@ -351,24 +353,24 @@ function RevealCard({
   text: string;
   names: string[];
 }) {
-  const border = accent === "pink" ? "border-neon-pink/40" : "border-neon-cyan/40";
-  const bg = accent === "pink" ? "bg-neon-pink/10" : "bg-neon-cyan/10";
-  const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
+  // Style volontairement statique (border dashed, bg neutre) pour qu'on ne
+  // confonde pas avec les boutons de vote.
+  const labelColor = accent === "pink" ? "text-neon-pink/70" : "text-neon-cyan/70";
   return (
-    <div className={`flex flex-col rounded-3xl border-2 p-4 ${border} ${bg}`}>
-      <div className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>
-        Option {label}
+    <div className="flex flex-col rounded-3xl border border-dashed border-white/15 bg-white/5 p-4">
+      <div className={`flex items-center justify-between text-sm font-bold uppercase tracking-widest ${labelColor}`}>
+        <span>📊 Option {label}</span>
+        <span className="text-white/40">{names.length} vote{names.length > 1 ? "s" : ""}</span>
       </div>
-      <div className="mt-1 text-xl font-bold">{text}</div>
-      <div className="mt-2 text-sm text-white/60">{names.length} vote{names.length > 1 ? "s" : ""}</div>
+      <div className="mt-2 text-lg font-semibold text-white/90">{text}</div>
       {names.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-2">
+        <ul className="mt-3 flex flex-wrap gap-2">
           {names.map((n, i) => (
             <li key={i} className="chip">{n}</li>
           ))}
         </ul>
       ) : (
-        <div className="mt-2 text-white/40">Personne</div>
+        <div className="mt-3 text-sm text-white/40">— Personne</div>
       )}
     </div>
   );
