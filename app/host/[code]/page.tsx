@@ -297,6 +297,18 @@ export default function HostPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
+      <DebugOverlay
+        status={room.status}
+        currentQId={currentQ?.id ?? null}
+        meId={me?.id ?? null}
+        playersCount={players.length}
+        votesCount={currentVotes.length}
+        busy={busy}
+        optimistic={optimisticHostVote}
+        dbVote={dbVote}
+        myVote={myVote}
+      />
+
       <RoomHeader
         code={room.code}
         status={room.status}
@@ -658,8 +670,8 @@ function HostVoteButton({
         console.log("[GameNight] HostVoteButton click", label);
         try { onClick(); } catch (e) { console.error("[GameNight] click handler threw", e); }
       }}
-      style={{ touchAction: "manipulation" }}
-      className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
+      style={{ touchAction: "manipulation", cursor: "pointer", position: "relative", zIndex: 10 }}
+      className={`flex flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
     >
       <span className={`pointer-events-none text-xs font-bold uppercase tracking-widest ${labelColor}`}>Option {label}</span>
       <span className="pointer-events-none mt-2 text-base font-bold leading-tight">{text}</span>
@@ -767,6 +779,43 @@ function ColumnReveal({
       ) : (
         <div className="mt-2 text-white/40">Personne</div>
       )}
+    </div>
+  );
+}
+
+// Petit panneau de debug fixé en haut à droite. À retirer plus tard.
+function DebugOverlay({
+  status, currentQId, meId, playersCount, votesCount, busy, optimistic, dbVote, myVote,
+}: {
+  status: string;
+  currentQId: number | null;
+  meId: string | null;
+  playersCount: number;
+  votesCount: number;
+  busy: boolean;
+  optimistic: { qid: number; choice: Choice } | null;
+  dbVote: Choice | null;
+  myVote: Choice | null;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", top: 8, right: 8, zIndex: 1000,
+        background: "rgba(0,0,0,0.85)", color: "#0f0",
+        fontFamily: "monospace", fontSize: 11,
+        padding: "8px 10px", borderRadius: 6,
+        maxWidth: 280, lineHeight: 1.4, pointerEvents: "none",
+      }}
+    >
+      <div>status: {status}</div>
+      <div>currentQ: {currentQId ?? "—"}</div>
+      <div>me: {meId ? meId.slice(0, 8) : "❌ NULL"}</div>
+      <div>players: {playersCount}</div>
+      <div>votes(Q): {votesCount}</div>
+      <div>busy: {String(busy)}</div>
+      <div>optimistic: {optimistic ? `Q${optimistic.qid}/${optimistic.choice}` : "—"}</div>
+      <div>dbVote: {dbVote ?? "—"}</div>
+      <div>myVote: {myVote ?? "—"}</div>
     </div>
   );
 }

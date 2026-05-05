@@ -283,8 +283,8 @@ function ChoiceButton({
         console.log("[GameNight] ChoiceButton click", label);
         try { onClick(); } catch (e) { console.error("[GameNight] click handler threw", e); }
       }}
-      style={{ touchAction: "manipulation" }}
-      className={`flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
+      style={{ touchAction: "manipulation", cursor: "pointer", position: "relative", zIndex: 10 }}
+      className={`flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
     >
       <span className={`pointer-events-none text-sm font-bold uppercase tracking-widest ${labelColor}`}>
         Option {label}
