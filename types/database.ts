@@ -1,6 +1,7 @@
-export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "ended";
-export type GameType = "who_would" | "who_of_us";
-export type Choice = "A" | "B";
+export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "ended";
+export type GameType = "who_would" | "who_of_us" | "majority" | "minority";
+export type Choice = string;
+export type ScoreboardFrequency = "round" | "end";
 
 export interface Room {
   id: string;
@@ -11,10 +12,15 @@ export interface Room {
   current_question_id: number | null;
   question_started_at: string | null;
   reveal_started_at: string | null;
+  scoreboard_started_at: string | null;
   total_questions: number;
   vote_duration_sec: number;
   reveal_duration_sec: number;
+  scoreboard_duration_sec: number;
   autoplay: boolean;
+  hide_scores: boolean;
+  scoreboard_frequency: ScoreboardFrequency;
+  score_target: number | null;
   selected_categories: string[];
   created_at: string;
 }

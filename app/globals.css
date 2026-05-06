@@ -19,6 +19,96 @@ body {
   overscroll-behavior-y: contain;
 }
 
+@keyframes revealIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.75); opacity: 0; }
+  70% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes barSweep {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes confettiBurst {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--x), var(--y), 0) rotate(var(--r)) scale(1);
+  }
+}
+
+.animate-reveal-in {
+  animation: revealIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.animate-pop-in {
+  animation: popIn 360ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.result-fill {
+  transform-origin: left center;
+  animation: barSweep 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.prediction-card {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.confetti-field {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.confetti-field span {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #4ade80;
+  animation: confettiBurst 900ms ease-out both;
+}
+
+.confetti-field span:nth-child(2n) { background: #22d3ee; }
+.confetti-field span:nth-child(3n) { background: #ff3ea5; }
+.confetti-field span:nth-child(4n) { background: #facc15; }
+.confetti-field span:nth-child(1) { --x: -120px; --y: 88px; --r: 210deg; animation-delay: 20ms; }
+.confetti-field span:nth-child(2) { --x: -80px; --y: -40px; --r: 120deg; animation-delay: 80ms; }
+.confetti-field span:nth-child(3) { --x: -32px; --y: 112px; --r: 320deg; animation-delay: 40ms; }
+.confetti-field span:nth-child(4) { --x: 38px; --y: -54px; --r: 170deg; animation-delay: 100ms; }
+.confetti-field span:nth-child(5) { --x: 96px; --y: 70px; --r: 260deg; animation-delay: 30ms; }
+.confetti-field span:nth-child(6) { --x: 132px; --y: -12px; --r: 90deg; animation-delay: 120ms; }
+.confetti-field span:nth-child(7) { --x: -148px; --y: 16px; --r: 240deg; animation-delay: 70ms; }
+.confetti-field span:nth-child(8) { --x: 18px; --y: 134px; --r: 360deg; animation-delay: 55ms; }
+.confetti-field span:nth-child(9) { --x: -18px; --y: -74px; --r: 180deg; animation-delay: 90ms; }
+.confetti-field span:nth-child(10) { --x: 152px; --y: 104px; --r: 300deg; animation-delay: 10ms; }
+.confetti-field span:nth-child(11) { --x: -104px; --y: 138px; --r: 260deg; animation-delay: 110ms; }
+.confetti-field span:nth-child(12) { --x: 76px; --y: 154px; --r: 140deg; animation-delay: 65ms; }
+.confetti-field span:nth-child(13) { --x: -156px; --y: 96px; --r: 340deg; animation-delay: 105ms; }
+.confetti-field span:nth-child(14) { --x: 118px; --y: 18px; --r: 190deg; animation-delay: 35ms; }
+
 @layer components {
   .btn {
     @apply inline-flex cursor-pointer items-center justify-center font-bold
@@ -54,4 +144,15 @@ body {
 /* Évite que le clavier mobile ne fasse zoomer iOS sur les inputs. */
 @media (max-width: 640px) {
   input, button, textarea, select { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }

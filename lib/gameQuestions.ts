@@ -10,9 +10,15 @@ import {
   type WhoOfUsCategory,
   type WhoOfUsCategoryMeta,
 } from "./whoOfUsQuestions";
+import {
+  MAJORITY_CATEGORIES,
+  MAJORITY_QUESTIONS,
+  type MajorityCategory,
+  type MajorityCategoryMeta,
+} from "./majorityQuestions";
 import type { GameType } from "@/types/database";
 
-export type GameCategory = WhoWouldCategory | WhoOfUsCategory;
+export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory;
 
 export interface GameDefinition {
   id: GameType;
@@ -36,8 +42,16 @@ export interface WhoOfUsGameQuestion {
   text: string;
 }
 
-export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion;
-export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta) & { id: GameCategory };
+export interface PredictionGameQuestion {
+  id: number;
+  gameType: "majority" | "minority";
+  category: MajorityCategory;
+  text: string;
+  options: string[];
+}
+
+export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion;
+export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta) & { id: GameCategory };
 
 export const GAME_DEFINITIONS: GameDefinition[] = [
   {
@@ -51,6 +65,18 @@ export const GAME_DEFINITIONS: GameDefinition[] = [
     label: "Qui de nous ?",
     shortLabel: "Qui de nous ?",
     description: "Désigne le joueur qui correspond le mieux à la question.",
+  },
+  {
+    id: "majority",
+    label: "Majorité",
+    shortLabel: "Majorité",
+    description: "Prédit la réponse que le groupe choisira le plus.",
+  },
+  {
+    id: "minority",
+    label: "Minorité",
+    shortLabel: "Minorité",
+    description: "Trouve le choix rare sans viser une option vide.",
   },
 ];
 
@@ -66,12 +92,14 @@ export function getGameDefinition(gameType: GameType | null | undefined): GameDe
 
 export function getGameCategories(gameType: GameType | null | undefined): GameCategoryMeta[] {
   if (gameType === "who_of_us") return WHO_OF_US_CATEGORIES as GameCategoryMeta[];
+  if (gameType === "majority" || gameType === "minority") return MAJORITY_CATEGORIES as GameCategoryMeta[];
   if (gameType === "who_would") return WHO_WOULD_CATEGORIES as GameCategoryMeta[];
   return [];
 }
 
 export function getDefaultCategories(gameType: GameType | null | undefined): GameCategory[] {
   if (gameType === "who_of_us") return ["classique"];
+  if (gameType === "majority" || gameType === "minority") return ["food", "internet", "party"];
   if (gameType === "who_would") return ["soft"];
   return [];
 }
@@ -87,6 +115,9 @@ export function getCategoryForGame(
 export function getQuestionsForGame(gameType: GameType | null | undefined): GameQuestion[] {
   if (gameType === "who_of_us") {
     return WHO_OF_US_QUESTIONS.map((q) => ({ ...q, gameType: "who_of_us" as const }));
+  }
+  if (gameType === "majority" || gameType === "minority") {
+    return MAJORITY_QUESTIONS.map((q) => ({ ...q, gameType }));
   }
   if (gameType === "who_would") return WHO_WOULD_QUESTIONS;
   return [];

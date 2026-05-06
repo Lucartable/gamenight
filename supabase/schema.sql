@@ -14,7 +14,11 @@ drop table if exists public.rooms cascade;
 
 -- ----- TYPES LOGIQUES ------------------------------------------------------
 -- Les checks textuels gardent le schéma simple côté Supabase JS.
--- game_type : 'who_would' = vote entre deux options, 'who_of_us' = joueur désigné.
+-- game_type :
+--   'who_would' = vote entre deux options
+--   'who_of_us' = joueur désigné
+--   'majority' = prédire la réponse majoritaire
+--   'minority' = viser une minorité valide
 
 -- ----- ROOMS ---------------------------------------------------------------
 create table public.rooms (
@@ -22,19 +26,27 @@ create table public.rooms (
   code text unique not null,
   host_client_id text not null,
   game_type text
-    check (game_type in ('who_would','who_of_us')),
+    check (game_type in ('who_would','who_of_us','majority','minority')),
   status text not null default 'lobby'
-    check (status in ('lobby','question_active','reveal_results','ended')),
+    check (status in ('lobby','question_active','reveal_results','scoreboard','ended')),
   current_question_id integer,
   question_started_at timestamptz,
   reveal_started_at timestamptz,
+  scoreboard_started_at timestamptz,
   total_questions integer not null default 10
     check (total_questions between 1 and 400),
   vote_duration_sec integer not null default 30
     check (vote_duration_sec between 5 and 300),
   reveal_duration_sec integer not null default 15
     check (reveal_duration_sec between 3 and 300),
+  scoreboard_duration_sec integer not null default 7
+    check (scoreboard_duration_sec between 3 and 60),
   autoplay boolean not null default false,
+  hide_scores boolean not null default false,
+  scoreboard_frequency text not null default 'round'
+    check (scoreboard_frequency in ('round','end')),
+  score_target integer
+    check (score_target is null or score_target between 1 and 999),
   selected_categories text[] not null default '{}',
   created_at timestamptz not null default now()
 );
@@ -48,10 +60,11 @@ create index rooms_game_type_idx on public.rooms(game_type);
 create table public.questions (
   id integer primary key,
   game_type text not null
-    check (game_type in ('who_would','who_of_us')),
+    check (game_type in ('who_would','who_of_us','majority','minority')),
   text text,
   option_a text,
   option_b text,
+  options jsonb,
   category text not null,
   difficulty text,
   created_at timestamptz not null default now(),
@@ -59,6 +72,14 @@ create table public.questions (
     (game_type = 'who_would' and option_a is not null and option_b is not null)
     or
     (game_type = 'who_of_us' and text is not null and option_a is null and option_b is null)
+    or
+    (
+      game_type in ('majority','minority')
+      and text is not null
+      and options is not null
+      and jsonb_typeof(options) = 'array'
+      and jsonb_array_length(options) between 2 and 8
+    )
   )
 );
 
@@ -82,10 +103,10 @@ create table public.votes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us')),
+    check (game_type in ('who_would','who_of_us','majority','minority')),
   voter_player_id uuid not null references public.players(id) on delete cascade,
   question_id integer not null,
-  selected_option text check (selected_option in ('A','B')),
+  selected_option text,
   selected_player_id uuid references public.players(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (room_id, game_type, question_id, voter_player_id),
@@ -93,6 +114,8 @@ create table public.votes (
     (game_type = 'who_would' and selected_option is not null and selected_player_id is null)
     or
     (game_type = 'who_of_us' and selected_option is null and selected_player_id is not null)
+    or
+    (game_type in ('majority','minority') and selected_option is not null and selected_player_id is null)
   )
 );
 
@@ -105,7 +128,7 @@ create table public.asked_questions (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us')),
+    check (game_type in ('who_would','who_of_us','majority','minority')),
   question_id integer not null,
   asked_at timestamptz not null default now(),
   unique (room_id, game_type, question_id)

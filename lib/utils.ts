@@ -2,10 +2,12 @@
 export const DEFAULT_TOTAL_QUESTIONS = 10;
 export const DEFAULT_VOTE_DURATION_SEC = 30;
 export const DEFAULT_REVEAL_DURATION_SEC = 15;
+export const DEFAULT_SCOREBOARD_DURATION_SEC = 7;
 
 export const QUESTION_COUNT_PRESETS = [5, 10, 20] as const;
-export const VOTE_DURATION_OPTIONS = [15, 30, 45, 60] as const;
-export const REVEAL_DURATION_OPTIONS = [10, 15, 30] as const;
+export const VOTE_DURATION_OPTIONS = [8, 15, 30, 45, 60] as const;
+export const REVEAL_DURATION_OPTIONS = [6, 10, 15, 30] as const;
+export const SCORE_TARGET_OPTIONS = [10, 20, 30, 50] as const;
 
 // Mots faciles à lire/dicter à voix haute.
 const WORDS = [
@@ -46,6 +48,13 @@ export function secondsLeft(startIso: string | null, durationSec: number): numbe
 export function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function triggerHaptic(pattern: number | number[] = 12): void {
+  if (typeof window === "undefined") return;
+  if ("vibrate" in window.navigator) {
+    window.navigator.vibrate(pattern);
+  }
 }
 
 // Persistance des catégories sélectionnées par l'hôte (par salle).

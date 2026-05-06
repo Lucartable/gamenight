@@ -9,6 +9,7 @@ import {
   GAME_DEFINITIONS,
   type GameCategory,
   type GameQuestion,
+  type PredictionGameQuestion,
   type WhoOfUsGameQuestion,
   type WhoWouldQuestion,
   getCategoryForGame,
@@ -20,11 +21,24 @@ import {
   pickRandomQuestionForGame,
 } from "@/lib/gameQuestions";
 import {
+  PredictionEndGamePanel,
+  PredictionRevealPanel,
+  PredictionScoreboardPanel,
+  PredictionVoteScreen,
+} from "@/components/predictionMode";
+import {
+  computePredictionScores,
+  hasReachedScoreTarget,
+  isPredictionGame,
+} from "@/lib/scoring";
+import {
   DEFAULT_REVEAL_DURATION_SEC,
+  DEFAULT_SCOREBOARD_DURATION_SEC,
   DEFAULT_TOTAL_QUESTIONS,
   DEFAULT_VOTE_DURATION_SEC,
   QUESTION_COUNT_PRESETS,
   REVEAL_DURATION_OPTIONS,
+  SCORE_TARGET_OPTIONS,
   VOTE_DURATION_OPTIONS,
   clampInt,
   getOrCreateClientId,
@@ -41,7 +55,11 @@ type RoomConfigPatch = Partial<
     | "total_questions"
     | "vote_duration_sec"
     | "reveal_duration_sec"
+    | "scoreboard_duration_sec"
     | "autoplay"
+    | "hide_scores"
+    | "scoreboard_frequency"
+    | "score_target"
   >
 >;
 
@@ -63,6 +81,7 @@ export default function HostPage() {
   const [customQuestionCount, setCustomQuestionCount] = useState(String(DEFAULT_TOTAL_QUESTIONS));
   const [hostSelectedOption, setHostSelectedOption] = useState<Choice | null>(null);
   const [hostSelectedPlayerId, setHostSelectedPlayerId] = useState<string | null>(null);
+  const [hostSelectedPredictionOption, setHostSelectedPredictionOption] = useState<string | null>(null);
   const [hostSubmitting, setHostSubmitting] = useState(false);
   const [optimisticHostVote, setOptimisticHostVote] = useState<LocalVote | null>(null);
   const transitionRef = useRef(false);
@@ -92,7 +111,9 @@ export default function HostPage() {
   const totalQuestions = room?.total_questions ?? DEFAULT_TOTAL_QUESTIONS;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
+  const scoreboardDuration = room?.scoreboard_duration_sec ?? DEFAULT_SCOREBOARD_DURATION_SEC;
   const autoplay = room?.autoplay ?? false;
+  const predictionMode = isPredictionGame(gameType) ? gameType : null;
 
   const askedForGameIds = useMemo(
     () =>
@@ -132,9 +153,22 @@ export default function HostPage() {
   );
   const allVotesSubmitted = players.length > 0 && submittedVotesCount >= players.length;
 
+  const predictionScores = useMemo(
+    () => (predictionMode ? computePredictionScores(predictionMode, players, votes, currentQ?.id ?? null) : []),
+    [currentQ?.id, players, predictionMode, votes]
+  );
+  const scoreTargetReached = predictionMode
+    ? hasReachedScoreTarget(predictionScores, room?.score_target)
+    : false;
+  const shouldShowRoundScoreboard =
+    Boolean(predictionMode) && !room?.hide_scores && room?.scoreboard_frequency === "round";
+  const shouldFinishAfterCurrentRound =
+    roundsPlayed >= totalQuestions || filteredAvailable.length === 0 || scoreTargetReached;
+
   useEffect(() => {
     setHostSelectedOption(null);
     setHostSelectedPlayerId(null);
+    setHostSelectedPredictionOption(null);
     setHostSubmitting(false);
     setOptimisticHostVote(null);
   }, [currentQ?.id]);
@@ -149,6 +183,11 @@ export default function HostPage() {
   const revealHasExpired =
     revealStartedAt !== null && secondsLeft(revealStartedAt, revealDuration) === 0;
 
+  const scoreboardStartedAt = room?.status === "scoreboard" ? room.scoreboard_started_at : null;
+  const scoreboardLeft = useCountdown(scoreboardStartedAt, scoreboardDuration);
+  const scoreboardHasExpired =
+    scoreboardStartedAt !== null && secondsLeft(scoreboardStartedAt, scoreboardDuration) === 0;
+
   useEffect(() => {
     if (room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
@@ -158,10 +197,21 @@ export default function HostPage() {
 
   useEffect(() => {
     if (room?.status === "reveal_results" && autoplay && revealHasExpired) {
+      if (shouldShowRoundScoreboard) {
+        void showScoreboard();
+      } else {
+        void goToNextQuestion();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, autoplay, revealHasExpired, roundsPlayed, filteredAvailable.length, shouldShowRoundScoreboard]);
+
+  useEffect(() => {
+    if (room?.status === "scoreboard" && autoplay && scoreboardHasExpired) {
       void goToNextQuestion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, autoplay, revealHasExpired, roundsPlayed, filteredAvailable.length]);
+  }, [room?.status, autoplay, scoreboardHasExpired, roundsPlayed, filteredAvailable.length, scoreTargetReached]);
 
   async function runTransition(action: () => Promise<void>) {
     if (transitionRef.current) return;
@@ -242,15 +292,17 @@ export default function HostPage() {
           current_question_id: question.id,
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
+          scoreboard_started_at: null,
         })
-        .eq("id", room.id);
+        .eq("id", room.id)
+        .in("status", ["lobby", "reveal_results", "scoreboard"]);
       if (roomError) throw roomError;
     });
   }
 
   async function goToNextQuestion() {
     if (!room || !gameType) return;
-    if (roundsPlayed >= totalQuestions || filteredAvailable.length === 0) {
+    if (shouldFinishAfterCurrentRound) {
       await finishGame(false);
       return;
     }
@@ -271,7 +323,23 @@ export default function HostPage() {
           status: "reveal_results",
           reveal_started_at: new Date().toISOString(),
         })
-        .eq("id", room.id);
+        .eq("id", room.id)
+        .eq("status", "question_active");
+      if (error) throw error;
+    });
+  }
+
+  async function showScoreboard() {
+    if (!room || !predictionMode) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "scoreboard",
+          scoreboard_started_at: new Date().toISOString(),
+        })
+        .eq("id", room.id)
+        .eq("status", "reveal_results");
       if (error) throw error;
     });
   }
@@ -286,6 +354,7 @@ export default function HostPage() {
           current_question_id: null,
           question_started_at: null,
           reveal_started_at: null,
+          scoreboard_started_at: null,
         })
         .eq("id", room.id);
       if (error) throw error;
@@ -330,9 +399,15 @@ export default function HostPage() {
 
   async function submitHostVote() {
     if (!room || !gameType || !currentQ || !me || hostSubmitting) return;
-    const selectedOption = gameType === "who_would" ? hostSelectedOption : null;
+    const selectedOption =
+      gameType === "who_would"
+        ? hostSelectedOption
+        : isPredictionGame(gameType)
+          ? hostSelectedPredictionOption
+          : null;
     const selectedPlayerId = gameType === "who_of_us" ? hostSelectedPlayerId : null;
     if (gameType === "who_would" && !selectedOption) return;
+    if (isPredictionGame(gameType) && !selectedOption) return;
     if (gameType === "who_of_us" && (!selectedPlayerId || selectedPlayerId === me.id)) return;
 
     setHostSubmitting(true);
@@ -364,6 +439,8 @@ export default function HostPage() {
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
+  if (room.status === "ended" && predictionMode)
+    return <PredictionEndGamePanel mode={predictionMode} players={players} votes={votes} />;
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" action={{ label: "Retour", href: "/" }} />;
 
@@ -415,6 +492,7 @@ export default function HostPage() {
           availableCount={filteredAvailable.length}
           gameType={gameType}
           gameLabel={gameDefinition.label}
+          isPredictionMode={Boolean(predictionMode)}
           selectedCategories={selectedCategories}
           room={room}
           busy={busy}
@@ -461,6 +539,24 @@ export default function HostPage() {
         />
       )}
 
+      {room.status === "question_active" && currentQ && predictionMode && (
+        <PredictionVoteScreen
+          mode={predictionMode}
+          question={currentQ as PredictionGameQuestion}
+          startedAt={room.question_started_at}
+          durationSec={voteDuration}
+          selectedOption={hostSelectedPredictionOption}
+          validatedOption={effectiveHostVote?.selected_option ?? null}
+          submitting={hostSubmitting}
+          votedCount={submittedVotesCount}
+          totalPlayers={players.length}
+          busy={busy}
+          onSelect={setHostSelectedPredictionOption}
+          onSubmit={submitHostVote}
+          onRevealNow={revealNow}
+        />
+      )}
+
       {room.status === "reveal_results" && currentQ && gameType === "who_would" && (
         <WhoWouldRevealView
           question={currentQ as WhoWouldQuestion}
@@ -487,6 +583,44 @@ export default function HostPage() {
           busy={busy}
           onNext={goToNextQuestion}
           onEnd={() => void finishGame(false)}
+          onBackToLobby={resetToLobby}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && predictionMode && (
+        <PredictionRevealPanel
+          mode={predictionMode}
+          question={currentQ as PredictionGameQuestion}
+          players={players}
+          votes={currentVotes}
+          revealLeft={revealLeft}
+          autoplay={autoplay}
+          busy={busy}
+          primaryLabel={
+            shouldShowRoundScoreboard
+              ? "Voir le classement"
+              : shouldFinishAfterCurrentRound
+                ? "Terminer la partie"
+                : "Question suivante"
+          }
+          onPrimary={shouldShowRoundScoreboard ? showScoreboard : goToNextQuestion}
+          onBackToLobby={resetToLobby}
+        />
+      )}
+
+      {room.status === "scoreboard" && predictionMode && (
+        <PredictionScoreboardPanel
+          mode={predictionMode}
+          players={players}
+          votes={votes}
+          currentQuestionId={currentQ?.id ?? null}
+          scoreTarget={room.score_target}
+          autoplay={autoplay}
+          scoreboardLeft={scoreboardLeft}
+          busy={busy}
+          final={shouldFinishAfterCurrentRound}
+          primaryLabel={shouldFinishAfterCurrentRound ? "Terminer la partie" : "Question suivante"}
+          onPrimary={goToNextQuestion}
           onBackToLobby={resetToLobby}
         />
       )}
@@ -617,6 +751,7 @@ function LobbyView({
   availableCount,
   gameType,
   gameLabel,
+  isPredictionMode,
   selectedCategories,
   room,
   busy,
@@ -632,6 +767,7 @@ function LobbyView({
   availableCount: number;
   gameType: GameType;
   gameLabel: string;
+  isPredictionMode: boolean;
   selectedCategories: string[];
   room: Room;
   busy: boolean;
@@ -753,6 +889,63 @@ function LobbyView({
             {room.autoplay ? "ON" : "OFF"}
           </span>
         </button>
+
+        {isPredictionMode && (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onUpdateConfig({ hide_scores: !room.hide_scores })}
+              className={`mt-3 flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${
+                room.hide_scores
+                  ? "border-neon-yellow/50 bg-neon-yellow/10 text-white"
+                  : "border-white/10 bg-white/5 text-white/70"
+              }`}
+            >
+              <span className="font-bold">Masquer les scores pendant la partie</span>
+              <span className={room.hide_scores ? "text-neon-yellow" : "text-white/50"}>
+                {room.hide_scores ? "ON" : "OFF"}
+              </span>
+            </button>
+
+            <ConfigGroup label="Scoreboard">
+              <ConfigButton
+                active={room.scoreboard_frequency === "round"}
+                disabled={busy || room.hide_scores}
+                onClick={() => onUpdateConfig({ scoreboard_frequency: "round" })}
+              >
+                Après chaque manche
+              </ConfigButton>
+              <ConfigButton
+                active={room.scoreboard_frequency === "end"}
+                disabled={busy}
+                onClick={() => onUpdateConfig({ scoreboard_frequency: "end" })}
+              >
+                Seulement à la fin
+              </ConfigButton>
+            </ConfigGroup>
+
+            <ConfigGroup label="Score cible">
+              <ConfigButton
+                active={!room.score_target}
+                disabled={busy}
+                onClick={() => onUpdateConfig({ score_target: null })}
+              >
+                Aucun
+              </ConfigButton>
+              {SCORE_TARGET_OPTIONS.map((target) => (
+                <ConfigButton
+                  key={target}
+                  active={room.score_target === target}
+                  disabled={busy}
+                  onClick={() => onUpdateConfig({ score_target: target })}
+                >
+                  {target}
+                </ConfigButton>
+              ))}
+            </ConfigGroup>
+          </>
+        )}
       </section>
 
       <section className="card mb-4 p-5">
@@ -1424,6 +1617,7 @@ function countSubmittedVotes(gameType: GameType | null, players: Player[], votes
     if (!playerIds.has(vote.voter_player_id)) return false;
     if (gameType === "who_would") return vote.selected_option === "A" || vote.selected_option === "B";
     if (gameType === "who_of_us") return Boolean(vote.selected_player_id);
+    if (isPredictionGame(gameType)) return Boolean(vote.selected_option);
     return false;
   }).length;
 }
@@ -1494,6 +1688,7 @@ function labelStatus(status: string) {
     case "lobby": return "Lobby";
     case "question_active": return "Vote en cours";
     case "reveal_results": return "Révélation";
+    case "scoreboard": return "Scoreboard";
     case "ended": return "Terminée";
     default: return status;
   }

@@ -140,6 +140,20 @@ export default function HomePage() {
                 </div>
                 <div className="chip">Nouveau</div>
               </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold text-white">Majorité</div>
+                  <div className="text-white/50">Prédit la réponse du groupe.</div>
+                </div>
+                <div className="chip">Party</div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold text-white">Minorité</div>
+                  <div className="text-white/50">Marque avec les choix rares.</div>
+                </div>
+                <div className="chip">Stratégie</div>
+              </div>
             </div>
           </div>
         </div>

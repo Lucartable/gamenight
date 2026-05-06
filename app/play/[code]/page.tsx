@@ -6,6 +6,7 @@ import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
 import {
+  type PredictionGameQuestion,
   type WhoOfUsGameQuestion,
   type WhoWouldQuestion,
   getCategoryForGame,
@@ -13,11 +14,18 @@ import {
   getQuestionForGame,
 } from "@/lib/gameQuestions";
 import {
+  PredictionEndGamePanel,
+  PredictionRevealPanel,
+  PredictionScoreboardPanel,
+  PredictionVoteScreen,
+} from "@/components/predictionMode";
+import { isPredictionGame } from "@/lib/scoring";
+import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_VOTE_DURATION_SEC,
   getOrCreateClientId,
 } from "@/lib/utils";
-import type { Choice, GameType, Player, Vote } from "@/types/database";
+import type { Choice, Player, Vote } from "@/types/database";
 
 interface LocalVote {
   qid: number;
@@ -32,6 +40,7 @@ export default function PlayerPage() {
   const { room, players, votes, loading, error, refresh } = useRoom(code);
   const [selectedOption, setSelectedOption] = useState<Choice | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [selectedPredictionOption, setSelectedPredictionOption] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [optimisticVote, setOptimisticVote] = useState<LocalVote | null>(null);
@@ -49,12 +58,14 @@ export default function PlayerPage() {
   }, [room?.host_client_id, code, room, router]);
 
   const gameType = room?.game_type ?? null;
+  const predictionMode = isPredictionGame(gameType) ? gameType : null;
   const gameDefinition = getGameDefinition(gameType);
   const currentQ = getQuestionForGame(gameType, room?.current_question_id);
 
   useEffect(() => {
     setSelectedOption(null);
     setSelectedPlayerId(null);
+    setSelectedPredictionOption(null);
     setSubmitting(false);
     setOptimisticVote(null);
   }, [currentQ?.id]);
@@ -88,9 +99,15 @@ export default function PlayerPage() {
     }
     if (effectiveVote || submitting) return;
 
-    const selected_option = gameType === "who_would" ? selectedOption : null;
+    const selected_option =
+      gameType === "who_would"
+        ? selectedOption
+        : isPredictionGame(gameType)
+          ? selectedPredictionOption
+          : null;
     const selected_player_id = gameType === "who_of_us" ? selectedPlayerId : null;
     if (gameType === "who_would" && !selected_option) return;
+    if (isPredictionGame(gameType) && !selected_option) return;
     if (gameType === "who_of_us" && (!selected_player_id || selected_player_id === me.id)) return;
 
     setSubmitting(true);
@@ -123,6 +140,8 @@ export default function PlayerPage() {
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
   if (!me)
     return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
+  if (room.status === "ended" && predictionMode)
+    return <PredictionEndGamePanel mode={predictionMode} players={players} votes={votes} />;
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" subtitle="Merci d'avoir joué !" action={{ label: "Retour", href: "/" }} />;
 
@@ -174,6 +193,20 @@ export default function PlayerPage() {
         />
       )}
 
+      {room.status === "question_active" && currentQ && predictionMode && (
+        <PredictionVoteScreen
+          mode={predictionMode}
+          question={currentQ as PredictionGameQuestion}
+          startedAt={room.question_started_at}
+          durationSec={voteDuration}
+          selectedOption={selectedPredictionOption}
+          validatedOption={effectiveVote?.selected_option ?? null}
+          submitting={submitting}
+          onSelect={setSelectedPredictionOption}
+          onSubmit={submitVote}
+        />
+      )}
+
       {room.status === "reveal_results" && currentQ && gameType === "who_would" && (
         <WhoWouldReveal
           question={currentQ as WhoWouldQuestion}
@@ -193,6 +226,28 @@ export default function PlayerPage() {
           revealStartedAt={room.reveal_started_at}
           revealDurationSec={revealDuration}
           autoplay={room.autoplay}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && predictionMode && (
+        <PredictionRevealPanel
+          mode={predictionMode}
+          question={currentQ as PredictionGameQuestion}
+          players={players}
+          votes={currentVotes}
+          revealStartedAt={room.reveal_started_at}
+          revealDurationSec={revealDuration}
+          autoplay={room.autoplay}
+        />
+      )}
+
+      {room.status === "scoreboard" && predictionMode && (
+        <PredictionScoreboardPanel
+          mode={predictionMode}
+          players={players}
+          votes={votes}
+          currentQuestionId={currentQ?.id ?? null}
+          scoreTarget={room.score_target}
         />
       )}
     </main>
