@@ -130,7 +130,7 @@ export default function HomePage() {
                 <div className="text-base font-bold text-white">Tu préfères ?</div>
                 <div className="text-white/50">2 options, 30 sec pour voter, débat possible.</div>
               </div>
-              <div className="chip">3+ joueurs</div>
+              <div className="chip">2+ joueurs</div>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ import {
   getOrCreateClientId,
   loadCategories,
   saveCategories,
+  secondsLeft,
 } from "@/lib/utils";
 import type { Choice, Player, Vote } from "@/types/database";
 
@@ -74,22 +75,22 @@ export default function HostPage() {
 
   // Reset du vote optimiste quand on change de question.
   useEffect(() => {
-    if (!currentQ || (optimisticHostVote && optimisticHostVote.qid !== currentQ.id)) {
-      setOptimisticHostVote(null);
-    }
-  }, [currentQ?.id, optimisticHostVote]);
+    setOptimisticHostVote((prev) =>
+      !currentQ || (prev && prev.qid !== currentQ.id) ? null : prev
+    );
+  }, [currentQ]);
 
   // Bascule auto vers la révélation quand le timer atteint 0.
-  const voteLeft = useCountdown(
-    room?.status === "voting" ? room?.question_started_at ?? null : null,
-    VOTE_DURATION_SEC
-  );
+  const votingStartedAt = room?.status === "voting" ? room.question_started_at : null;
+  const voteLeft = useCountdown(votingStartedAt, VOTE_DURATION_SEC);
+  const voteHasExpired =
+    votingStartedAt !== null && secondsLeft(votingStartedAt, VOTE_DURATION_SEC) === 0;
   useEffect(() => {
-    if (room?.status === "voting" && voteLeft === 0 && !busy) {
+    if (room?.status === "voting" && voteHasExpired && !busy) {
       void revealNow();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteLeft, room?.status]);
+  }, [voteLeft, room?.status, voteHasExpired, busy]);
 
   function toggleCategory(cat: Category) {
     setSelectedCategories((prev) =>
@@ -297,18 +298,6 @@ export default function HostPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
-      <DebugOverlay
-        status={room.status}
-        currentQId={currentQ?.id ?? null}
-        meId={me?.id ?? null}
-        playersCount={players.length}
-        votesCount={currentVotes.length}
-        busy={busy}
-        optimistic={optimisticHostVote}
-        dbVote={dbVote}
-        myVote={myVote}
-      />
-
       <RoomHeader
         code={room.code}
         status={room.status}
@@ -805,43 +794,6 @@ function ColumnReveal({
       ) : (
         <div className="mt-3 text-sm text-white/40">— Personne</div>
       )}
-    </div>
-  );
-}
-
-// Petit panneau de debug fixé en haut à droite. À retirer plus tard.
-function DebugOverlay({
-  status, currentQId, meId, playersCount, votesCount, busy, optimistic, dbVote, myVote,
-}: {
-  status: string;
-  currentQId: number | null;
-  meId: string | null;
-  playersCount: number;
-  votesCount: number;
-  busy: boolean;
-  optimistic: { qid: number; choice: Choice } | null;
-  dbVote: Choice | null;
-  myVote: Choice | null;
-}) {
-  return (
-    <div
-      style={{
-        position: "fixed", top: 8, right: 8, zIndex: 1000,
-        background: "rgba(0,0,0,0.85)", color: "#0f0",
-        fontFamily: "monospace", fontSize: 11,
-        padding: "8px 10px", borderRadius: 6,
-        maxWidth: 280, lineHeight: 1.4, pointerEvents: "none",
-      }}
-    >
-      <div>status: {status}</div>
-      <div>currentQ: {currentQId ?? "—"}</div>
-      <div>me: {meId ? meId.slice(0, 8) : "❌ NULL"}</div>
-      <div>players: {playersCount}</div>
-      <div>votes(Q): {votesCount}</div>
-      <div>busy: {String(busy)}</div>
-      <div>optimistic: {optimistic ? `Q${optimistic.qid}/${optimistic.choice}` : "—"}</div>
-      <div>dbVote: {dbVote ?? "—"}</div>
-      <div>myVote: {myVote ?? "—"}</div>
     </div>
   );
 }
