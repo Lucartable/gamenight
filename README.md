@@ -171,6 +171,7 @@ Les expressions viennent de [`lib/mimeExpressions.ts`](lib/mimeExpressions.ts), 
 | Apéro +18 | oui | Expressions familières, beauf/trash, réservées aux adultes |
 
 L'hôte choisit l'ordre de passage au lancement : ordre d'arrivée, aléatoire ou personnalisé. Ensuite, chaque manche passe automatiquement au joueur suivant, avec retour au début de la liste.
+Le réglage **Mode hôte joueur** masque l'expression à l'hôte quand ce n'est pas lui qui mime, afin qu'il puisse deviner avec le groupe.
 
 ---
 

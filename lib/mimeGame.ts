@@ -27,6 +27,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
   const roundNumber = toInt(raw.roundNumber, 0);
   const timerDuration = toInt(raw.timerDuration, 30);
   const roundStatus = isMimeRoundStatus(raw.roundStatus) ? raw.roundStatus : "waiting";
+  const hostPlayMode = raw.hostPlayMode === true;
 
   if (!playerOrder.length && !currentExpressionId && !roundNumber) return null;
 
@@ -39,6 +40,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
     roundNumber,
     timerDuration,
     roundStatus,
+    hostPlayMode,
   };
 }
 
@@ -115,6 +117,7 @@ export function buildMimeGameState({
   roundNumber,
   timerDuration,
   roundStatus,
+  hostPlayMode,
 }: {
   playerOrder: string[];
   currentMimeIndex: number;
@@ -123,6 +126,7 @@ export function buildMimeGameState({
   roundNumber: number;
   timerDuration: number;
   roundStatus: MimeRoundStatus;
+  hostPlayMode: boolean;
 }): MimeGameState {
   const safeIndex = clampIndex(currentMimeIndex, playerOrder.length);
   return {
@@ -134,6 +138,7 @@ export function buildMimeGameState({
     roundNumber,
     timerDuration,
     roundStatus,
+    hostPlayMode,
   };
 }
 

@@ -13,6 +13,7 @@ export interface MimeGameState {
   roundNumber: number;
   timerDuration: number;
   roundStatus: MimeRoundStatus;
+  hostPlayMode: boolean;
 }
 
 export interface Room {

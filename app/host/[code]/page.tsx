@@ -108,6 +108,7 @@ export default function HostPage() {
   const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("arrival");
   const [mimeCustomOrder, setMimeCustomOrder] = useState<string[]>([]);
   const [mimeRandomOrder, setMimeRandomOrder] = useState<string[]>([]);
+  const [mimeHostPlayMode, setMimeHostPlayMode] = useState(true);
   const transitionRef = useRef(false);
 
   useEffect(() => {
@@ -344,6 +345,7 @@ export default function HostPage() {
       setMimeOrderMode("arrival");
       setMimeCustomOrder(arrivalOrder);
       setMimeRandomOrder(shuffleIds(arrivalOrder));
+      setMimeHostPlayMode(true);
     }
     void updateConfig({
       game_type: nextGameType,
@@ -420,7 +422,7 @@ export default function HostPage() {
     await askQuestion(question);
   }
 
-  async function startMimeGame(playerOrder: string[]) {
+  async function startMimeGame(playerOrder: string[], hostPlayMode: boolean) {
     if (!room || !mimeMode) return;
     const liveOrder = prunePlayerOrder(playerOrder, players);
     if (!liveOrder.length) {
@@ -458,6 +460,7 @@ export default function HostPage() {
             roundNumber: 1,
             timerDuration: voteDuration,
             roundStatus: "playing",
+            hostPlayMode,
           }),
         })
         .eq("id", room.id)
@@ -513,6 +516,7 @@ export default function HostPage() {
             roundNumber: mimeGameState.roundNumber + 1,
             timerDuration: mimeGameState.timerDuration || voteDuration,
             roundStatus: "playing",
+            hostPlayMode: mimeGameState.hostPlayMode,
           }),
         })
         .eq("id", room.id)
@@ -855,6 +859,7 @@ export default function HostPage() {
           busy={busy}
           customQuestionCount={customQuestionCount}
           orderMode={mimeOrderMode}
+          hostPlayMode={mimeHostPlayMode}
           finalOrder={mimeLobbyOrder}
           customOrder={mimeCustomOrder}
           onOrderModeChange={(mode) => {
@@ -866,11 +871,12 @@ export default function HostPage() {
           onMoveCustomPlayer={(playerId, direction) => {
             setMimeCustomOrder((prev) => moveId(mergePlayerOrder(prev, players), playerId, direction));
           }}
+          onHostPlayModeChange={setMimeHostPlayMode}
           onCustomQuestionCountChange={setCustomQuestionCount}
           onCommitCustomQuestionCount={commitCustomQuestionCount}
           onToggleCategory={toggleCategory}
           onUpdateConfig={updateConfig}
-          onStart={() => void startMimeGame(mimeLobbyOrder)}
+          onStart={() => void startMimeGame(mimeLobbyOrder, mimeHostPlayMode)}
           onChangeGame={changeGame}
         />
       )}
@@ -900,6 +906,7 @@ export default function HostPage() {
           expression={currentQ as MimeExpressionQuestion}
           state={mimeGameState}
           currentMimePlayer={currentMimePlayer}
+          isHostMime={me?.id === mimeGameState.currentMimePlayerId}
           orderedPlayers={mimePlayersInOrder}
           playersOutsideOrder={mimePlayersOutsideOrder}
           roundLeft={mimeRoundLeft}
@@ -1429,11 +1436,13 @@ function MimeLobbyView({
   busy,
   customQuestionCount,
   orderMode,
+  hostPlayMode,
   finalOrder,
   customOrder,
   onOrderModeChange,
   onShuffle,
   onMoveCustomPlayer,
+  onHostPlayModeChange,
   onCustomQuestionCountChange,
   onCommitCustomQuestionCount,
   onToggleCategory,
@@ -1449,11 +1458,13 @@ function MimeLobbyView({
   busy: boolean;
   customQuestionCount: string;
   orderMode: MimeOrderMode;
+  hostPlayMode: boolean;
   finalOrder: string[];
   customOrder: string[];
   onOrderModeChange: (mode: MimeOrderMode) => void;
   onShuffle: () => void;
   onMoveCustomPlayer: (playerId: string, direction: -1 | 1) => void;
+  onHostPlayModeChange: (value: boolean) => void;
   onCustomQuestionCountChange: (value: string) => void;
   onCommitCustomQuestionCount: () => void;
   onToggleCategory: (category: GameCategory) => void;
@@ -1545,6 +1556,22 @@ function MimeLobbyView({
             </ConfigButton>
           ))}
         </ConfigGroup>
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onHostPlayModeChange(!hostPlayMode)}
+          className={`mt-2 flex w-full items-center justify-between rounded-2xl border p-4 text-left transition disabled:opacity-50 ${
+            hostPlayMode
+              ? "border-neon-cyan bg-neon-cyan/10 text-white"
+              : "border-white/10 bg-white/5 text-white/70"
+          }`}
+        >
+          <span className="font-bold">Mode hôte joueur</span>
+          <span className={hostPlayMode ? "text-neon-cyan" : "text-white/50"}>
+            {hostPlayMode ? "ON" : "OFF"}
+          </span>
+        </button>
       </section>
 
       <section className="card mb-4 p-5">
@@ -1715,6 +1742,7 @@ function MimeActiveHostView({
   expression,
   state,
   currentMimePlayer,
+  isHostMime,
   orderedPlayers,
   playersOutsideOrder,
   roundLeft,
@@ -1729,6 +1757,7 @@ function MimeActiveHostView({
   expression: MimeExpressionQuestion;
   state: NonNullable<Room["mime_game_state"]>;
   currentMimePlayer: Player | undefined;
+  isHostMime: boolean;
   orderedPlayers: Player[];
   playersOutsideOrder: Player[];
   roundLeft: number;
@@ -1744,6 +1773,7 @@ function MimeActiveHostView({
   const isFinal = state.roundNumber >= totalRounds;
   const timeIsHot = roundLeft <= 5;
   const ended = state.roundStatus === "ended" || roundLeft === 0;
+  const showExpression = !state.hostPlayMode || isHostMime;
 
   return (
     <section key={state.currentMimePlayerId} className="card flex flex-1 flex-col p-5 animate-reveal-in">
@@ -1765,10 +1795,19 @@ function MimeActiveHostView({
         <div className="mt-2 text-3xl font-black">{currentMimePlayer?.name ?? "Joueur absent"}</div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
-        <div className="text-xs font-bold uppercase tracking-wider text-white/50">Expression</div>
-        <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
-      </div>
+      {showExpression ? (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+          <div className="text-xs font-bold uppercase tracking-wider text-white/50">Expression</div>
+          <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+          <div className="text-xs font-bold uppercase tracking-wider text-white/50">Expression masquée</div>
+          <div className="mt-3 text-xl font-bold text-white/80">
+            Tu peux deviner avec les autres joueurs.
+          </div>
+        </div>
+      )}
 
       <MimeHostActions
         busy={busy}
