@@ -128,7 +128,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-base font-bold text-white">Tu préfères ?</div>
-                <div className="text-white/50">2 options, 30 sec pour voter, débat possible.</div>
+                <div className="text-white/50">2 options, choix validé, résultats instantanés.</div>
               </div>
               <div className="chip">2+ joueurs</div>
             </div>

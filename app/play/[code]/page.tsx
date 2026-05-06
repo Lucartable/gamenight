@@ -7,8 +7,8 @@ import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
 import { Category, getCategory, getQuestion } from "@/lib/questions";
 import {
-  DEBATE_DURATION_SEC,
-  VOTE_DURATION_SEC,
+  DEFAULT_REVEAL_DURATION_SEC,
+  DEFAULT_VOTE_DURATION_SEC,
   getOrCreateClientId,
 } from "@/lib/utils";
 import type { Choice, Player, Vote } from "@/types/database";
@@ -18,10 +18,9 @@ export default function PlayerPage() {
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
   const { room, players, votes, loading, error, refresh } = useRoom(code);
-  const [submitting, setSubmitting] = useState<Choice | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<Choice | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
-  // Vote optimiste : si la realtime ne propage pas tout de suite,
-  // on affiche quand même le retour visuel.
   const [optimisticVote, setOptimisticVote] = useState<{ qid: number; choice: Choice } | null>(null);
 
   const me = useMemo<Player | undefined>(() => {
@@ -30,7 +29,6 @@ export default function PlayerPage() {
     return players.find((p) => p.client_id === id);
   }, [players]);
 
-  // Auto-redirect : si l'hôte t'a transmis le rôle, basculer en /host.
   useEffect(() => {
     if (!room) return;
     const id = getOrCreateClientId();
@@ -39,44 +37,23 @@ export default function PlayerPage() {
 
   const currentQ = getQuestion(room?.current_question_id);
 
-  // Reset des états transitoires quand on change de question.
   useEffect(() => {
-    if (!currentQ || (optimisticVote && optimisticVote.qid !== currentQ.id)) {
-      setOptimisticVote(null);
-    }
-    setSubmitting(null);
-  }, [currentQ?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Filet de sécurité : si pour une raison quelconque `submitting` reste bloqué,
-  // on le libère après 5s pour que les boutons ne soient jamais figés.
-  useEffect(() => {
-    if (!submitting) return;
-    const t = setTimeout(() => setSubmitting(null), 5000);
-    return () => clearTimeout(t);
-  }, [submitting]);
+    setSelectedChoice(null);
+    setSubmitting(false);
+    setOptimisticVote(null);
+  }, [currentQ?.id]);
 
   const myVote = useMemo<Vote | undefined>(() => {
     if (!me || !currentQ) return undefined;
     return votes.find((v) => v.player_id === me.id && v.question_id === currentQ.id);
   }, [me, votes, currentQ]);
 
-  // L'optimistic prime sur le DB : il représente l'intention courante du
-  // joueur. Sans ça, changer A→B ne se voit pas tant que la BDD n'a pas
-  // encore renvoyé la nouvelle ligne (≈200ms-1.5s), donc l'écran reste
-  // figé sur l'ancien choix et on a l'impression que le clic ne fait rien.
   const effectiveVote: Choice | null =
     optimisticVote && currentQ && optimisticVote.qid === currentQ.id
       ? optimisticVote.choice
       : myVote?.choice ?? null;
 
-  async function vote(choice: Choice) {
-    console.log("[GameNight] vote()", choice, {
-      hasRoom: !!room,
-      hasCurrentQ: !!currentQ,
-      hasMe: !!me,
-      submitting,
-      playersCount: players.length,
-    });
+  async function submitVote() {
     setVoteError(null);
     if (!room) { setVoteError("Salle non chargée. Rafraîchis la page."); return; }
     if (!currentQ) { setVoteError("Aucune question active."); return; }
@@ -86,12 +63,10 @@ export default function PlayerPage() {
       );
       return;
     }
-    // Note : on n'early-return PAS sur `submitting`. L'upsert est idempotent
-    // (replace même row) — on laisse l'utilisateur re-cliquer librement.
+    if (!selectedChoice || effectiveVote || submitting) return;
 
-    // Optimiste : feedback visuel immédiat, rollback si échec.
-    setSubmitting(choice);
-    setOptimisticVote({ qid: currentQ.id, choice });
+    setSubmitting(true);
+    setOptimisticVote({ qid: currentQ.id, choice: selectedChoice });
 
     try {
       const { error } = await getSupabase().from("votes").upsert(
@@ -99,18 +74,17 @@ export default function PlayerPage() {
           room_id: room.id,
           player_id: me.id,
           question_id: currentQ.id,
-          choice,
+          choice: selectedChoice,
         },
         { onConflict: "room_id,player_id,question_id" }
       );
       if (error) throw error;
       await refresh();
     } catch (err) {
-      console.error("[GameNight] vote failed:", err);
       setVoteError(err instanceof Error ? err.message : "Erreur d'enregistrement du vote.");
       setOptimisticVote(null);
     } finally {
-      setSubmitting(null);
+      setSubmitting(false);
     }
   }
 
@@ -121,6 +95,9 @@ export default function PlayerPage() {
     return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" subtitle="Merci d'avoir joué !" action={{ label: "Retour", href: "/" }} />;
+
+  const voteDuration = room.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
+  const revealDuration = room.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
@@ -134,30 +111,32 @@ export default function PlayerPage() {
 
       {room.status === "lobby" && <Lobby players={players} />}
 
-      {room.status === "voting" && currentQ && (
+      {room.status === "question_active" && currentQ && (
         <VoteScreen
           question={currentQ}
           startedAt={room.question_started_at}
-          onVote={vote}
-          myVote={effectiveVote}
+          durationSec={voteDuration}
+          selectedChoice={selectedChoice}
+          validatedChoice={effectiveVote}
           submitting={submitting}
+          onSelect={setSelectedChoice}
+          onSubmit={submitVote}
         />
       )}
 
-      {(room.status === "reveal" || room.status === "debate") && currentQ && (
+      {room.status === "reveal_results" && currentQ && (
         <Reveal
           question={currentQ}
           players={players}
           votes={votes.filter((v) => v.question_id === currentQ.id)}
-          isDebate={room.status === "debate"}
-          debateStartedAt={room.debate_started_at}
+          revealStartedAt={room.reveal_started_at}
+          revealDurationSec={revealDuration}
+          autoplay={room.autoplay}
         />
       )}
     </main>
   );
 }
-
-// ---------- Sous-vues ------------------------------------------------------
 
 function PlayerHeader({
   code,
@@ -206,25 +185,30 @@ function Lobby({ players }: { players: Player[] }) {
 function VoteScreen({
   question,
   startedAt,
-  onVote,
-  myVote,
+  durationSec,
+  selectedChoice,
+  validatedChoice,
   submitting,
+  onSelect,
+  onSubmit,
 }: {
   question: { id: number; optionA: string; optionB: string; category: Category };
   startedAt: string | null;
-  onVote: (c: Choice) => void;
-  myVote: Choice | null;
-  submitting: Choice | null;
+  durationSec: number;
+  selectedChoice: Choice | null;
+  validatedChoice: Choice | null;
+  submitting: boolean;
+  onSelect: (c: Choice) => void;
+  onSubmit: () => void;
 }) {
-  const left = useCountdown(startedAt, VOTE_DURATION_SEC);
+  const left = useCountdown(startedAt, durationSec);
+  const locked = Boolean(validatedChoice) || submitting || left === 0;
   const cat = getCategory(question.category);
 
   return (
     <section className="flex flex-1 flex-col">
       <div className="card mb-3 flex items-center justify-between p-3 px-4">
-        <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
-          🗳️ Vote !
-        </span>
+        <span className="chip">{cat?.emoji} {cat?.label}</span>
         <div>
           <span className="text-3xl font-black tabular-nums">{left}</span>
           <span className="ml-2 text-white/60">sec</span>
@@ -236,24 +220,31 @@ function VoteScreen({
           accent="pink"
           label="A"
           text={question.optionA}
-          selected={myVote === "A"}
-          loading={submitting === "A"}
-          onClick={() => onVote("A")}
+          selected={(validatedChoice ?? selectedChoice) === "A"}
+          disabled={locked}
+          onClick={() => onSelect("A")}
         />
         <ChoiceButton
           accent="cyan"
           label="B"
           text={question.optionB}
-          selected={myVote === "B"}
-          loading={submitting === "B"}
-          onClick={() => onVote("B")}
+          selected={(validatedChoice ?? selectedChoice) === "B"}
+          disabled={locked}
+          onClick={() => onSelect("B")}
         />
       </div>
 
-      {myVote && (
-        <p className="mt-4 text-center text-white/70">
-          Vote enregistré ✓ — tu peux changer tant que le timer tourne.
-        </p>
+      <button
+        type="button"
+        disabled={!selectedChoice || locked}
+        onClick={onSubmit}
+        className="btn-primary mt-4 w-full disabled:shadow-none"
+      >
+        {submitting ? "Envoi..." : validatedChoice ? "Vote envoyé" : "Valider mon choix"}
+      </button>
+
+      {validatedChoice && (
+        <p className="mt-3 text-center text-sm font-semibold text-neon-green">Vote envoyé</p>
       )}
     </section>
   );
@@ -264,35 +255,31 @@ function ChoiceButton({
   label,
   text,
   selected,
-  loading,
+  disabled,
   onClick,
 }: {
   accent: "pink" | "cyan";
   label: string;
   text: string;
   selected: boolean;
-  loading: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   const base = accent === "pink" ? "border-neon-pink/40 bg-neon-pink/10" : "border-neon-cyan/40 bg-neon-cyan/10";
-  const sel  = accent === "pink" ? "ring-4 ring-neon-pink shadow-glow-pink" : "ring-4 ring-neon-cyan shadow-glow-cyan";
+  const selectedClass = accent === "pink" ? "ring-4 ring-neon-pink shadow-glow-pink" : "ring-4 ring-neon-cyan shadow-glow-cyan";
   const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
 
   return (
     <button
       type="button"
-      onClick={() => {
-        console.log("[GameNight] ChoiceButton click", label);
-        try { onClick(); } catch (e) { console.error("[GameNight] click handler threw", e); }
-      }}
-      style={{ touchAction: "manipulation", cursor: "pointer", position: "relative", zIndex: 10 }}
-      className={`flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] ${base} ${selected ? sel : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${base} ${selected ? selectedClass : ""}`}
     >
-      <span className={`pointer-events-none text-sm font-bold uppercase tracking-widest ${labelColor}`}>
+      <span className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>
         Option {label}
       </span>
-      <span className="pointer-events-none mt-3 text-2xl font-bold leading-tight">{text}</span>
-      {loading && <span className="pointer-events-none mt-3 text-sm text-white/60">Envoi...</span>}
+      <span className="mt-3 text-2xl font-bold leading-tight">{text}</span>
     </button>
   );
 }
@@ -301,24 +288,25 @@ function Reveal({
   question,
   players,
   votes,
-  isDebate,
-  debateStartedAt,
+  revealStartedAt,
+  revealDurationSec,
+  autoplay,
 }: {
   question: { id: number; optionA: string; optionB: string; category: Category };
   players: Player[];
   votes: Vote[];
-  isDebate: boolean;
-  debateStartedAt: string | null;
+  revealStartedAt: string | null;
+  revealDurationSec: number;
+  autoplay: boolean;
 }) {
-  const debateLeft = useCountdown(isDebate ? debateStartedAt : null, DEBATE_DURATION_SEC);
+  const revealLeft = useCountdown(autoplay ? revealStartedAt : null, revealDurationSec);
   const cat = getCategory(question.category);
-  const namesFor = (c: Choice) =>
+  const stats = getVoteStats(players, votes);
+  const namesFor = (choice: Choice) =>
     votes
-      .filter((v) => v.choice === c)
-      .map((v) => players.find((p) => p.id === v.player_id)?.name ?? "?");
-
-  const a = namesFor("A");
-  const b = namesFor("B");
+      .filter((v) => v.choice === choice)
+      .map((v) => players.find((p) => p.id === v.player_id)?.name)
+      .filter((name): name is string => Boolean(name));
 
   return (
     <section className="flex flex-1 flex-col">
@@ -328,49 +316,71 @@ function Reveal({
       </div>
 
       <div className="grid flex-1 gap-3">
-        <RevealCard accent="pink" label="A" text={question.optionA} names={a} />
-        <RevealCard accent="cyan" label="B" text={question.optionB} names={b} />
+        <ResultCard
+          accent="pink"
+          label="Option A"
+          text={question.optionA}
+          count={stats.aCount}
+          percent={stats.aPercent}
+          names={namesFor("A")}
+        />
+        <ResultCard
+          accent="cyan"
+          label="Option B"
+          text={question.optionB}
+          count={stats.bCount}
+          percent={stats.bPercent}
+          names={namesFor("B")}
+        />
       </div>
 
-      {isDebate && (
-        <div className="mt-4 rounded-2xl border border-neon-yellow/50 bg-neon-yellow/10 p-4 text-center">
-          <div className="text-xs uppercase text-neon-yellow">Débat en cours</div>
-          <div className="mt-1 text-3xl font-black tabular-nums">{formatMMSS(debateLeft)}</div>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+        <div className="text-xs uppercase tracking-wider text-white/50">
+          {stats.total} vote{stats.total > 1 ? "s" : ""} validé{stats.total > 1 ? "s" : ""}
         </div>
-      )}
+        {autoplay && <div className="mt-1 text-3xl font-black tabular-nums">{revealLeft}s</div>}
+      </div>
     </section>
   );
 }
 
-function RevealCard({
+function ResultCard({
   accent,
   label,
   text,
+  count,
+  percent,
   names,
 }: {
   accent: "pink" | "cyan";
   label: string;
   text: string;
+  count: number;
+  percent: number;
   names: string[];
 }) {
-  // Style volontairement statique (border dashed, bg neutre) pour qu'on ne
-  // confonde pas avec les boutons de vote.
-  const labelColor = accent === "pink" ? "text-neon-pink/70" : "text-neon-cyan/70";
+  const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
+  const barColor = accent === "pink" ? "bg-neon-pink" : "bg-neon-cyan";
+
   return (
-    <div className="flex flex-col rounded-3xl border border-dashed border-white/15 bg-white/5 p-4">
-      <div className={`flex items-center justify-between text-sm font-bold uppercase tracking-widest ${labelColor}`}>
-        <span>📊 Option {label}</span>
-        <span className="text-white/40">{names.length} vote{names.length > 1 ? "s" : ""}</span>
-      </div>
+    <div className="flex flex-col rounded-3xl border border-white/10 bg-white/5 p-4">
+      <div className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>{label}</div>
       <div className="mt-2 text-lg font-semibold text-white/90">{text}</div>
-      {names.length > 0 ? (
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="text-4xl font-black tabular-nums">{percent}%</div>
+        <div className="pb-1 text-sm text-white/60">
+          {count} vote{count > 1 ? "s" : ""}
+        </div>
+      </div>
+      <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
+      </div>
+      {names.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
-          {names.map((n, i) => (
-            <li key={i} className="chip">{n}</li>
+          {names.map((name) => (
+            <li key={name} className="chip">{name}</li>
           ))}
         </ul>
-      ) : (
-        <div className="mt-3 text-sm text-white/40">— Personne</div>
       )}
     </div>
   );
@@ -398,8 +408,25 @@ function CenteredMessage({
   );
 }
 
-function formatMMSS(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+interface VoteStats {
+  total: number;
+  aCount: number;
+  bCount: number;
+  aPercent: number;
+  bPercent: number;
+}
+
+function getVoteStats(players: Player[], votes: Vote[]): VoteStats {
+  const playerIds = new Set(players.map((p) => p.id));
+  const validVotes = votes.filter((vote) => playerIds.has(vote.player_id));
+  const total = validVotes.length;
+  const aCount = validVotes.filter((vote) => vote.choice === "A").length;
+  const bCount = validVotes.filter((vote) => vote.choice === "B").length;
+  return {
+    total,
+    aCount,
+    bCount,
+    aPercent: total === 0 ? 0 : Math.round((aCount / total) * 100),
+    bPercent: total === 0 ? 0 : Math.round((bCount / total) * 100),
+  };
 }

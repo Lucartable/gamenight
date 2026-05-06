@@ -1,4 +1,4 @@
-export type RoomStatus = "lobby" | "voting" | "reveal" | "debate" | "ended";
+export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "ended";
 export type Choice = "A" | "B";
 
 export interface Room {
@@ -8,8 +8,11 @@ export interface Room {
   status: RoomStatus;
   current_question_id: number | null;
   question_started_at: string | null;
-  debate_started_at: string | null;
-  debate_mode: boolean;
+  reveal_started_at: string | null;
+  total_questions: number;
+  vote_duration_sec: number;
+  reveal_duration_sec: number;
+  autoplay: boolean;
   created_at: string;
 }
 

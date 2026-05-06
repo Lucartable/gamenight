@@ -10,9 +10,10 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 ## ✨ Fonctionnalités
 
 - 🎲 **400+ questions** réparties en **7 catégories** : Classique, Hot 🔥 (18+), Trash 💀, Insolite 🤪, Éthique ⚖️, Couple 💑, Pop culture 🎬
-- ⏱️ **Timer synchronisé** côté serveur (pas de désynchro entre joueurs)
+- ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
-- 🔥 **Mode débat** de 2 minutes après la révélation
+- ▶️ **Lecture automatique** optionnelle pour enchaîner les questions
+- ✅ **Validation manuelle du vote** avant envoi Supabase
 - 📱 **Mobile first** : gros boutons, fonctionne sur tous les téléphones
 - 🎨 **Thème sombre festif** (néon rose/cyan)
 - 🚫 **Aucune question ne se répète** dans la même partie
@@ -35,7 +36,7 @@ npm install
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-> **Tu as déjà un projet déployé ?** Re-exécute `schema.sql` (il est idempotent) — la nouvelle version ajoute `asked_questions` à la publication realtime, ce qui élimine un cas où la liste des questions posées ne se mettait pas à jour côté hôte.
+> **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
 
 ### 3. Configurer les variables d'environnement
 
@@ -64,13 +65,14 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 
 1. **L'hôte** clique sur *Créer une salle* → reçoit un code (ex : `LOUP-42`).
 2. **Les joueurs** ouvrent le site sur leur téléphone, cliquent sur *Rejoindre une salle*, entrent le code et leur prénom.
-3. L'hôte choisit les **ambiances** (catégories) qu'il veut jouer.
-4. L'hôte clique sur **🎲 Question aléatoire** (ou pioche manuellement dans la liste) → un timer de **30 secondes** démarre pour tout le monde.
-5. Chaque joueur — **y compris l'hôte** — voit deux gros boutons (Option A / Option B) et vote.
-6. À la fin du timer (ou si l'hôte révèle plus tôt), tout le monde voit qui a voté quoi.
-7. L'hôte choisit : **question suivante** ou **mode débat** (2 minutes).
-8. À tout moment, l'hôte peut **passer le rôle d'hôte** à un autre joueur via le bouton 👑 Transférer.
-9. L'hôte peut terminer la partie à tout moment.
+3. L'hôte configure le nombre de questions, les durées et la lecture automatique.
+4. L'hôte choisit les **ambiances** (catégories) qu'il veut jouer.
+5. L'hôte clique sur **Lancer la partie** → une question aléatoire compatible démarre.
+6. Chaque joueur — **y compris l'hôte** — choisit une option puis clique sur **Valider mon choix**.
+7. À la révélation, tout le monde voit les pourcentages et le nombre de votes.
+8. L'hôte lance la question suivante, ou la lecture automatique s'en charge.
+9. À tout moment, l'hôte peut **passer le rôle d'hôte** à un autre joueur via le bouton 👑 Transférer.
+10. L'hôte peut terminer la partie à tout moment.
 
 ---
 
@@ -93,7 +95,7 @@ gamenight/
 ├── types/
 │   └── database.ts               # Types Supabase
 ├── supabase/
-│   └── schema.sql                # Schéma à exécuter dans Supabase (idempotent)
+│   └── schema.sql                # Schéma complet à exécuter dans Supabase
 └── ...
 ```
 
