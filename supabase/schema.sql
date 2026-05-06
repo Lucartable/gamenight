@@ -1,5 +1,5 @@
 -- =========================================================================
--- GameNight - Schéma Supabase complet pour "Tu préfères ?"
+-- GameNight - Schéma Supabase complet
 -- À exécuter dans l'éditeur SQL Supabase pour repartir sur une base propre.
 --
 -- ATTENTION : ce script supprime les anciennes tables de jeu avant de les
@@ -8,14 +8,21 @@
 
 drop table if exists public.votes cascade;
 drop table if exists public.asked_questions cascade;
+drop table if exists public.questions cascade;
 drop table if exists public.players cascade;
 drop table if exists public.rooms cascade;
+
+-- ----- TYPES LOGIQUES ------------------------------------------------------
+-- Les checks textuels gardent le schéma simple côté Supabase JS.
+-- game_type : 'who_would' = vote entre deux options, 'who_of_us' = joueur désigné.
 
 -- ----- ROOMS ---------------------------------------------------------------
 create table public.rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   host_client_id text not null,
+  game_type text
+    check (game_type in ('who_would','who_of_us')),
   status text not null default 'lobby'
     check (status in ('lobby','question_active','reveal_results','ended')),
   current_question_id integer,
@@ -28,10 +35,34 @@ create table public.rooms (
   reveal_duration_sec integer not null default 15
     check (reveal_duration_sec between 3 and 300),
   autoplay boolean not null default false,
+  selected_categories text[] not null default '{}',
   created_at timestamptz not null default now()
 );
 
 create index rooms_code_idx on public.rooms(code);
+create index rooms_game_type_idx on public.rooms(game_type);
+
+-- ----- QUESTIONS -----------------------------------------------------------
+-- L'app embarque aujourd'hui les questions dans le code pour rester rapide.
+-- Cette table prépare une migration future vers des questions administrables.
+create table public.questions (
+  id integer primary key,
+  game_type text not null
+    check (game_type in ('who_would','who_of_us')),
+  text text,
+  option_a text,
+  option_b text,
+  category text not null,
+  difficulty text,
+  created_at timestamptz not null default now(),
+  check (
+    (game_type = 'who_would' and option_a is not null and option_b is not null)
+    or
+    (game_type = 'who_of_us' and text is not null and option_a is null and option_b is null)
+  )
+);
+
+create index questions_game_category_idx on public.questions(game_type, category);
 
 -- ----- PLAYERS -------------------------------------------------------------
 create table public.players (
@@ -50,26 +81,37 @@ create index players_room_id_idx on public.players(room_id);
 create table public.votes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
-  player_id uuid not null references public.players(id) on delete cascade,
+  game_type text not null
+    check (game_type in ('who_would','who_of_us')),
+  voter_player_id uuid not null references public.players(id) on delete cascade,
   question_id integer not null,
-  choice text not null check (choice in ('A','B')),
+  selected_option text check (selected_option in ('A','B')),
+  selected_player_id uuid references public.players(id) on delete set null,
   created_at timestamptz not null default now(),
-  unique (room_id, player_id, question_id)
+  unique (room_id, game_type, question_id, voter_player_id),
+  check (
+    (game_type = 'who_would' and selected_option is not null and selected_player_id is null)
+    or
+    (game_type = 'who_of_us' and selected_option is null and selected_player_id is not null)
+  )
 );
 
-create index votes_room_q_idx on public.votes(room_id, question_id);
-create index votes_player_idx on public.votes(player_id);
+create index votes_room_game_q_idx on public.votes(room_id, game_type, question_id);
+create index votes_voter_idx on public.votes(voter_player_id);
+create index votes_selected_player_idx on public.votes(selected_player_id);
 
 -- ----- ASKED QUESTIONS -----------------------------------------------------
 create table public.asked_questions (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
+  game_type text not null
+    check (game_type in ('who_would','who_of_us')),
   question_id integer not null,
   asked_at timestamptz not null default now(),
-  unique (room_id, question_id)
+  unique (room_id, game_type, question_id)
 );
 
-create index asked_questions_room_idx on public.asked_questions(room_id);
+create index asked_questions_room_game_idx on public.asked_questions(room_id, game_type);
 
 -- =========================================================================
 -- ROW LEVEL SECURITY
@@ -77,11 +119,15 @@ create index asked_questions_room_idx on public.asked_questions(room_id);
 -- À durcir si l'app devient publique à grande échelle.
 -- =========================================================================
 alter table public.rooms enable row level security;
+alter table public.questions enable row level security;
 alter table public.players enable row level security;
 alter table public.votes enable row level security;
 alter table public.asked_questions enable row level security;
 
 create policy "rooms_all" on public.rooms
+  for all using (true) with check (true);
+
+create policy "questions_all" on public.questions
   for all using (true) with check (true);
 
 create policy "players_all" on public.players
@@ -95,10 +141,11 @@ create policy "asked_questions_all" on public.asked_questions
 
 -- =========================================================================
 -- REALTIME
--- Les updates de rooms pilotent le flow. Les players/votes/asked_questions
--- gardent les clients synchronisés sans dépendre uniquement du polling.
+-- rooms pilote le flow, players/votes/asked_questions gardent tous les écrans
+-- synchronisés. questions est ajouté aussi pour une future édition live.
 -- =========================================================================
 alter table public.rooms           replica identity full;
+alter table public.questions       replica identity full;
 alter table public.players         replica identity full;
 alter table public.votes           replica identity full;
 alter table public.asked_questions replica identity full;
@@ -107,6 +154,11 @@ do $$
 begin
   begin
     alter publication supabase_realtime add table public.rooms;
+  exception when duplicate_object then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table public.questions;
   exception when duplicate_object then null;
   end;
 

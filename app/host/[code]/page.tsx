@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
 import {
-  CATEGORIES,
-  Category,
-  getCategory,
-  getQuestion,
-  pickRandomQuestion,
-  QUESTIONS,
-} from "@/lib/questions";
+  GAME_DEFINITIONS,
+  type GameCategory,
+  type GameQuestion,
+  type WhoOfUsGameQuestion,
+  type WhoWouldQuestion,
+  getCategoryForGame,
+  getDefaultCategories,
+  getGameCategories,
+  getGameDefinition,
+  getQuestionForGame,
+  getQuestionsForGame,
+  pickRandomQuestionForGame,
+} from "@/lib/gameQuestions";
 import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_TOTAL_QUESTIONS,
@@ -22,41 +28,44 @@ import {
   VOTE_DURATION_OPTIONS,
   clampInt,
   getOrCreateClientId,
-  loadCategories,
-  saveCategories,
   secondsLeft,
 } from "@/lib/utils";
-import type { Choice, Player, Room, Vote } from "@/types/database";
+import type { Choice, GameType, Player, Room, Vote } from "@/types/database";
 
 type RoomConfigPatch = Partial<
-  Pick<Room, "total_questions" | "vote_duration_sec" | "reveal_duration_sec" | "autoplay">
+  Pick<
+    Room,
+    | "game_type"
+    | "current_question_id"
+    | "selected_categories"
+    | "total_questions"
+    | "vote_duration_sec"
+    | "reveal_duration_sec"
+    | "autoplay"
+  >
 >;
+
+interface LocalVote {
+  qid: number;
+  selected_option: Choice | null;
+  selected_player_id: string | null;
+}
 
 export default function HostPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, askedQuestionIds, loading, error, refresh } = useRoom(code);
+  const { room, players, votes, askedQuestions, loading, error, refresh } = useRoom(code);
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [customQuestionCount, setCustomQuestionCount] = useState(String(DEFAULT_TOTAL_QUESTIONS));
-  const [hostSelectedChoice, setHostSelectedChoice] = useState<Choice | null>(null);
+  const [hostSelectedOption, setHostSelectedOption] = useState<Choice | null>(null);
+  const [hostSelectedPlayerId, setHostSelectedPlayerId] = useState<string | null>(null);
   const [hostSubmitting, setHostSubmitting] = useState(false);
-  const [optimisticHostVote, setOptimisticHostVote] = useState<{ qid: number; choice: Choice } | null>(null);
+  const [optimisticHostVote, setOptimisticHostVote] = useState<LocalVote | null>(null);
   const transitionRef = useRef(false);
-
-  useEffect(() => {
-    if (!code) return;
-    const saved = loadCategories(code) as Category[];
-    setSelectedCategories(saved.length ? saved : ["soft"]);
-  }, [code]);
-
-  useEffect(() => {
-    if (code) saveCategories(code, selectedCategories);
-  }, [code, selectedCategories]);
 
   useEffect(() => {
     if (room?.total_questions) setCustomQuestionCount(String(room.total_questions));
@@ -73,31 +82,59 @@ export default function HostPage() {
     return players.find((p) => p.client_id === id);
   }, [players]);
 
-  const currentQ = getQuestion(room?.current_question_id);
+  const gameType = room?.game_type ?? null;
+  const selectedCategories = useMemo(
+    () => getSelectedCategories(room),
+    [room]
+  );
+  const gameDefinition = getGameDefinition(gameType);
+  const currentQ = getQuestionForGame(gameType, room?.current_question_id);
   const totalQuestions = room?.total_questions ?? DEFAULT_TOTAL_QUESTIONS;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
   const autoplay = room?.autoplay ?? false;
 
-  const blockedQuestionIds = useMemo(() => {
-    if (!currentQ || askedQuestionIds.includes(currentQ.id)) return askedQuestionIds;
-    return [...askedQuestionIds, currentQ.id];
-  }, [askedQuestionIds, currentQ]);
-
-  const roundsPlayed = blockedQuestionIds.length;
-  const currentVotes = useMemo(
-    () => (currentQ ? votes.filter((v) => v.question_id === currentQ.id) : []),
-    [votes, currentQ]
+  const askedForGameIds = useMemo(
+    () =>
+      gameType
+        ? askedQuestions
+            .filter((asked) => asked.game_type === gameType)
+            .map((asked) => asked.question_id)
+        : [],
+    [askedQuestions, gameType]
   );
+  const blockedQuestionIds = useMemo(() => {
+    if (!currentQ || askedForGameIds.includes(currentQ.id)) return askedForGameIds;
+    return [...askedForGameIds, currentQ.id];
+  }, [askedForGameIds, currentQ]);
+  const roundsPlayed = blockedQuestionIds.length;
+
+  const currentVotes = useMemo(
+    () =>
+      currentQ && gameType
+        ? votes.filter((vote) => vote.game_type === gameType && vote.question_id === currentQ.id)
+        : [],
+    [votes, currentQ, gameType]
+  );
+
   const filteredAvailable = useMemo(() => {
-    const cats = selectedCategories.length ? selectedCategories : CATEGORIES.map((c) => c.id);
-    return QUESTIONS.filter(
-      (q) => cats.includes(q.category) && !blockedQuestionIds.includes(q.id)
+    if (!gameType) return [];
+    return getQuestionsForGame(gameType).filter(
+      (question) =>
+        selectedCategories.includes(question.category) &&
+        !blockedQuestionIds.includes(question.id)
     );
-  }, [selectedCategories, blockedQuestionIds]);
+  }, [gameType, selectedCategories, blockedQuestionIds]);
+
+  const submittedVotesCount = useMemo(
+    () => countSubmittedVotes(gameType, players, currentVotes),
+    [gameType, players, currentVotes]
+  );
+  const allVotesSubmitted = players.length > 0 && submittedVotesCount >= players.length;
 
   useEffect(() => {
-    setHostSelectedChoice(null);
+    setHostSelectedOption(null);
+    setHostSelectedPlayerId(null);
     setHostSubmitting(false);
     setOptimisticHostVote(null);
   }, [currentQ?.id]);
@@ -113,11 +150,11 @@ export default function HostPage() {
     revealStartedAt !== null && secondsLeft(revealStartedAt, revealDuration) === 0;
 
   useEffect(() => {
-    if (room?.status === "question_active" && voteHasExpired) {
+    if (room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, voteHasExpired, currentQ?.id]);
+  }, [room?.status, voteHasExpired, allVotesSubmitted, currentQ?.id]);
 
   useEffect(() => {
     if (room?.status === "reveal_results" && autoplay && revealHasExpired) {
@@ -157,55 +194,72 @@ export default function HostPage() {
     }
   }
 
-  function toggleCategory(cat: Category) {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+  function chooseGame(nextGameType: GameType) {
+    void updateConfig({
+      game_type: nextGameType,
+      selected_categories: getDefaultCategories(nextGameType),
+      current_question_id: null,
+    });
+  }
+
+  function changeGame() {
+    void updateConfig({
+      game_type: null,
+      selected_categories: [],
+      current_question_id: null,
+    });
+  }
+
+  function toggleCategory(category: GameCategory) {
+    const next = selectedCategories.includes(category)
+      ? selectedCategories.filter((item) => item !== category)
+      : [...selectedCategories, category];
+    void updateConfig({ selected_categories: next });
   }
 
   function commitCustomQuestionCount() {
-    const next = clampInt(Number.parseInt(customQuestionCount, 10), 1, QUESTIONS.length);
+    const next = clampInt(Number.parseInt(customQuestionCount, 10), 1, getQuestionsForGame(gameType).length || 400);
     setCustomQuestionCount(String(next));
     void updateConfig({ total_questions: next });
   }
 
-  async function askQuestion(questionId: number) {
-    if (!room) return;
+  async function askQuestion(question: GameQuestion) {
+    if (!room || !gameType) return;
     await runTransition(async () => {
       const supabase = getSupabase();
-      const { error: aqErr } = await supabase
+      const { error: askedError } = await supabase
         .from("asked_questions")
         .upsert(
-          { room_id: room.id, question_id: questionId },
-          { onConflict: "room_id,question_id" }
+          { room_id: room.id, game_type: gameType, question_id: question.id },
+          { onConflict: "room_id,game_type,question_id" }
         );
-      if (aqErr) throw aqErr;
+      if (askedError) throw askedError;
 
-      const { error: roomErr } = await supabase
+      const { error: roomError } = await supabase
         .from("rooms")
         .update({
           status: "question_active",
-          current_question_id: questionId,
+          current_question_id: question.id,
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
         })
         .eq("id", room.id);
-      if (roomErr) throw roomErr;
+      if (roomError) throw roomError;
     });
   }
 
   async function goToNextQuestion() {
-    if (!room) return;
+    if (!room || !gameType) return;
     if (roundsPlayed >= totalQuestions || filteredAvailable.length === 0) {
       await finishGame(false);
       return;
     }
-    const question = pickRandomQuestion(selectedCategories, blockedQuestionIds);
+    const question = pickRandomQuestionForGame(gameType, selectedCategories, blockedQuestionIds);
     if (!question) {
       await finishGame(false);
       return;
     }
-    await askQuestion(question.id);
+    await askQuestion(question);
   }
 
   async function revealNow() {
@@ -252,39 +306,50 @@ export default function HostPage() {
     if (!confirm(`Passer le rôle d'hôte à ${player.name} ?`)) return;
     await runTransition(async () => {
       const supabase = getSupabase();
-      const { error: e1 } = await supabase
+      const { error: currentHostError } = await supabase
         .from("players")
         .update({ is_host: false })
         .eq("room_id", room.id)
         .eq("client_id", room.host_client_id);
-      if (e1) throw e1;
+      if (currentHostError) throw currentHostError;
 
-      const { error: e2 } = await supabase.from("players").update({ is_host: true }).eq("id", player.id);
-      if (e2) throw e2;
+      const { error: newHostError } = await supabase
+        .from("players")
+        .update({ is_host: true })
+        .eq("id", player.id);
+      if (newHostError) throw newHostError;
 
-      const { error: e3 } = await supabase
+      const { error: roomError } = await supabase
         .from("rooms")
         .update({ host_client_id: player.client_id })
         .eq("id", room.id);
-      if (e3) throw e3;
+      if (roomError) throw roomError;
       setShowTransfer(false);
     });
   }
 
   async function submitHostVote() {
-    if (!room || !currentQ || !me || !hostSelectedChoice || hostSubmitting) return;
+    if (!room || !gameType || !currentQ || !me || hostSubmitting) return;
+    const selectedOption = gameType === "who_would" ? hostSelectedOption : null;
+    const selectedPlayerId = gameType === "who_of_us" ? hostSelectedPlayerId : null;
+    if (gameType === "who_would" && !selectedOption) return;
+    if (gameType === "who_of_us" && (!selectedPlayerId || selectedPlayerId === me.id)) return;
+
     setHostSubmitting(true);
     setActionError(null);
-    setOptimisticHostVote({ qid: currentQ.id, choice: hostSelectedChoice });
+    setOptimisticHostVote({ qid: currentQ.id, selected_option: selectedOption, selected_player_id: selectedPlayerId });
+
     try {
       const { error } = await getSupabase().from("votes").upsert(
         {
           room_id: room.id,
-          player_id: me.id,
+          game_type: gameType,
+          voter_player_id: me.id,
           question_id: currentQ.id,
-          choice: hostSelectedChoice,
+          selected_option: selectedOption,
+          selected_player_id: selectedPlayerId,
         },
-        { onConflict: "room_id,player_id,question_id" }
+        { onConflict: "room_id,game_type,question_id,voter_player_id" }
       );
       if (error) throw error;
       await refresh();
@@ -302,13 +367,13 @@ export default function HostPage() {
   if (room.status === "ended")
     return <CenteredMessage title="Partie terminée" action={{ label: "Retour", href: "/" }} />;
 
-  const dbVote: Choice | null = me ? currentVotes.find((v) => v.player_id === me.id)?.choice ?? null : null;
-  const myVote: Choice | null =
+  const dbVote = me ? currentVotes.find((vote) => vote.voter_player_id === me.id) : undefined;
+  const effectiveHostVote =
     optimisticHostVote && currentQ && optimisticHostVote.qid === currentQ.id
-      ? optimisticHostVote.choice
-      : dbVote;
-  const otherPlayers = players.filter((p) => p.client_id !== room.host_client_id);
-  const stats = getVoteStats(players, currentVotes);
+      ? optimisticHostVote
+      : voteToLocalVote(dbVote);
+  const otherPlayers = players.filter((player) => player.client_id !== room.host_client_id);
+  const targetPlayers = me ? players.filter((player) => player.id !== me.id) : players;
   const isFinalReveal = room.status === "reveal_results" && roundsPlayed >= totalQuestions;
 
   return (
@@ -316,11 +381,12 @@ export default function HostPage() {
       <RoomHeader
         code={room.code}
         status={room.status}
+        gameLabel={gameDefinition?.shortLabel}
         playersCount={players.length}
         round={roundsPlayed}
         totalQuestions={totalQuestions}
         onEnd={() => void finishGame(true)}
-        onToggleTransfer={() => setShowTransfer((s) => !s)}
+        onToggleTransfer={() => setShowTransfer((value) => !value)}
         canTransfer={otherPlayers.length > 0}
       />
 
@@ -339,10 +405,16 @@ export default function HostPage() {
         </div>
       )}
 
-      {room.status === "lobby" && (
+      {room.status === "lobby" && !gameType && (
+        <GameSelectionView busy={busy} onChoose={chooseGame} />
+      )}
+
+      {room.status === "lobby" && gameType && gameDefinition && (
         <LobbyView
           players={players}
           availableCount={filteredAvailable.length}
+          gameType={gameType}
+          gameLabel={gameDefinition.label}
           selectedCategories={selectedCategories}
           room={room}
           busy={busy}
@@ -352,31 +424,63 @@ export default function HostPage() {
           onToggleCategory={toggleCategory}
           onUpdateConfig={updateConfig}
           onStart={goToNextQuestion}
+          onChangeGame={changeGame}
         />
       )}
 
-      {room.status === "question_active" && currentQ && (
-        <QuestionActiveView
-          question={currentQ}
+      {room.status === "question_active" && currentQ && gameType === "who_would" && (
+        <WhoWouldActiveView
+          question={currentQ as WhoWouldQuestion}
           voteLeft={voteLeft}
-          votedCount={stats.total}
+          votedCount={submittedVotesCount}
           totalPlayers={players.length}
-          selectedChoice={hostSelectedChoice}
-          validatedChoice={myVote}
+          selectedChoice={hostSelectedOption}
+          validatedChoice={effectiveHostVote?.selected_option ?? null}
           submitting={hostSubmitting}
           busy={busy}
-          onSelect={setHostSelectedChoice}
+          onSelect={setHostSelectedOption}
           onSubmit={submitHostVote}
           onRevealNow={revealNow}
         />
       )}
 
-      {room.status === "reveal_results" && currentQ && (
-        <RevealView
-          question={currentQ}
+      {room.status === "question_active" && currentQ && gameType === "who_of_us" && (
+        <WhoOfUsActiveView
+          question={currentQ as WhoOfUsGameQuestion}
+          voteLeft={voteLeft}
+          votedCount={submittedVotesCount}
+          totalPlayers={players.length}
+          targetPlayers={targetPlayers}
+          selectedPlayerId={hostSelectedPlayerId}
+          validatedPlayerId={effectiveHostVote?.selected_player_id ?? null}
+          submitting={hostSubmitting}
+          busy={busy}
+          onSelect={setHostSelectedPlayerId}
+          onSubmit={submitHostVote}
+          onRevealNow={revealNow}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && gameType === "who_would" && (
+        <WhoWouldRevealView
+          question={currentQ as WhoWouldQuestion}
           players={players}
           votes={currentVotes}
-          stats={stats}
+          revealLeft={revealLeft}
+          autoplay={autoplay}
+          isFinal={isFinalReveal || filteredAvailable.length === 0}
+          busy={busy}
+          onNext={goToNextQuestion}
+          onEnd={() => void finishGame(false)}
+          onBackToLobby={resetToLobby}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && gameType === "who_of_us" && (
+        <WhoOfUsRevealView
+          question={currentQ as WhoOfUsGameQuestion}
+          players={players}
+          votes={currentVotes}
           revealLeft={revealLeft}
           autoplay={autoplay}
           isFinal={isFinalReveal || filteredAvailable.length === 0}
@@ -390,9 +494,46 @@ export default function HostPage() {
   );
 }
 
+function GameSelectionView({
+  busy,
+  onChoose,
+}: {
+  busy: boolean;
+  onChoose: (gameType: GameType) => void;
+}) {
+  return (
+    <section className="flex flex-1 flex-col justify-center">
+      <div className="mb-5 text-center">
+        <h1 className="text-3xl font-black">Choisir un jeu</h1>
+        <p className="mt-2 text-white/60">Deux ambiances rapides, un seul code de salle.</p>
+      </div>
+      <div className="grid gap-3">
+        {GAME_DEFINITIONS.map((game) => (
+          <button
+            key={game.id}
+            type="button"
+            disabled={busy}
+            onClick={() => onChoose(game.id)}
+            className="card p-5 text-left transition hover:border-neon-cyan/50 hover:bg-bg-soft disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-2xl font-black">{game.label}</div>
+                <div className="mt-2 text-sm text-white/60">{game.description}</div>
+              </div>
+              <span className="text-2xl text-neon-cyan">→</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function RoomHeader({
   code,
   status,
+  gameLabel,
   playersCount,
   round,
   totalQuestions,
@@ -402,6 +543,7 @@ function RoomHeader({
 }: {
   code: string;
   status: string;
+  gameLabel: string | undefined;
   playersCount: number;
   round: number;
   totalQuestions: number;
@@ -419,6 +561,7 @@ function RoomHeader({
           </div>
           <div className="mt-1 text-sm text-white/60">
             {playersCount} joueur{playersCount > 1 ? "s" : ""} · {labelStatus(status)}
+            {gameLabel && ` · ${gameLabel}`}
             {round > 0 && ` · ${Math.min(round, totalQuestions)} / ${totalQuestions}`}
           </div>
         </div>
@@ -472,6 +615,8 @@ function TransferPanel({
 function LobbyView({
   players,
   availableCount,
+  gameType,
+  gameLabel,
   selectedCategories,
   room,
   busy,
@@ -481,24 +626,41 @@ function LobbyView({
   onToggleCategory,
   onUpdateConfig,
   onStart,
+  onChangeGame,
 }: {
   players: Player[];
   availableCount: number;
-  selectedCategories: Category[];
+  gameType: GameType;
+  gameLabel: string;
+  selectedCategories: string[];
   room: Room;
   busy: boolean;
   customQuestionCount: string;
   onCustomQuestionCountChange: (value: string) => void;
   onCommitCustomQuestionCount: () => void;
-  onToggleCategory: (c: Category) => void;
+  onToggleCategory: (category: GameCategory) => void;
   onUpdateConfig: (patch: RoomConfigPatch) => void;
   onStart: () => void;
+  onChangeGame: () => void;
 }) {
   const enoughPlayers = players.length >= 2;
   const canStart = enoughPlayers && availableCount > 0 && !busy;
+  const categories = getGameCategories(gameType);
 
   return (
     <>
+      <section className="card mb-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-white/50">Jeu sélectionné</div>
+            <h2 className="text-2xl font-black">{gameLabel}</h2>
+          </div>
+          <button type="button" onClick={onChangeGame} disabled={busy} className="btn-ghost text-neon-cyan">
+            Changer
+          </button>
+        </div>
+      </section>
+
       <section className="card mb-4 p-5">
         <h2 className="mb-3 text-lg font-bold">Joueurs connectés</h2>
         {players.length === 0 ? (
@@ -594,24 +756,24 @@ function LobbyView({
       </section>
 
       <section className="card mb-4 p-5">
-        <h2 className="mb-3 text-lg font-bold">Ambiances</h2>
+        <h2 className="mb-3 text-lg font-bold">Thèmes</h2>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((c) => {
-            const active = selectedCategories.includes(c.id);
+          {categories.map((category) => {
+            const active = selectedCategories.includes(category.id);
             return (
               <button
-                key={c.id}
-                onClick={() => onToggleCategory(c.id)}
+                key={category.id}
+                onClick={() => onToggleCategory(category.id)}
                 className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition ${
                   active
                     ? "border-neon-pink bg-neon-pink/20 text-white shadow-glow-pink"
                     : "border-white/10 bg-white/5 text-white/70 hover:border-white/20"
                 }`}
-                title={c.description}
+                title={category.description}
               >
-                <span>{c.emoji}</span>
-                <span>{c.label}</span>
-                {c.adult && (
+                <span>{category.emoji}</span>
+                <span>{category.label}</span>
+                {category.adult && (
                   <span className="rounded bg-neon-pink/30 px-1 text-[10px] uppercase">18+</span>
                 )}
               </button>
@@ -634,7 +796,7 @@ function LobbyView({
         )}
         {availableCount === 0 && (
           <p className="mt-3 text-center text-sm text-neon-pink">
-            Aucune question disponible avec ces ambiances.
+            Aucune question disponible avec ces thèmes.
           </p>
         )}
       </section>
@@ -642,7 +804,7 @@ function LobbyView({
   );
 }
 
-function ConfigGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function ConfigGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mb-4">
       <div className="mb-2 text-xs font-bold uppercase tracking-wider text-white/50">{label}</div>
@@ -660,7 +822,7 @@ function ConfigButton({
   active: boolean;
   disabled: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -678,7 +840,35 @@ function ConfigButton({
   );
 }
 
-function QuestionActiveView({
+function QuestionShell({
+  category,
+  voteLeft,
+  votedCount,
+  totalPlayers,
+  children,
+}: {
+  category: ReturnType<typeof getCategoryForGame>;
+  voteLeft: number;
+  votedCount: number;
+  totalPlayers: number;
+  children: ReactNode;
+}) {
+  return (
+    <section className="card flex flex-1 flex-col p-5 text-center">
+      <div className="flex items-center justify-center gap-2">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
+          Vote ouvert
+        </span>
+      </div>
+      <div className="mt-4 text-7xl font-black tabular-nums text-white">{voteLeft}</div>
+      <div className="text-sm text-white/50">{votedCount} / {totalPlayers} vote{totalPlayers > 1 ? "s" : ""} envoyés</div>
+      {children}
+    </section>
+  );
+}
+
+function WhoWouldActiveView({
   question,
   voteLeft,
   votedCount,
@@ -691,7 +881,7 @@ function QuestionActiveView({
   onSubmit,
   onRevealNow,
 }: {
-  question: { id: number; optionA: string; optionB: string; category: Category };
+  question: WhoWouldQuestion;
   voteLeft: number;
   votedCount: number;
   totalPlayers: number;
@@ -703,85 +893,98 @@ function QuestionActiveView({
   onSubmit: () => void;
   onRevealNow: () => void;
 }) {
-  const cat = getCategory(question.category);
   const locked = Boolean(validatedChoice) || submitting || voteLeft === 0;
+  const category = getCategoryForGame("who_would", question.category);
 
   return (
-    <section className="card flex flex-1 flex-col p-5 text-center">
-      <div className="flex items-center justify-center gap-2">
-        <span className="chip">{cat?.emoji} {cat?.label}</span>
-        <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
-          Vote ouvert
-        </span>
+    <QuestionShell category={category} voteLeft={voteLeft} votedCount={votedCount} totalPlayers={totalPlayers}>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <ChoiceButton
+          accent="pink"
+          label="A"
+          text={question.optionA}
+          selected={(validatedChoice ?? selectedChoice) === "A"}
+          disabled={locked}
+          onClick={() => onSelect("A")}
+        />
+        <ChoiceButton
+          accent="cyan"
+          label="B"
+          text={question.optionB}
+          selected={(validatedChoice ?? selectedChoice) === "B"}
+          disabled={locked}
+          onClick={() => onSelect("B")}
+        />
       </div>
-      <div className="mt-4 text-7xl font-black tabular-nums text-white">{voteLeft}</div>
-      <div className="text-sm text-white/50">{votedCount} / {totalPlayers} vote{totalPlayers > 1 ? "s" : ""} envoyés</div>
-
-      <ChoicePicker
-        optionA={question.optionA}
-        optionB={question.optionB}
-        selectedChoice={validatedChoice ?? selectedChoice}
-        locked={locked}
-        onSelect={onSelect}
+      <VoteActions
+        canSubmit={Boolean(selectedChoice) && !locked}
+        validated={Boolean(validatedChoice)}
+        submitting={submitting}
+        busy={busy}
+        onSubmit={onSubmit}
+        onRevealNow={onRevealNow}
       />
-
-      <button
-        type="button"
-        disabled={!selectedChoice || locked}
-        onClick={onSubmit}
-        className="btn-primary mt-4 w-full disabled:shadow-none"
-      >
-        {submitting ? "Envoi..." : validatedChoice ? "Vote envoyé" : "Valider mon choix"}
-      </button>
-
-      {validatedChoice && (
-        <p className="mt-3 text-sm font-semibold text-neon-green">Vote envoyé</p>
-      )}
-
-      <button
-        type="button"
-        onClick={onRevealNow}
-        disabled={busy}
-        className="btn-secondary mt-4"
-      >
-        Révéler maintenant
-      </button>
-    </section>
+    </QuestionShell>
   );
 }
 
-function ChoicePicker({
-  optionA,
-  optionB,
-  selectedChoice,
-  locked,
+function WhoOfUsActiveView({
+  question,
+  voteLeft,
+  votedCount,
+  totalPlayers,
+  targetPlayers,
+  selectedPlayerId,
+  validatedPlayerId,
+  submitting,
+  busy,
   onSelect,
+  onSubmit,
+  onRevealNow,
 }: {
-  optionA: string;
-  optionB: string;
-  selectedChoice: Choice | null;
-  locked: boolean;
-  onSelect: (choice: Choice) => void;
+  question: WhoOfUsGameQuestion;
+  voteLeft: number;
+  votedCount: number;
+  totalPlayers: number;
+  targetPlayers: Player[];
+  selectedPlayerId: string | null;
+  validatedPlayerId: string | null;
+  submitting: boolean;
+  busy: boolean;
+  onSelect: (playerId: string) => void;
+  onSubmit: () => void;
+  onRevealNow: () => void;
 }) {
+  const locked = Boolean(validatedPlayerId) || submitting || voteLeft === 0;
+  const category = getCategoryForGame("who_of_us", question.category);
+  const activePlayerId = validatedPlayerId ?? selectedPlayerId;
+
   return (
-    <div className="mt-6 grid gap-3 sm:grid-cols-2">
-      <ChoiceButton
-        accent="pink"
-        label="A"
-        text={optionA}
-        selected={selectedChoice === "A"}
-        disabled={locked}
-        onClick={() => onSelect("A")}
+    <QuestionShell category={category} voteLeft={voteLeft} votedCount={votedCount} totalPlayers={totalPlayers}>
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+        <div className="text-xs font-bold uppercase tracking-wider text-white/50">Question</div>
+        <h2 className="mt-2 text-2xl font-black leading-tight">{question.text}</h2>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {targetPlayers.map((player) => (
+          <PlayerTargetButton
+            key={player.id}
+            player={player}
+            selected={activePlayerId === player.id}
+            disabled={locked}
+            onClick={() => onSelect(player.id)}
+          />
+        ))}
+      </div>
+      <VoteActions
+        canSubmit={Boolean(selectedPlayerId) && !locked}
+        validated={Boolean(validatedPlayerId)}
+        submitting={submitting}
+        busy={busy}
+        onSubmit={onSubmit}
+        onRevealNow={onRevealNow}
       />
-      <ChoiceButton
-        accent="cyan"
-        label="B"
-        text={optionB}
-        selected={selectedChoice === "B"}
-        disabled={locked}
-        onClick={() => onSelect("B")}
-      />
-    </div>
+    </QuestionShell>
   );
 }
 
@@ -817,11 +1020,78 @@ function ChoiceButton({
   );
 }
 
-function RevealView({
+function PlayerTargetButton({
+  player,
+  selected,
+  disabled,
+  onClick,
+}: {
+  player: Player;
+  selected: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex items-center justify-between rounded-2xl border p-4 text-left transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${
+        selected
+          ? "border-neon-cyan bg-neon-cyan/10 shadow-glow-cyan"
+          : "border-white/10 bg-white/5 hover:border-neon-cyan/50"
+      }`}
+    >
+      <span className="text-xl font-black">{player.name}</span>
+      {selected && <span className="text-sm font-bold text-neon-cyan">Sélectionné</span>}
+    </button>
+  );
+}
+
+function VoteActions({
+  canSubmit,
+  validated,
+  submitting,
+  busy,
+  onSubmit,
+  onRevealNow,
+}: {
+  canSubmit: boolean;
+  validated: boolean;
+  submitting: boolean;
+  busy: boolean;
+  onSubmit: () => void;
+  onRevealNow: () => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!canSubmit}
+        onClick={onSubmit}
+        className="btn-primary mt-4 w-full disabled:shadow-none"
+      >
+        {submitting ? "Envoi..." : validated ? "Vote envoyé" : "Valider mon choix"}
+      </button>
+      {validated && (
+        <p className="mt-3 text-sm font-semibold text-neon-green">Vote envoyé</p>
+      )}
+      <button
+        type="button"
+        onClick={onRevealNow}
+        disabled={busy}
+        className="btn-secondary mt-4"
+      >
+        Révéler maintenant
+      </button>
+    </>
+  );
+}
+
+function WhoWouldRevealView({
   question,
   players,
   votes,
-  stats,
   revealLeft,
   autoplay,
   isFinal,
@@ -830,10 +1100,9 @@ function RevealView({
   onEnd,
   onBackToLobby,
 }: {
-  question: { id: number; optionA: string; optionB: string; category: Category };
+  question: WhoWouldQuestion;
   players: Player[];
   votes: Vote[];
-  stats: VoteStats;
   revealLeft: number;
   autoplay: boolean;
   isFinal: boolean;
@@ -842,20 +1111,26 @@ function RevealView({
   onEnd: () => void;
   onBackToLobby: () => void;
 }) {
-  const cat = getCategory(question.category);
+  const category = getCategoryForGame("who_would", question.category);
+  const stats = getWhoWouldStats(players, votes);
   const namesFor = (choice: Choice) =>
     votes
-      .filter((v) => v.choice === choice)
-      .map((v) => players.find((p) => p.id === v.player_id)?.name)
+      .filter((vote) => vote.selected_option === choice)
+      .map((vote) => players.find((player) => player.id === vote.voter_player_id)?.name)
       .filter((name): name is string => Boolean(name));
 
   return (
-    <section className="card flex flex-1 flex-col p-5">
-      <div className="mb-4 flex items-center justify-center gap-2">
-        <span className="chip">{cat?.emoji} {cat?.label}</span>
-        <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
-      </div>
-
+    <RevealShell
+      category={category}
+      totalVotes={stats.total}
+      revealLeft={revealLeft}
+      autoplay={autoplay}
+      isFinal={isFinal}
+      busy={busy}
+      onNext={onNext}
+      onEnd={onEnd}
+      onBackToLobby={onBackToLobby}
+    >
       <div className="grid flex-1 gap-3 sm:grid-cols-2">
         <ResultCard
           accent="pink"
@@ -874,10 +1149,115 @@ function RevealView({
           names={namesFor("B")}
         />
       </div>
+    </RevealShell>
+  );
+}
+
+function WhoOfUsRevealView({
+  question,
+  players,
+  votes,
+  revealLeft,
+  autoplay,
+  isFinal,
+  busy,
+  onNext,
+  onEnd,
+  onBackToLobby,
+}: {
+  question: WhoOfUsGameQuestion;
+  players: Player[];
+  votes: Vote[];
+  revealLeft: number;
+  autoplay: boolean;
+  isFinal: boolean;
+  busy: boolean;
+  onNext: () => void;
+  onEnd: () => void;
+  onBackToLobby: () => void;
+}) {
+  const category = getCategoryForGame("who_of_us", question.category);
+  const stats = getWhoOfUsStats(players, votes);
+
+  return (
+    <RevealShell
+      category={category}
+      totalVotes={stats.total}
+      revealLeft={revealLeft}
+      autoplay={autoplay}
+      isFinal={isFinal}
+      busy={busy}
+      onNext={onNext}
+      onEnd={onEnd}
+      onBackToLobby={onBackToLobby}
+    >
+      <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="text-xs font-bold uppercase tracking-wider text-white/50">Question</div>
+        <h2 className="mt-2 text-2xl font-black leading-tight">{question.text}</h2>
+      </div>
+
+      <div className="grid gap-3">
+        {stats.ranking.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-white/60">
+            Aucun vote reçu.
+          </div>
+        ) : (
+          stats.ranking.map((row) => (
+            <RankingCard key={row.targetId} row={row} topCount={stats.topCount} />
+          ))
+        )}
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="mb-3 text-xs font-bold uppercase tracking-wider text-white/50">Détail des votes</div>
+        <ul className="space-y-2">
+          {stats.details.map((detail) => (
+            <li key={detail.voterId} className="flex items-center justify-between gap-3 rounded-xl bg-bg-soft p-3">
+              <span className="font-bold">{detail.voterName}</span>
+              <span className="text-right text-sm text-white/70">{detail.targetName ?? "n'a pas voté"}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </RevealShell>
+  );
+}
+
+function RevealShell({
+  category,
+  totalVotes,
+  revealLeft,
+  autoplay,
+  isFinal,
+  busy,
+  onNext,
+  onEnd,
+  onBackToLobby,
+  children,
+}: {
+  category: ReturnType<typeof getCategoryForGame>;
+  totalVotes: number;
+  revealLeft: number;
+  autoplay: boolean;
+  isFinal: boolean;
+  busy: boolean;
+  onNext: () => void;
+  onEnd: () => void;
+  onBackToLobby: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="card flex flex-1 flex-col p-5">
+      <div className="mb-4 flex items-center justify-center gap-2">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
+      </div>
+
+      {children}
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
         <div className="text-xs uppercase tracking-wider text-white/50">
-          {stats.total} vote{stats.total > 1 ? "s" : ""} validé{stats.total > 1 ? "s" : ""}
+          {totalVotes} vote{totalVotes > 1 ? "s" : ""} validé{totalVotes > 1 ? "s" : ""}
         </div>
         {autoplay && (
           <div className="mt-1 text-3xl font-black tabular-nums">
@@ -956,6 +1336,30 @@ function ResultCard({
   );
 }
 
+function RankingCard({ row, topCount }: { row: WhoOfUsRankingRow; topCount: number }) {
+  const isTop = topCount > 0 && row.count === topCount;
+  return (
+    <div className={`rounded-2xl border p-4 ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10" : "border-white/10 bg-white/5"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-2xl font-black">{row.targetName}</div>
+          {isTop && <div className="mt-1 text-xs font-bold uppercase tracking-wider text-neon-yellow">Meilleur suspect</div>}
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-black tabular-nums">{row.count}</div>
+          <div className="text-xs text-white/50">vote{row.count > 1 ? "s" : ""}</div>
+        </div>
+      </div>
+      <div className="mt-3 text-sm text-white/60">Voté par</div>
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {row.voters.map((name) => (
+          <li key={name} className="chip">{name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function CenteredMessage({
   title,
   subtitle,
@@ -978,7 +1382,7 @@ function CenteredMessage({
   );
 }
 
-interface VoteStats {
+interface WhoWouldStats {
   total: number;
   aCount: number;
   bCount: number;
@@ -986,18 +1390,102 @@ interface VoteStats {
   bPercent: number;
 }
 
-function getVoteStats(players: Player[], votes: Vote[]): VoteStats {
-  const playerIds = new Set(players.map((p) => p.id));
-  const validVotes = votes.filter((vote) => playerIds.has(vote.player_id));
+interface WhoOfUsRankingRow {
+  targetId: string;
+  targetName: string;
+  count: number;
+  voters: string[];
+}
+
+interface WhoOfUsDetailRow {
+  voterId: string;
+  voterName: string;
+  targetName: string | null;
+}
+
+function getSelectedCategories(room: Room | null): string[] {
+  if (!room?.game_type) return [];
+  if (room.selected_categories?.length) return room.selected_categories;
+  return getDefaultCategories(room.game_type);
+}
+
+function voteToLocalVote(vote: Vote | undefined): LocalVote | null {
+  if (!vote) return null;
+  return {
+    qid: vote.question_id,
+    selected_option: vote.selected_option,
+    selected_player_id: vote.selected_player_id,
+  };
+}
+
+function countSubmittedVotes(gameType: GameType | null, players: Player[], votes: Vote[]): number {
+  const playerIds = new Set(players.map((player) => player.id));
+  return votes.filter((vote) => {
+    if (!playerIds.has(vote.voter_player_id)) return false;
+    if (gameType === "who_would") return vote.selected_option === "A" || vote.selected_option === "B";
+    if (gameType === "who_of_us") return Boolean(vote.selected_player_id);
+    return false;
+  }).length;
+}
+
+function getWhoWouldStats(players: Player[], votes: Vote[]): WhoWouldStats {
+  const playerIds = new Set(players.map((player) => player.id));
+  const validVotes = votes.filter(
+    (vote) => playerIds.has(vote.voter_player_id) && (vote.selected_option === "A" || vote.selected_option === "B")
+  );
   const total = validVotes.length;
-  const aCount = validVotes.filter((vote) => vote.choice === "A").length;
-  const bCount = validVotes.filter((vote) => vote.choice === "B").length;
+  const aCount = validVotes.filter((vote) => vote.selected_option === "A").length;
+  const bCount = validVotes.filter((vote) => vote.selected_option === "B").length;
   return {
     total,
     aCount,
     bCount,
     aPercent: total === 0 ? 0 : Math.round((aCount / total) * 100),
     bPercent: total === 0 ? 0 : Math.round((bCount / total) * 100),
+  };
+}
+
+function getWhoOfUsStats(players: Player[], votes: Vote[]) {
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const ranking = new Map<string, WhoOfUsRankingRow>();
+  const voteByVoter = new Map<string, Vote>();
+
+  for (const vote of votes) {
+    if (!playerById.has(vote.voter_player_id)) continue;
+    voteByVoter.set(vote.voter_player_id, vote);
+    if (!vote.selected_player_id) continue;
+    const target = playerById.get(vote.selected_player_id);
+    const targetId = vote.selected_player_id;
+    const voterName = playerById.get(vote.voter_player_id)?.name ?? "Joueur parti";
+    const row = ranking.get(targetId) ?? {
+      targetId,
+      targetName: target?.name ?? "Joueur parti",
+      count: 0,
+      voters: [],
+    };
+    row.count += 1;
+    row.voters.push(voterName);
+    ranking.set(targetId, row);
+  }
+
+  const sortedRanking = [...ranking.values()].sort(
+    (a, b) => b.count - a.count || a.targetName.localeCompare(b.targetName)
+  );
+  const details: WhoOfUsDetailRow[] = players.map((player) => {
+    const vote = voteByVoter.get(player.id);
+    const target = vote?.selected_player_id ? playerById.get(vote.selected_player_id) : null;
+    return {
+      voterId: player.id,
+      voterName: player.name,
+      targetName: vote?.selected_player_id ? target?.name ?? "Joueur parti" : null,
+    };
+  });
+
+  return {
+    total: voteByVoter.size,
+    ranking: sortedRanking,
+    details,
+    topCount: sortedRanking[0]?.count ?? 0,
   };
 }
 

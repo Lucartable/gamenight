@@ -1,10 +1,12 @@
 export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "ended";
+export type GameType = "who_would" | "who_of_us";
 export type Choice = "A" | "B";
 
 export interface Room {
   id: string;
   code: string;
   host_client_id: string;
+  game_type: GameType | null;
   status: RoomStatus;
   current_question_id: number | null;
   question_started_at: string | null;
@@ -13,6 +15,7 @@ export interface Room {
   vote_duration_sec: number;
   reveal_duration_sec: number;
   autoplay: boolean;
+  selected_categories: string[];
   created_at: string;
 }
 
@@ -28,15 +31,18 @@ export interface Player {
 export interface Vote {
   id: string;
   room_id: string;
-  player_id: string;
+  game_type: GameType;
+  voter_player_id: string;
   question_id: number;
-  choice: Choice;
+  selected_option: Choice | null;
+  selected_player_id: string | null;
   created_at: string;
 }
 
 export interface AskedQuestion {
   id: string;
   room_id: string;
+  game_type: GameType;
   question_id: number;
   asked_at: string;
 }

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "GameNight — Jeux de soirée",
-  description: "Tu préfères ? et plein d'autres jeux à jouer entre amis depuis ton téléphone.",
+  description: "Jeux de soirée à jouer entre amis depuis ton téléphone.",
 };
 
 export const viewport: Viewport = {

@@ -1,7 +1,7 @@
 # 🎉 GameNight
 
 Application web de jeux de soirée multijoueur en temps réel.
-**Premier jeu : « Tu préfères ? »** — l'hôte crée une salle, les autres rejoignent depuis leur téléphone, et c'est parti.
+L'hôte crée une salle, les autres rejoignent depuis leur téléphone, puis le groupe choisit un jeu.
 
 Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 
@@ -9,7 +9,8 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 
 ## ✨ Fonctionnalités
 
-- 🎲 **400+ questions** réparties en **7 catégories** : Classique, Hot 🔥 (18+), Trash 💀, Insolite 🤪, Éthique ⚖️, Couple 💑, Pop culture 🎬
+- 🎲 **Deux jeux** : `Qui pourrait ?` et `Qui de nous ?`
+- 🧩 **765 questions embarquées** avec thèmes/filtres par jeu
 - ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
 - ▶️ **Lecture automatique** optionnelle pour enchaîner les questions
@@ -31,7 +32,7 @@ npm install
 ### 2. Créer un projet Supabase
 
 1. Va sur [supabase.com](https://supabase.com), crée un nouveau projet (gratuit).
-2. Dans **SQL Editor**, copie/colle le contenu de [`supabase/schema.sql`](supabase/schema.sql) et exécute-le. Ça crée les tables, les policies RLS, et active le temps réel sur les 4 tables (`rooms`, `players`, `votes`, `asked_questions`).
+2. Dans **SQL Editor**, copie/colle le contenu de [`supabase/schema.sql`](supabase/schema.sql) et exécute-le. Ça crée les tables, les policies RLS, et active le temps réel sur les tables de jeu.
 3. Dans **Project Settings → API**, récupère :
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -61,15 +62,15 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 
 ---
 
-## 🎮 Comment jouer à « Tu préfères ? »
+## 🎮 Comment jouer
 
 1. **L'hôte** clique sur *Créer une salle* → reçoit un code (ex : `LOUP-42`).
 2. **Les joueurs** ouvrent le site sur leur téléphone, cliquent sur *Rejoindre une salle*, entrent le code et leur prénom.
-3. L'hôte configure le nombre de questions, les durées et la lecture automatique.
-4. L'hôte choisit les **ambiances** (catégories) qu'il veut jouer.
+3. L'hôte choisit un jeu : **Qui pourrait ?** ou **Qui de nous ?**.
+4. L'hôte configure le nombre de questions, les durées, la lecture automatique et les thèmes.
 5. L'hôte clique sur **Lancer la partie** → une question aléatoire compatible démarre.
-6. Chaque joueur — **y compris l'hôte** — choisit une option puis clique sur **Valider mon choix**.
-7. À la révélation, tout le monde voit les pourcentages et le nombre de votes.
+6. Chaque joueur — **y compris l'hôte** — sélectionne son choix puis clique sur **Valider mon choix**.
+7. À la révélation, tout le monde voit les résultats adaptés au jeu : pourcentages ou classement des personnes désignées.
 8. L'hôte lance la question suivante, ou la lecture automatique s'en charge.
 9. À tout moment, l'hôte peut **passer le rôle d'hôte** à un autre joueur via le bouton 👑 Transférer.
 10. L'hôte peut terminer la partie à tout moment.
@@ -90,8 +91,10 @@ gamenight/
 │   ├── supabase.ts               # Client Supabase singleton
 │   ├── useRoom.ts                # Hook de synchro temps réel (rooms, players, votes, asked_questions)
 │   ├── useCountdown.ts           # Compte à rebours basé sur un timestamp serveur
-│   ├── questions.ts              # 400+ questions catégorisées + helpers
-│   └── utils.ts                  # Code de salle, client_id, durées, persistance des cats
+│   ├── questions.ts              # Questions du jeu Qui pourrait ?
+│   ├── whoOfUsQuestions.ts       # Questions du jeu Qui de nous ?
+│   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
+│   └── utils.ts                  # Code de salle, client_id, durées
 ├── types/
 │   └── database.ts               # Types Supabase
 ├── supabase/
@@ -116,12 +119,14 @@ gamenight/
 - **Pas d'authentification** : un `client_id` est généré par navigateur et stocké dans `localStorage`. Suffisant pour un jeu de soirée éphémère.
 - **Source de vérité côté serveur** : les timers utilisent un timestamp `started_at` stocké en base. Le client recalcule juste l'affichage. Pas de désynchro entre joueurs.
 - **Realtime via Supabase** : on s'abonne aux changements des 4 tables et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
-- **Catégories en localStorage** : la sélection de catégories de l'hôte est stockée par salle dans `localStorage` — pas de migration DB nécessaire, et préservée si l'hôte rafraîchit sa page.
+- **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
 - **RLS publique** : pour aller vite, les tables sont en lecture/écriture publique. À durcir pour un usage prod (par ex. exiger le code de la salle dans une RPC).
 
 ---
 
-## 🎲 Catégories de questions
+## 🎲 Jeux et catégories
+
+### Qui pourrait ?
 
 | Catégorie | Emoji | 18+ | Description | Nombre |
 | --- | --- | --- | --- | --- |
@@ -133,6 +138,24 @@ gamenight/
 | Couple | 💑 | non | Spécial relations, amour, jalousie | ~50 |
 | Pop culture | 🎬 | non | Films, séries, jeux vidéo, super-héros | ~30 |
 
+### Qui de nous ?
+
+Les questions viennent de [`lib/whoOfUsQuestions.ts`](lib/whoOfUsQuestions.ts), généré depuis `qui_de_nous.md`.
+
+| Catégorie | 18+ | Description |
+| --- | --- | --- |
+| Classique | non | Questions faciles pour lancer la soirée |
+| Trash | oui | Sans filtre, à jouer avec un groupe partant |
+| Hot | oui | Ambiance séduction et révélations |
+| +18 | oui | Réservé aux adultes et aux groupes de confiance |
+| Insolite | non | Bizarre, absurde et très soirée |
+| Brainrot | non | Mèmes, internet et chaos moderne |
+| Philosophique | non | Pour débattre sans sortir du jeu |
+| Couple | non | Relations, crushs et compatibilités |
+| Dark Humor | oui | Humour noir et questions plus piquantes |
+| Cringe | non | Gênance, dossiers et souvenirs honteux |
+| Random | non | Questions imprévisibles |
+
 ---
 
 ## 🛠️ Pistes pour la suite
@@ -140,7 +163,7 @@ gamenight/
 - [ ] **Persister la session joueur** : retrouver sa salle automatiquement après fermeture du navigateur.
 - [ ] **Ajouter d'autres jeux** : *Action ou Vérité*, *Loup-Garou*, *Mots impossibles*, etc.
 - [ ] **Nettoyage auto** des salles inactives (cron Supabase ou Edge Function).
-- [ ] **Custom questions** : laisser l'hôte ajouter ses propres « Tu préfères ? » à la volée.
+- [ ] **Custom questions** : laisser l'hôte ajouter ses propres questions à la volée.
 - [ ] **Score / leaderboard** sur l'ensemble de la soirée (qui vote comme la majorité, etc.).
 - [ ] **Détection d'hôte déconnecté** : transfert auto si l'hôte ne répond plus depuis X secondes.
 

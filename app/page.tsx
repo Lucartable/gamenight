@@ -124,13 +124,22 @@ export default function HomePage() {
           </button>
 
           <div className="card mt-8 p-5 text-sm text-white/70">
-            <div className="mb-2 font-semibold text-white">À l'affiche</div>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-base font-bold text-white">Tu préfères ?</div>
-                <div className="text-white/50">2 options, choix validé, résultats instantanés.</div>
+            <div className="mb-3 font-semibold text-white">Jeux disponibles</div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold text-white">Qui pourrait ?</div>
+                  <div className="text-white/50">Vote entre deux choix.</div>
+                </div>
+                <div className="chip">2+ joueurs</div>
               </div>
-              <div className="chip">2+ joueurs</div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold text-white">Qui de nous ?</div>
+                  <div className="text-white/50">Désigne quelqu'un du groupe.</div>
+                </div>
+                <div className="chip">Nouveau</div>
+              </div>
             </div>
           </div>
         </div>

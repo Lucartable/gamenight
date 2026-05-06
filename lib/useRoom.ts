@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Player, Room, Vote } from "@/types/database";
+import type { AskedQuestion, Player, Room, Vote } from "@/types/database";
 import { getSupabase } from "./supabase";
 
 interface UseRoomState {
   room: Room | null;
   players: Player[];
   votes: Vote[];
+  askedQuestions: AskedQuestion[];
   askedQuestionIds: number[];
   loading: boolean;
   error: string | null;
@@ -30,6 +31,7 @@ export function useRoom(code: string): UseRoomState {
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
+  const [askedQuestions, setAskedQuestions] = useState<AskedQuestion[]>([]);
   const [askedQuestionIds, setAskedQuestionIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function useRoom(code: string): UseRoomState {
         supabase.from("players").select("*").eq("room_id", roomId).order("joined_at"),
         supabase.from("votes").select("*").eq("room_id", roomId),
         supabase.from("rooms").select("*").eq("id", roomId).single(),
-        supabase.from("asked_questions").select("question_id").eq("room_id", roomId),
+        supabase.from("asked_questions").select("*").eq("room_id", roomId),
       ]);
       // Si un autre refresh plus récent a démarré entre-temps, on jette nos
       // résultats — ils sont peut-être plus vieux que ce qui est déjà affiché.
@@ -65,7 +67,11 @@ export function useRoom(code: string): UseRoomState {
       if (p.data) setPlayers(p.data as Player[]);
       if (v.data) setVotes(v.data as Vote[]);
       if (r.data) setRoom(r.data as Room);
-      if (aq.data) setAskedQuestionIds(aq.data.map((d) => d.question_id as number));
+      if (aq.data) {
+        const asked = aq.data as AskedQuestion[];
+        setAskedQuestions(asked);
+        setAskedQuestionIds(asked.map((d) => d.question_id));
+      }
     }
     refreshRef.current = doRefresh;
 
@@ -121,5 +127,5 @@ export function useRoom(code: string): UseRoomState {
     };
   }, [code]);
 
-  return { room, players, votes, askedQuestionIds, loading, error, refresh };
+  return { room, players, votes, askedQuestions, askedQuestionIds, loading, error, refresh };
 }
