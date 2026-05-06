@@ -26,16 +26,19 @@ import {
   PredictionScoreboardPanel,
   PredictionVoteScreen,
 } from "@/components/predictionMode";
+import { FinalReturnPanel } from "@/components/finalReturn";
 import {
   computePredictionScores,
   hasReachedScoreTarget,
   isPredictionGame,
 } from "@/lib/scoring";
+import { useCountUp } from "@/lib/useCountUp";
 import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_SCOREBOARD_DURATION_SEC,
   DEFAULT_TOTAL_QUESTIONS,
   DEFAULT_VOTE_DURATION_SEC,
+  END_GAME_RETURN_DELAY_SEC,
   QUESTION_COUNT_PRESETS,
   REVEAL_DURATION_OPTIONS,
   SCORE_TARGET_OPTIONS,
@@ -43,6 +46,7 @@ import {
   clampInt,
   getOrCreateClientId,
   secondsLeft,
+  triggerHaptic,
 } from "@/lib/utils";
 import type { Choice, GameType, Player, Room, Vote } from "@/types/database";
 
@@ -188,6 +192,12 @@ export default function HostPage() {
   const scoreboardHasExpired =
     scoreboardStartedAt !== null && secondsLeft(scoreboardStartedAt, scoreboardDuration) === 0;
 
+  const endedStartedAt = room?.status === "ended" ? room.scoreboard_started_at : null;
+  const endReturnLeft = useCountdown(endedStartedAt, END_GAME_RETURN_DELAY_SEC);
+  const endReturnHasExpired =
+    room?.status === "ended" &&
+    (!endedStartedAt || secondsLeft(endedStartedAt, END_GAME_RETURN_DELAY_SEC) === 0);
+
   useEffect(() => {
     if (room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
@@ -212,6 +222,13 @@ export default function HostPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.status, autoplay, scoreboardHasExpired, roundsPlayed, filteredAvailable.length, scoreTargetReached]);
+
+  useEffect(() => {
+    if (endReturnHasExpired) {
+      void resetFinishedGameToLobby();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endReturnHasExpired, room?.id]);
 
   async function runTransition(action: () => Promise<void>) {
     if (transitionRef.current) return;
@@ -363,10 +380,46 @@ export default function HostPage() {
 
   async function finishGame(requireConfirm: boolean) {
     if (!room) return;
-    if (requireConfirm && !confirm("Terminer la partie pour tout le monde ?")) return;
+    if (requireConfirm && !confirm("Afficher les résultats finaux puis revenir au lobby ?")) return;
     await runTransition(async () => {
-      const { error } = await getSupabase().from("rooms").update({ status: "ended" }).eq("id", room.id);
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "ended",
+          scoreboard_started_at: new Date().toISOString(),
+        })
+        .eq("id", room.id);
       if (error) throw error;
+    });
+  }
+
+  async function resetFinishedGameToLobby() {
+    if (!room) return;
+    await runTransition(async () => {
+      const supabase = getSupabase();
+      const { error: votesError } = await supabase
+        .from("votes")
+        .delete()
+        .eq("room_id", room.id);
+      if (votesError) throw votesError;
+
+      const { error: askedError } = await supabase
+        .from("asked_questions")
+        .delete()
+        .eq("room_id", room.id);
+      if (askedError) throw askedError;
+
+      const { error: roomError } = await supabase
+        .from("rooms")
+        .update({
+          status: "lobby",
+          current_question_id: null,
+          question_started_at: null,
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+        })
+        .eq("id", room.id);
+      if (roomError) throw roomError;
     });
   }
 
@@ -408,7 +461,7 @@ export default function HostPage() {
     const selectedPlayerId = gameType === "who_of_us" ? hostSelectedPlayerId : null;
     if (gameType === "who_would" && !selectedOption) return;
     if (isPredictionGame(gameType) && !selectedOption) return;
-    if (gameType === "who_of_us" && (!selectedPlayerId || selectedPlayerId === me.id)) return;
+    if (gameType === "who_of_us" && !selectedPlayerId) return;
 
     setHostSubmitting(true);
     setActionError(null);
@@ -440,9 +493,28 @@ export default function HostPage() {
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
   if (room.status === "ended" && predictionMode)
-    return <PredictionEndGamePanel mode={predictionMode} players={players} votes={votes} />;
+    return (
+      <PredictionEndGamePanel
+        mode={predictionMode}
+        players={players}
+        votes={votes}
+        returnLeft={endReturnLeft}
+        isHost
+        busy={busy}
+        onRestart={resetFinishedGameToLobby}
+      />
+    );
   if (room.status === "ended")
-    return <CenteredMessage title="Partie terminée" action={{ label: "Retour", href: "/" }} />;
+    return (
+      <FinalReturnPanel
+        title="Résultats terminés"
+        subtitle="La salle reste ouverte avec les mêmes joueurs."
+        returnLeft={endReturnLeft}
+        isHost
+        busy={busy}
+        onRestart={resetFinishedGameToLobby}
+      />
+    );
 
   const dbVote = me ? currentVotes.find((vote) => vote.voter_player_id === me.id) : undefined;
   const effectiveHostVote =
@@ -450,7 +522,7 @@ export default function HostPage() {
       ? optimisticHostVote
       : voteToLocalVote(dbVote);
   const otherPlayers = players.filter((player) => player.client_id !== room.host_client_id);
-  const targetPlayers = me ? players.filter((player) => player.id !== me.id) : players;
+  const targetPlayers = players;
   const isFinalReveal = room.status === "reveal_results" && roundsPlayed >= totalQuestions;
 
   return (
@@ -600,7 +672,7 @@ export default function HostPage() {
             shouldShowRoundScoreboard
               ? "Voir le classement"
               : shouldFinishAfterCurrentRound
-                ? "Terminer la partie"
+                ? "Résultats finaux"
                 : "Question suivante"
           }
           onPrimary={shouldShowRoundScoreboard ? showScoreboard : goToNextQuestion}
@@ -619,7 +691,7 @@ export default function HostPage() {
           scoreboardLeft={scoreboardLeft}
           busy={busy}
           final={shouldFinishAfterCurrentRound}
-          primaryLabel={shouldFinishAfterCurrentRound ? "Terminer la partie" : "Question suivante"}
+          primaryLabel={shouldFinishAfterCurrentRound ? "Résultats finaux" : "Question suivante"}
           onPrimary={goToNextQuestion}
           onBackToLobby={resetToLobby}
         />
@@ -648,7 +720,7 @@ function GameSelectionView({
             type="button"
             disabled={busy}
             onClick={() => onChoose(game.id)}
-            className="card p-5 text-left transition hover:border-neon-cyan/50 hover:bg-bg-soft disabled:opacity-50"
+            className="card p-5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-neon-cyan/50 hover:bg-bg-soft active:scale-[0.98] disabled:opacity-50"
           >
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -705,7 +777,7 @@ function RoomHeader({
               👑 Transférer
             </button>
           )}
-          <button onClick={onEnd} className="btn-ghost text-neon-pink">Terminer</button>
+          <button onClick={onEnd} className="btn-ghost text-neon-pink">Finir</button>
         </div>
       </div>
     </header>
@@ -804,7 +876,7 @@ function LobbyView({
         ) : (
           <ul className="flex flex-wrap gap-2">
             {players.map((p) => (
-              <li key={p.id} className="chip">
+              <li key={p.id} className="chip animate-pop-in">
                 {p.is_host ? "👑 " : ""}{p.name}
               </li>
             ))}
@@ -957,10 +1029,10 @@ function LobbyView({
               <button
                 key={category.id}
                 onClick={() => onToggleCategory(category.id)}
-                className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition ${
+                className={`prediction-card flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] ${
                   active
                     ? "border-neon-pink bg-neon-pink/20 text-white shadow-glow-pink"
-                    : "border-white/10 bg-white/5 text-white/70 hover:border-white/20"
+                    : "border-white/10 bg-white/5 text-white/70 hover:-translate-y-0.5 hover:border-white/20"
                 }`}
                 title={category.description}
               >
@@ -980,7 +1052,7 @@ function LobbyView({
 
       <section className="card p-5">
         <button onClick={onStart} disabled={!canStart} className="btn-primary w-full text-xl">
-          Lancer la partie
+          Relancer une partie
         </button>
         {!enoughPlayers && (
           <p className="mt-3 text-center text-sm text-neon-yellow">
@@ -1047,7 +1119,7 @@ function QuestionShell({
   children: ReactNode;
 }) {
   return (
-    <section className="card flex flex-1 flex-col p-5 text-center">
+    <section className="card flex flex-1 flex-col p-5 text-center animate-reveal-in">
       <div className="flex items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
@@ -1204,8 +1276,11 @@ function ChoiceButton({
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
-      className={`flex min-h-40 flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${base} ${selected ? selectedClass : ""}`}
+      onClick={() => {
+        triggerHaptic(10);
+        onClick();
+      }}
+      className={`prediction-card flex min-h-40 flex-col items-center justify-center rounded-2xl border-2 p-4 text-center transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${base} ${selected ? selectedClass : "hover:-translate-y-0.5 hover:bg-white/10"}`}
     >
       <span className={`text-xs font-bold uppercase tracking-widest ${labelColor}`}>Option {label}</span>
       <span className="mt-2 text-base font-bold leading-tight">{text}</span>
@@ -1228,11 +1303,14 @@ function PlayerTargetButton({
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
-      className={`flex items-center justify-between rounded-2xl border p-4 text-left transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${
+      onClick={() => {
+        triggerHaptic(10);
+        onClick();
+      }}
+      className={`prediction-card flex items-center justify-between rounded-2xl border p-4 text-left transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${
         selected
           ? "border-neon-cyan bg-neon-cyan/10 shadow-glow-cyan"
-          : "border-white/10 bg-white/5 hover:border-neon-cyan/50"
+          : "border-white/10 bg-white/5 hover:-translate-y-0.5 hover:border-neon-cyan/50"
       }`}
     >
       <span className="text-xl font-black">{player.name}</span>
@@ -1261,7 +1339,10 @@ function VoteActions({
       <button
         type="button"
         disabled={!canSubmit}
-        onClick={onSubmit}
+        onClick={() => {
+          triggerHaptic([12, 30, 18]);
+          onSubmit();
+        }}
         className="btn-primary mt-4 w-full disabled:shadow-none"
       >
         {submitting ? "Envoi..." : validated ? "Vote envoyé" : "Valider mon choix"}
@@ -1471,7 +1552,7 @@ function RevealShell({
             onClick={isFinal ? onEnd : onNext}
             className="btn-primary"
           >
-            {isFinal ? "Terminer la partie" : "Question suivante"}
+            {isFinal ? "Résultats finaux" : "Question suivante"}
           </button>
           <button
             type="button"
@@ -1504,19 +1585,20 @@ function ResultCard({
 }) {
   const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
   const barColor = accent === "pink" ? "bg-neon-pink" : "bg-neon-cyan";
+  const shownPercent = useCountUp(percent);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 animate-reveal-in">
       <div className={`text-xs font-bold uppercase tracking-widest ${labelColor}`}>{label}</div>
       <div className="mt-2 text-base font-semibold text-white/90">{text}</div>
       <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="text-4xl font-black tabular-nums">{percent}%</div>
+        <div className="text-4xl font-black tabular-nums">{shownPercent}%</div>
         <div className="pb-1 text-sm text-white/60">
           {count} vote{count > 1 ? "s" : ""}
         </div>
       </div>
       <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
+        <div className={`result-fill h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
       </div>
       {names.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
@@ -1532,7 +1614,7 @@ function ResultCard({
 function RankingCard({ row, topCount }: { row: WhoOfUsRankingRow; topCount: number }) {
   const isTop = topCount > 0 && row.count === topCount;
   return (
-    <div className={`rounded-2xl border p-4 ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10" : "border-white/10 bg-white/5"}`}>
+    <div className={`rounded-2xl border p-4 animate-reveal-in ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10 shadow-glow" : "border-white/10 bg-white/5"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-2xl font-black">{row.targetName}</div>

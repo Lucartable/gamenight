@@ -10,6 +10,7 @@ import {
   type PredictionOptionResult,
   type PredictionScoreRow,
 } from "@/lib/scoring";
+import { useCountUp } from "@/lib/useCountUp";
 import { useCountdown } from "@/lib/useCountdown";
 import { triggerHaptic } from "@/lib/utils";
 import type { Player, Vote } from "@/types/database";
@@ -500,10 +501,18 @@ export function PredictionEndGamePanel({
   mode,
   players,
   votes,
+  returnLeft = 0,
+  isHost = false,
+  busy = false,
+  onRestart,
 }: {
   mode: PredictionGameType;
   players: Player[];
   votes: Vote[];
+  returnLeft?: number;
+  isHost?: boolean;
+  busy?: boolean;
+  onRestart?: () => void;
 }) {
   const rows = useMemo(() => computePredictionScores(mode, players, votes, null), [mode, players, votes]);
   const stats = useMemo(() => buildFunStats(mode, rows), [mode, rows]);
@@ -538,9 +547,16 @@ export function PredictionEndGamePanel({
           ))}
         </div>
 
-        <a href="/" className="btn-primary mt-6">
-          Retour à l'accueil
-        </a>
+        <div className="mx-auto mt-6 w-fit rounded-2xl border border-white/10 bg-white/5 px-5 py-3">
+          <div className="text-4xl font-black tabular-nums">{returnLeft}</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-white/45">retour lobby</div>
+        </div>
+
+        {isHost && onRestart && (
+          <button type="button" disabled={busy} onClick={onRestart} className="btn-primary mt-4 w-full">
+            Relancer une partie
+          </button>
+        )}
       </section>
     </main>
   );
@@ -597,29 +613,6 @@ function MiniConfetti() {
       ))}
     </div>
   );
-}
-
-function useCountUp(target: number, durationMs: number): number {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    let frame = 0;
-    const start = performance.now();
-    const from = value;
-
-    function tick(now: number) {
-      const progress = Math.min(1, (now - start) / durationMs);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(from + (target - from) * eased));
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    }
-
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, durationMs]);
-
-  return value;
 }
 
 function getPlayerGradient(id: string): string {

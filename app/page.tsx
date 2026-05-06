@@ -82,8 +82,6 @@ export default function HomePage() {
 
       if (rErr) throw rErr;
       if (!room) throw new Error("Aucune salle trouvée avec ce code.");
-      if (room.status === "ended") throw new Error("Cette partie est terminée.");
-
       // upsert : si on rejoint deux fois (refresh), on met juste à jour le nom.
       const { error: pErr } = await supabase
         .from("players")
@@ -128,8 +126,8 @@ export default function HomePage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-base font-bold text-white">Qui pourrait ?</div>
-                  <div className="text-white/50">Vote entre deux choix.</div>
+                  <div className="text-base font-bold text-white">Tu préfères</div>
+                  <div className="text-white/50">Choisis entre deux options.</div>
                 </div>
                 <div className="chip">2+ joueurs</div>
               </div>

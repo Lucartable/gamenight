@@ -15,7 +15,7 @@ drop table if exists public.rooms cascade;
 -- ----- TYPES LOGIQUES ------------------------------------------------------
 -- Les checks textuels gardent le schéma simple côté Supabase JS.
 -- game_type :
---   'who_would' = vote entre deux options
+--   'who_would' = Tu préfères, vote entre deux options
 --   'who_of_us' = joueur désigné
 --   'majority' = prédire la réponse majoritaire
 --   'minority' = viser une minorité valide

@@ -19,11 +19,15 @@ import {
   PredictionScoreboardPanel,
   PredictionVoteScreen,
 } from "@/components/predictionMode";
+import { FinalReturnPanel } from "@/components/finalReturn";
 import { isPredictionGame } from "@/lib/scoring";
+import { useCountUp } from "@/lib/useCountUp";
 import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_VOTE_DURATION_SEC,
+  END_GAME_RETURN_DELAY_SEC,
   getOrCreateClientId,
+  triggerHaptic,
 } from "@/lib/utils";
 import type { Choice, Player, Vote } from "@/types/database";
 
@@ -86,6 +90,8 @@ export default function PlayerPage() {
     optimisticVote && currentQ && optimisticVote.qid === currentQ.id
       ? optimisticVote
       : voteToLocalVote(myVote);
+  const endedStartedAt = room?.status === "ended" ? room.scoreboard_started_at : null;
+  const endReturnLeft = useCountdown(endedStartedAt, END_GAME_RETURN_DELAY_SEC);
 
   async function submitVote() {
     setVoteError(null);
@@ -108,7 +114,7 @@ export default function PlayerPage() {
     const selected_player_id = gameType === "who_of_us" ? selectedPlayerId : null;
     if (gameType === "who_would" && !selected_option) return;
     if (isPredictionGame(gameType) && !selected_option) return;
-    if (gameType === "who_of_us" && (!selected_player_id || selected_player_id === me.id)) return;
+    if (gameType === "who_of_us" && !selected_player_id) return;
 
     setSubmitting(true);
     setOptimisticVote({ qid: currentQ.id, selected_option, selected_player_id });
@@ -141,13 +147,26 @@ export default function PlayerPage() {
   if (!me)
     return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
   if (room.status === "ended" && predictionMode)
-    return <PredictionEndGamePanel mode={predictionMode} players={players} votes={votes} />;
+    return (
+      <PredictionEndGamePanel
+        mode={predictionMode}
+        players={players}
+        votes={votes}
+        returnLeft={endReturnLeft}
+      />
+    );
   if (room.status === "ended")
-    return <CenteredMessage title="Partie terminée" subtitle="Merci d'avoir joué !" action={{ label: "Retour", href: "/" }} />;
+    return (
+      <FinalReturnPanel
+        title="Résultats terminés"
+        subtitle="La salle reste ouverte, l'hôte prépare la suite."
+        returnLeft={endReturnLeft}
+      />
+    );
 
   const voteDuration = room.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
-  const targetPlayers = players.filter((player) => player.id !== me.id);
+  const targetPlayers = players;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
@@ -295,7 +314,7 @@ function Lobby({ players, gameLabel }: { players: Player[]; gameLabel: string | 
         <div className="text-xs uppercase tracking-wider text-white/50">Joueurs</div>
         <ul className="mt-2 flex flex-wrap justify-center gap-2">
           {players.map((p) => (
-            <li key={p.id} className="chip">
+            <li key={p.id} className="chip animate-pop-in">
               {p.is_host ? "👑 " : ""}{p.name}
             </li>
           ))}
@@ -319,7 +338,7 @@ function VoteShell({
   const left = useCountdown(startedAt, durationSec);
 
   return (
-    <section className="flex flex-1 flex-col">
+    <section className="flex flex-1 flex-col animate-reveal-in">
       <div className="card mb-3 flex items-center justify-between p-3 px-4">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <div>
@@ -461,8 +480,11 @@ function ChoiceButton({
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
-      className={`flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${base} ${selected ? selectedClass : ""}`}
+      onClick={() => {
+        triggerHaptic(10);
+        onClick();
+      }}
+      className={`prediction-card flex w-full flex-col items-center justify-center rounded-3xl border-2 p-6 text-center transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${base} ${selected ? selectedClass : "hover:-translate-y-0.5 hover:bg-white/10"}`}
     >
       <span className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>
         Option {label}
@@ -487,11 +509,14 @@ function PlayerTargetButton({
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
-      className={`flex items-center justify-between rounded-2xl border p-4 text-left transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${
+      onClick={() => {
+        triggerHaptic(10);
+        onClick();
+      }}
+      className={`prediction-card flex items-center justify-between rounded-2xl border p-4 text-left transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 ${
         selected
           ? "border-neon-cyan bg-neon-cyan/10 shadow-glow-cyan"
-          : "border-white/10 bg-white/5 hover:border-neon-cyan/50"
+          : "border-white/10 bg-white/5 hover:-translate-y-0.5 hover:border-neon-cyan/50"
       }`}
     >
       <span className="text-xl font-black">{player.name}</span>
@@ -516,7 +541,10 @@ function SubmitButton({
       <button
         type="button"
         disabled={!canSubmit}
-        onClick={onSubmit}
+        onClick={() => {
+          triggerHaptic([12, 30, 18]);
+          onSubmit();
+        }}
         className="btn-primary mt-4 w-full disabled:shadow-none"
       >
         {submitting ? "Envoi..." : validated ? "Vote envoyé" : "Valider mon choix"}
@@ -676,19 +704,20 @@ function ResultCard({
 }) {
   const labelColor = accent === "pink" ? "text-neon-pink" : "text-neon-cyan";
   const barColor = accent === "pink" ? "bg-neon-pink" : "bg-neon-cyan";
+  const shownPercent = useCountUp(percent);
 
   return (
-    <div className="flex flex-col rounded-3xl border border-white/10 bg-white/5 p-4">
+    <div className="flex flex-col rounded-3xl border border-white/10 bg-white/5 p-4 animate-reveal-in">
       <div className={`text-sm font-bold uppercase tracking-widest ${labelColor}`}>{label}</div>
       <div className="mt-2 text-lg font-semibold text-white/90">{text}</div>
       <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="text-4xl font-black tabular-nums">{percent}%</div>
+        <div className="text-4xl font-black tabular-nums">{shownPercent}%</div>
         <div className="pb-1 text-sm text-white/60">
           {count} vote{count > 1 ? "s" : ""}
         </div>
       </div>
       <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
+        <div className={`result-fill h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
       </div>
       {names.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
@@ -704,7 +733,7 @@ function ResultCard({
 function RankingCard({ row, topCount }: { row: WhoOfUsRankingRow; topCount: number }) {
   const isTop = topCount > 0 && row.count === topCount;
   return (
-    <div className={`rounded-2xl border p-4 ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10" : "border-white/10 bg-white/5"}`}>
+    <div className={`rounded-2xl border p-4 animate-reveal-in ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10 shadow-glow" : "border-white/10 bg-white/5"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-2xl font-black">{row.targetName}</div>

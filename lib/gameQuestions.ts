@@ -56,9 +56,9 @@ export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCat
 export const GAME_DEFINITIONS: GameDefinition[] = [
   {
     id: "who_would",
-    label: "Qui pourrait ?",
-    shortLabel: "Qui pourrait ?",
-    description: "Vote entre deux choix et découvre le résultat du groupe.",
+    label: "Tu préfères",
+    shortLabel: "Tu préfères",
+    description: "Choisis entre deux options et découvre le résultat du groupe.",
   },
   {
     id: "who_of_us",

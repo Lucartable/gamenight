@@ -3,6 +3,7 @@ export const DEFAULT_TOTAL_QUESTIONS = 10;
 export const DEFAULT_VOTE_DURATION_SEC = 30;
 export const DEFAULT_REVEAL_DURATION_SEC = 15;
 export const DEFAULT_SCOREBOARD_DURATION_SEC = 7;
+export const END_GAME_RETURN_DELAY_SEC = 7;
 
 export const QUESTION_COUNT_PRESETS = [5, 10, 20] as const;
 export const VOTE_DURATION_OPTIONS = [8, 15, 30, 45, 60] as const;
