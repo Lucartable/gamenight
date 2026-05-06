@@ -9,6 +9,7 @@ import {
   GAME_DEFINITIONS,
   type GameCategory,
   type GameQuestion,
+  type MimeExpressionQuestion,
   type PredictionGameQuestion,
   type WhoOfUsGameQuestion,
   type WhoWouldQuestion,
@@ -20,6 +21,21 @@ import {
   getQuestionsForGame,
   pickRandomQuestionForGame,
 } from "@/lib/gameQuestions";
+import {
+  buildMimeGameState,
+  findNextMimeIndex,
+  getArrivalOrder,
+  getMimeGameState,
+  getOrderedPlayers,
+  getPlayersOutsideOrder,
+  isMimeGame,
+  mergePlayerOrder,
+  moveId,
+  pickMimeExpression,
+  prunePlayerOrder,
+  shuffleIds,
+  type MimeOrderMode,
+} from "@/lib/mimeGame";
 import {
   PredictionEndGamePanel,
   PredictionRevealPanel,
@@ -64,6 +80,7 @@ type RoomConfigPatch = Partial<
     | "hide_scores"
     | "scoreboard_frequency"
     | "score_target"
+    | "mime_game_state"
   >
 >;
 
@@ -88,6 +105,9 @@ export default function HostPage() {
   const [hostSelectedPredictionOption, setHostSelectedPredictionOption] = useState<string | null>(null);
   const [hostSubmitting, setHostSubmitting] = useState(false);
   const [optimisticHostVote, setOptimisticHostVote] = useState<LocalVote | null>(null);
+  const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("arrival");
+  const [mimeCustomOrder, setMimeCustomOrder] = useState<string[]>([]);
+  const [mimeRandomOrder, setMimeRandomOrder] = useState<string[]>([]);
   const transitionRef = useRef(false);
 
   useEffect(() => {
@@ -118,6 +138,36 @@ export default function HostPage() {
   const scoreboardDuration = room?.scoreboard_duration_sec ?? DEFAULT_SCOREBOARD_DURATION_SEC;
   const autoplay = room?.autoplay ?? false;
   const predictionMode = isPredictionGame(gameType) ? gameType : null;
+  const mimeMode = isMimeGame(gameType);
+  const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
+  const mimeTimerDuration = mimeGameState?.timerDuration ?? voteDuration;
+  const mimePlayerOrder = useMemo(() => mimeGameState?.playerOrder ?? [], [mimeGameState?.playerOrder]);
+  const currentMimePlayer = useMemo(
+    () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
+    [mimeGameState?.currentMimePlayerId, players]
+  );
+  const mimePlayersInOrder = useMemo(
+    () => getOrderedPlayers(mimePlayerOrder, players),
+    [mimePlayerOrder, players]
+  );
+  const mimePlayersOutsideOrder = useMemo(
+    () => getPlayersOutsideOrder(mimePlayerOrder, players),
+    [mimePlayerOrder, players]
+  );
+
+  useEffect(() => {
+    if (!mimeMode || room?.status !== "lobby") return;
+    const arrivalOrder = getArrivalOrder(players);
+    setMimeCustomOrder((prev) => {
+      const base = prev.length ? prev : arrivalOrder;
+      const next = mergePlayerOrder(base, players);
+      return sameOrder(prev, next) ? prev : next;
+    });
+    setMimeRandomOrder((prev) => {
+      const next = prev.length ? mergePlayerOrder(prev, players) : shuffleIds(arrivalOrder);
+      return sameOrder(prev, next) ? prev : next;
+    });
+  }, [mimeMode, players, room?.status]);
 
   const askedForGameIds = useMemo(
     () =>
@@ -179,8 +229,11 @@ export default function HostPage() {
 
   const votingStartedAt = room?.status === "question_active" ? room.question_started_at : null;
   const voteLeft = useCountdown(votingStartedAt, voteDuration);
+  const mimeRoundLeft = useCountdown(mimeMode ? votingStartedAt : null, mimeTimerDuration);
   const voteHasExpired =
     votingStartedAt !== null && secondsLeft(votingStartedAt, voteDuration) === 0;
+  const mimeTimerHasExpired =
+    mimeMode && votingStartedAt !== null && secondsLeft(votingStartedAt, mimeTimerDuration) === 0;
 
   const revealStartedAt = room?.status === "reveal_results" ? room.reveal_started_at : null;
   const revealLeft = useCountdown(revealStartedAt, revealDuration);
@@ -199,14 +252,38 @@ export default function HostPage() {
     (!endedStartedAt || secondsLeft(endedStartedAt, END_GAME_RETURN_DELAY_SEC) === 0);
 
   useEffect(() => {
-    if (room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
+    if (!mimeMode && room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, voteHasExpired, allVotesSubmitted, currentQ?.id]);
+  }, [mimeMode, room?.status, voteHasExpired, allVotesSubmitted, currentQ?.id]);
 
   useEffect(() => {
-    if (room?.status === "reveal_results" && autoplay && revealHasExpired) {
+    if (
+      mimeMode &&
+      room?.status === "question_active" &&
+      mimeGameState?.roundStatus === "playing" &&
+      mimeTimerHasExpired
+    ) {
+      void markMimeRoundEnded();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mimeMode, room?.status, mimeGameState?.roundStatus, mimeTimerHasExpired, currentQ?.id]);
+
+  useEffect(() => {
+    if (!mimeMode || !room || !mimeGameState || room.status === "lobby" || room.status === "ended") return;
+    const liveOrder = prunePlayerOrder(mimeGameState.playerOrder, players);
+    if (!liveOrder.length || sameOrder(liveOrder, mimeGameState.playerOrder)) return;
+    if (!liveOrder.includes(mimeGameState.currentMimePlayerId)) {
+      void goToNextMimeRound({ forceOrder: liveOrder });
+      return;
+    }
+    void syncMimePlayerOrder(liveOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mimeMode, room?.id, room?.status, mimeGameState?.currentMimePlayerId, mimeGameState?.playerOrder.join("|"), players]);
+
+  useEffect(() => {
+    if (!mimeMode && room?.status === "reveal_results" && autoplay && revealHasExpired) {
       if (shouldShowRoundScoreboard) {
         void showScoreboard();
       } else {
@@ -214,7 +291,7 @@ export default function HostPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, autoplay, revealHasExpired, roundsPlayed, filteredAvailable.length, shouldShowRoundScoreboard]);
+  }, [mimeMode, room?.status, autoplay, revealHasExpired, roundsPlayed, filteredAvailable.length, shouldShowRoundScoreboard]);
 
   useEffect(() => {
     if (room?.status === "scoreboard" && autoplay && scoreboardHasExpired) {
@@ -262,10 +339,17 @@ export default function HostPage() {
   }
 
   function chooseGame(nextGameType: GameType) {
+    if (nextGameType === "mime_expressions") {
+      const arrivalOrder = getArrivalOrder(players);
+      setMimeOrderMode("arrival");
+      setMimeCustomOrder(arrivalOrder);
+      setMimeRandomOrder(shuffleIds(arrivalOrder));
+    }
     void updateConfig({
       game_type: nextGameType,
       selected_categories: getDefaultCategories(nextGameType),
       current_question_id: null,
+      mime_game_state: null,
     });
   }
 
@@ -274,6 +358,7 @@ export default function HostPage() {
       game_type: null,
       selected_categories: [],
       current_question_id: null,
+      mime_game_state: null,
     });
   }
 
@@ -319,6 +404,10 @@ export default function HostPage() {
 
   async function goToNextQuestion() {
     if (!room || !gameType) return;
+    if (mimeMode) {
+      await goToNextMimeRound();
+      return;
+    }
     if (shouldFinishAfterCurrentRound) {
       await finishGame(false);
       return;
@@ -331,7 +420,196 @@ export default function HostPage() {
     await askQuestion(question);
   }
 
+  async function startMimeGame(playerOrder: string[]) {
+    if (!room || !mimeMode) return;
+    const liveOrder = prunePlayerOrder(playerOrder, players);
+    if (!liveOrder.length) {
+      setActionError("Ajoute au moins un joueur dans l'ordre de passage.");
+      return;
+    }
+    const expression = pickMimeExpression(selectedCategories, []);
+    if (!expression) {
+      setActionError("Aucune expression disponible avec ces thèmes.");
+      return;
+    }
+    await runTransition(async () => {
+      const supabase = getSupabase();
+      const { error: askedError } = await supabase
+        .from("asked_questions")
+        .upsert(
+          { room_id: room.id, game_type: "mime_expressions", question_id: expression.id },
+          { onConflict: "room_id,game_type,question_id" }
+        );
+      if (askedError) throw askedError;
+
+      const { error } = await supabase
+        .from("rooms")
+        .update({
+          status: "question_active",
+          current_question_id: expression.id,
+          question_started_at: new Date().toISOString(),
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: buildMimeGameState({
+            playerOrder: liveOrder,
+            currentMimeIndex: 0,
+            expressionId: expression.id,
+            usedExpressionIds: [expression.id],
+            roundNumber: 1,
+            timerDuration: voteDuration,
+            roundStatus: "playing",
+          }),
+        })
+        .eq("id", room.id)
+        .eq("status", "lobby");
+      if (error) throw error;
+    });
+  }
+
+  async function goToNextMimeRound(options?: { forceOrder?: string[] }) {
+    if (!room || !mimeMode || !mimeGameState) return;
+    const liveOrder = options?.forceOrder?.length
+      ? options.forceOrder
+      : prunePlayerOrder(mimeGameState.playerOrder, players);
+    if (!liveOrder.length) {
+      await resetToLobby();
+      return;
+    }
+    if (mimeGameState.roundNumber >= totalQuestions) {
+      await finishGame(false);
+      return;
+    }
+    const expression = pickMimeExpression(selectedCategories, mimeGameState.usedExpressionIds);
+    if (!expression) {
+      await finishGame(false);
+      return;
+    }
+    const nextIndex = findNextMimeIndex(mimeGameState, liveOrder);
+    const usedExpressionIds = [...mimeGameState.usedExpressionIds, expression.id];
+
+    await runTransition(async () => {
+      const supabase = getSupabase();
+      const { error: askedError } = await supabase
+        .from("asked_questions")
+        .upsert(
+          { room_id: room.id, game_type: "mime_expressions", question_id: expression.id },
+          { onConflict: "room_id,game_type,question_id" }
+        );
+      if (askedError) throw askedError;
+
+      const { error } = await supabase
+        .from("rooms")
+        .update({
+          status: "question_active",
+          current_question_id: expression.id,
+          question_started_at: new Date().toISOString(),
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: buildMimeGameState({
+            playerOrder: liveOrder,
+            currentMimeIndex: nextIndex,
+            expressionId: expression.id,
+            usedExpressionIds,
+            roundNumber: mimeGameState.roundNumber + 1,
+            timerDuration: mimeGameState.timerDuration || voteDuration,
+            roundStatus: "playing",
+          }),
+        })
+        .eq("id", room.id)
+        .in("status", ["question_active", "reveal_results"]);
+      if (error) throw error;
+    });
+  }
+
+  async function restartMimeRound() {
+    if (!room || !mimeMode || !mimeGameState || !currentQ) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "question_active",
+          question_started_at: new Date().toISOString(),
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: { ...mimeGameState, roundStatus: "playing" },
+        })
+        .eq("id", room.id)
+        .in("status", ["question_active", "reveal_results"]);
+      if (error) throw error;
+    });
+  }
+
+  async function revealMimeExpression() {
+    if (!room || !mimeMode || !mimeGameState || !currentQ) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "reveal_results",
+          reveal_started_at: new Date().toISOString(),
+          mime_game_state: { ...mimeGameState, roundStatus: "revealed" },
+        })
+        .eq("id", room.id)
+        .in("status", ["question_active", "reveal_results"]);
+      if (error) throw error;
+    });
+  }
+
+  async function markMimeRoundEnded() {
+    if (!room || !mimeMode || !mimeGameState) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          mime_game_state: { ...mimeGameState, roundStatus: "ended" },
+        })
+        .eq("id", room.id)
+        .eq("status", "question_active");
+      if (error) throw error;
+    });
+  }
+
+  async function syncMimePlayerOrder(playerOrder: string[]) {
+    if (!room || !mimeMode || !mimeGameState) return;
+    const currentIndex = Math.max(0, playerOrder.indexOf(mimeGameState.currentMimePlayerId));
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          mime_game_state: {
+            ...mimeGameState,
+            playerOrder,
+            currentMimeIndex: currentIndex,
+          },
+        })
+        .eq("id", room.id)
+        .neq("status", "lobby");
+      if (error) throw error;
+    });
+  }
+
+  async function addPlayerToMimeOrder(player: Player) {
+    if (!room || !mimeMode || !mimeGameState || mimeGameState.playerOrder.includes(player.id)) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          mime_game_state: {
+            ...mimeGameState,
+            playerOrder: [...mimeGameState.playerOrder, player.id],
+          },
+        })
+        .eq("id", room.id)
+        .neq("status", "lobby");
+      if (error) throw error;
+    });
+  }
+
   async function revealNow() {
+    if (mimeMode) {
+      await revealMimeExpression();
+      return;
+    }
     if (!room || !currentQ) return;
     await runTransition(async () => {
       const { error } = await getSupabase()
@@ -372,6 +650,7 @@ export default function HostPage() {
           question_started_at: null,
           reveal_started_at: null,
           scoreboard_started_at: null,
+          mime_game_state: null,
         })
         .eq("id", room.id);
       if (error) throw error;
@@ -417,6 +696,7 @@ export default function HostPage() {
           question_started_at: null,
           reveal_started_at: null,
           scoreboard_started_at: null,
+          mime_game_state: null,
         })
         .eq("id", room.id);
       if (roomError) throw roomError;
@@ -524,6 +804,13 @@ export default function HostPage() {
   const otherPlayers = players.filter((player) => player.client_id !== room.host_client_id);
   const targetPlayers = players;
   const isFinalReveal = room.status === "reveal_results" && roundsPlayed >= totalQuestions;
+  const mimeLobbyOrder =
+    mimeOrderMode === "arrival"
+      ? getArrivalOrder(players)
+      : mimeOrderMode === "random"
+        ? prunePlayerOrder(mimeRandomOrder, players)
+        : mergePlayerOrder(mimeCustomOrder, players);
+  const displayRound = mimeMode ? mimeGameState?.roundNumber ?? 0 : roundsPlayed;
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
@@ -532,7 +819,7 @@ export default function HostPage() {
         status={room.status}
         gameLabel={gameDefinition?.shortLabel}
         playersCount={players.length}
-        round={roundsPlayed}
+        round={displayRound}
         totalQuestions={totalQuestions}
         onEnd={() => void finishGame(true)}
         onToggleTransfer={() => setShowTransfer((value) => !value)}
@@ -558,7 +845,37 @@ export default function HostPage() {
         <GameSelectionView busy={busy} onChoose={chooseGame} />
       )}
 
-      {room.status === "lobby" && gameType && gameDefinition && (
+      {room.status === "lobby" && gameType === "mime_expressions" && gameDefinition && (
+        <MimeLobbyView
+          players={players}
+          availableCount={filteredAvailable.length}
+          gameLabel={gameDefinition.label}
+          selectedCategories={selectedCategories}
+          room={room}
+          busy={busy}
+          customQuestionCount={customQuestionCount}
+          orderMode={mimeOrderMode}
+          finalOrder={mimeLobbyOrder}
+          customOrder={mimeCustomOrder}
+          onOrderModeChange={(mode) => {
+            setMimeOrderMode(mode);
+            if (mode === "random") setMimeRandomOrder(shuffleIds(getArrivalOrder(players)));
+            if (mode === "custom") setMimeCustomOrder((prev) => mergePlayerOrder(prev, players));
+          }}
+          onShuffle={() => setMimeRandomOrder(shuffleIds(getArrivalOrder(players)))}
+          onMoveCustomPlayer={(playerId, direction) => {
+            setMimeCustomOrder((prev) => moveId(mergePlayerOrder(prev, players), playerId, direction));
+          }}
+          onCustomQuestionCountChange={setCustomQuestionCount}
+          onCommitCustomQuestionCount={commitCustomQuestionCount}
+          onToggleCategory={toggleCategory}
+          onUpdateConfig={updateConfig}
+          onStart={() => void startMimeGame(mimeLobbyOrder)}
+          onChangeGame={changeGame}
+        />
+      )}
+
+      {room.status === "lobby" && gameType && gameType !== "mime_expressions" && gameDefinition && (
         <LobbyView
           players={players}
           availableCount={filteredAvailable.length}
@@ -575,6 +892,24 @@ export default function HostPage() {
           onUpdateConfig={updateConfig}
           onStart={goToNextQuestion}
           onChangeGame={changeGame}
+        />
+      )}
+
+      {room.status === "question_active" && currentQ && mimeGameState && gameType === "mime_expressions" && (
+        <MimeActiveHostView
+          expression={currentQ as MimeExpressionQuestion}
+          state={mimeGameState}
+          currentMimePlayer={currentMimePlayer}
+          orderedPlayers={mimePlayersInOrder}
+          playersOutsideOrder={mimePlayersOutsideOrder}
+          roundLeft={mimeRoundLeft}
+          totalRounds={totalQuestions}
+          busy={busy}
+          onReveal={revealMimeExpression}
+          onRestart={restartMimeRound}
+          onNext={() => void goToNextMimeRound()}
+          onEnd={() => void finishGame(false)}
+          onAddPlayer={addPlayerToMimeOrder}
         />
       )}
 
@@ -626,6 +961,22 @@ export default function HostPage() {
           onSelect={setHostSelectedPredictionOption}
           onSubmit={submitHostVote}
           onRevealNow={revealNow}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && mimeGameState && gameType === "mime_expressions" && (
+        <MimeRevealHostView
+          expression={currentQ as MimeExpressionQuestion}
+          state={mimeGameState}
+          currentMimePlayer={currentMimePlayer}
+          orderedPlayers={mimePlayersInOrder}
+          playersOutsideOrder={mimePlayersOutsideOrder}
+          totalRounds={totalQuestions}
+          busy={busy}
+          onRestart={restartMimeRound}
+          onNext={() => void goToNextMimeRound()}
+          onEnd={() => void finishGame(false)}
+          onAddPlayer={addPlayerToMimeOrder}
         />
       )}
 
@@ -766,7 +1117,7 @@ function RoomHeader({
             {code}
           </div>
           <div className="mt-1 text-sm text-white/60">
-            {playersCount} joueur{playersCount > 1 ? "s" : ""} · {labelStatus(status)}
+            {playersCount} joueur{playersCount > 1 ? "s" : ""} · {labelStatus(status, gameLabel)}
             {gameLabel && ` · ${gameLabel}`}
             {round > 0 && ` · ${Math.min(round, totalQuestions)} / ${totalQuestions}`}
           </div>
@@ -1066,6 +1417,534 @@ function LobbyView({
         )}
       </section>
     </>
+  );
+}
+
+function MimeLobbyView({
+  players,
+  availableCount,
+  gameLabel,
+  selectedCategories,
+  room,
+  busy,
+  customQuestionCount,
+  orderMode,
+  finalOrder,
+  customOrder,
+  onOrderModeChange,
+  onShuffle,
+  onMoveCustomPlayer,
+  onCustomQuestionCountChange,
+  onCommitCustomQuestionCount,
+  onToggleCategory,
+  onUpdateConfig,
+  onStart,
+  onChangeGame,
+}: {
+  players: Player[];
+  availableCount: number;
+  gameLabel: string;
+  selectedCategories: string[];
+  room: Room;
+  busy: boolean;
+  customQuestionCount: string;
+  orderMode: MimeOrderMode;
+  finalOrder: string[];
+  customOrder: string[];
+  onOrderModeChange: (mode: MimeOrderMode) => void;
+  onShuffle: () => void;
+  onMoveCustomPlayer: (playerId: string, direction: -1 | 1) => void;
+  onCustomQuestionCountChange: (value: string) => void;
+  onCommitCustomQuestionCount: () => void;
+  onToggleCategory: (category: GameCategory) => void;
+  onUpdateConfig: (patch: RoomConfigPatch) => void;
+  onStart: () => void;
+  onChangeGame: () => void;
+}) {
+  const enoughPlayers = players.length >= 2;
+  const canStart = enoughPlayers && finalOrder.length >= 2 && availableCount > 0 && !busy;
+  const categories = getGameCategories("mime_expressions");
+  const orderedPlayers = getOrderedPlayers(finalOrder, players);
+  const customPlayers = getOrderedPlayers(mergePlayerOrder(customOrder, players), players);
+
+  return (
+    <>
+      <section className="card mb-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-white/50">Jeu sélectionné</div>
+            <h2 className="text-2xl font-black">{gameLabel}</h2>
+          </div>
+          <button type="button" onClick={onChangeGame} disabled={busy} className="btn-ghost text-neon-cyan">
+            Changer
+          </button>
+        </div>
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="mb-3 text-lg font-bold">Joueurs présents</h2>
+        {players.length === 0 ? (
+          <p className="text-white/60">En attente des joueurs...</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {players.map((player) => (
+              <li key={player.id} className="chip animate-pop-in">
+                {player.is_host ? "👑 " : ""}{player.name}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="mb-4 text-lg font-bold">Configuration</h2>
+
+        <ConfigGroup label="Manches">
+          {QUESTION_COUNT_PRESETS.map((count) => (
+            <ConfigButton
+              key={count}
+              active={room.total_questions === count}
+              disabled={busy}
+              onClick={() => onUpdateConfig({ total_questions: count })}
+            >
+              {count}
+            </ConfigButton>
+          ))}
+          <div className="flex min-w-[128px] flex-1 gap-2">
+            <input
+              className="input min-w-0 rounded-xl px-3 py-2 text-base"
+              inputMode="numeric"
+              value={customQuestionCount}
+              onChange={(e) => onCustomQuestionCountChange(e.target.value.replace(/\D/g, ""))}
+              onBlur={onCommitCustomQuestionCount}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              disabled={busy}
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onCommitCustomQuestionCount}
+              className="btn-secondary rounded-xl px-3 py-2 text-sm"
+            >
+              OK
+            </button>
+          </div>
+        </ConfigGroup>
+
+        <ConfigGroup label="Timer">
+          {VOTE_DURATION_OPTIONS.map((duration) => (
+            <ConfigButton
+              key={duration}
+              active={room.vote_duration_sec === duration}
+              disabled={busy}
+              onClick={() => onUpdateConfig({ vote_duration_sec: duration })}
+            >
+              {duration}s
+            </ConfigButton>
+          ))}
+        </ConfigGroup>
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="mb-3 text-lg font-bold">Catégories</h2>
+        <div className="flex flex-wrap gap-2">
+          {categories.map((category) => {
+            const active = selectedCategories.includes(category.id);
+            return (
+              <button
+                key={category.id}
+                type="button"
+                disabled={busy}
+                onClick={() => onToggleCategory(category.id)}
+                className={`prediction-card flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:opacity-50 ${
+                  active
+                    ? "border-neon-pink bg-neon-pink/20 text-white shadow-glow-pink"
+                    : "border-white/10 bg-white/5 text-white/70 hover:-translate-y-0.5 hover:border-white/20"
+                }`}
+                title={category.description}
+              >
+                <span>{category.emoji}</span>
+                <span>{category.label}</span>
+                {category.adult && (
+                  <span className="rounded bg-neon-pink/30 px-1 text-[10px] uppercase">18+</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-sm text-white/50">
+          {availableCount} expression{availableCount > 1 ? "s" : ""} disponible{availableCount > 1 ? "s" : ""}.
+        </p>
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="mb-4 text-lg font-bold">Ordre de passage</h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <OrderModeButton
+            active={orderMode === "arrival"}
+            disabled={busy}
+            title="Ordre d'arrivée"
+            subtitle="Selon l'entrée dans la room"
+            onClick={() => onOrderModeChange("arrival")}
+          />
+          <OrderModeButton
+            active={orderMode === "random"}
+            disabled={busy}
+            title="Aléatoire"
+            subtitle="Mélangé au lancement"
+            onClick={() => onOrderModeChange("random")}
+          />
+          <OrderModeButton
+            active={orderMode === "custom"}
+            disabled={busy}
+            title="Personnalisé"
+            subtitle="Réorganisé par l'hôte"
+            onClick={() => onOrderModeChange("custom")}
+          />
+        </div>
+
+        {orderMode === "random" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onShuffle}
+            className="btn-secondary mt-3 w-full rounded-xl py-3 text-base"
+          >
+            Remélanger
+          </button>
+        )}
+
+        {orderMode === "custom" && (
+          <ul className="mt-4 space-y-2">
+            {customPlayers.map((player, index) => (
+              <li key={player.id} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neon-cyan/15 text-sm font-black text-neon-cyan">
+                  {index + 1}
+                </div>
+                <div className="min-w-0 flex-1 truncate font-bold">{player.name}</div>
+                <button
+                  type="button"
+                  disabled={busy || index === 0}
+                  onClick={() => onMoveCustomPlayer(player.id, -1)}
+                  className="btn-ghost rounded-xl px-3"
+                  aria-label={`Monter ${player.name}`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || index === customPlayers.length - 1}
+                  onClick={() => onMoveCustomPlayer(player.id, 1)}
+                  className="btn-ghost rounded-xl px-3"
+                  aria-label={`Descendre ${player.name}`}
+                >
+                  ↓
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-bg-soft p-4">
+          <div className="mb-3 text-xs font-bold uppercase tracking-wider text-white/50">Aperçu final</div>
+          <ol className="space-y-2">
+            {orderedPlayers.map((player, index) => (
+              <li key={player.id} className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-black">
+                  {index + 1}
+                </span>
+                <span className="font-semibold">{player.name}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <button type="button" onClick={onStart} disabled={!canStart} className="btn-primary w-full text-xl">
+          Valider et lancer la partie
+        </button>
+        {!enoughPlayers && (
+          <p className="mt-3 text-center text-sm text-neon-yellow">
+            Il faut au moins 2 joueurs pour lancer.
+          </p>
+        )}
+        {availableCount === 0 && (
+          <p className="mt-3 text-center text-sm text-neon-pink">
+            Aucune expression disponible avec ces catégories.
+          </p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function OrderModeButton({
+  active,
+  disabled,
+  title,
+  subtitle,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition disabled:opacity-50 ${
+        active
+          ? "border-neon-cyan bg-neon-cyan/10 shadow-glow-cyan"
+          : "border-white/10 bg-white/5 hover:border-white/20"
+      }`}
+    >
+      <div className="font-black">{title}</div>
+      <div className="mt-1 text-xs text-white/50">{subtitle}</div>
+    </button>
+  );
+}
+
+function MimeActiveHostView({
+  expression,
+  state,
+  currentMimePlayer,
+  orderedPlayers,
+  playersOutsideOrder,
+  roundLeft,
+  totalRounds,
+  busy,
+  onReveal,
+  onRestart,
+  onNext,
+  onEnd,
+  onAddPlayer,
+}: {
+  expression: MimeExpressionQuestion;
+  state: NonNullable<Room["mime_game_state"]>;
+  currentMimePlayer: Player | undefined;
+  orderedPlayers: Player[];
+  playersOutsideOrder: Player[];
+  roundLeft: number;
+  totalRounds: number;
+  busy: boolean;
+  onReveal: () => void;
+  onRestart: () => void;
+  onNext: () => void;
+  onEnd: () => void;
+  onAddPlayer: (player: Player) => void;
+}) {
+  const category = getCategoryForGame("mime_expressions", expression.category);
+  const isFinal = state.roundNumber >= totalRounds;
+  const timeIsHot = roundLeft <= 5;
+  const ended = state.roundStatus === "ended" || roundLeft === 0;
+
+  return (
+    <section key={state.currentMimePlayerId} className="card flex flex-1 flex-col p-5 animate-reveal-in">
+      <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
+        <span className={`chip ${ended ? "border-neon-yellow/50 text-neon-yellow" : "border-neon-cyan/40 text-neon-cyan"}`}>
+          {ended ? "Temps écoulé" : "Mime en cours"}
+        </span>
+      </div>
+
+      <div className={`text-center text-7xl font-black tabular-nums ${timeIsHot ? "animate-pulseSoft text-neon-pink" : "text-white"}`}>
+        {roundLeft}
+      </div>
+      <div className="text-center text-sm text-white/50">secondes</div>
+
+      <div className="mt-6 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-5 text-center">
+        <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">Mime actuel</div>
+        <div className="mt-2 text-3xl font-black">{currentMimePlayer?.name ?? "Joueur absent"}</div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+        <div className="text-xs font-bold uppercase tracking-wider text-white/50">Expression</div>
+        <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
+      </div>
+
+      <MimeHostActions
+        busy={busy}
+        isFinal={isFinal}
+        revealDisabled={state.roundStatus === "revealed"}
+        onReveal={onReveal}
+        onRestart={onRestart}
+        onNext={onNext}
+        onEnd={onEnd}
+      />
+
+      <MimeOrderPanel
+        currentMimePlayerId={state.currentMimePlayerId}
+        orderedPlayers={orderedPlayers}
+        playersOutsideOrder={playersOutsideOrder}
+        busy={busy}
+        onAddPlayer={onAddPlayer}
+      />
+    </section>
+  );
+}
+
+function MimeRevealHostView({
+  expression,
+  state,
+  currentMimePlayer,
+  orderedPlayers,
+  playersOutsideOrder,
+  totalRounds,
+  busy,
+  onRestart,
+  onNext,
+  onEnd,
+  onAddPlayer,
+}: {
+  expression: MimeExpressionQuestion;
+  state: NonNullable<Room["mime_game_state"]>;
+  currentMimePlayer: Player | undefined;
+  orderedPlayers: Player[];
+  playersOutsideOrder: Player[];
+  totalRounds: number;
+  busy: boolean;
+  onRestart: () => void;
+  onNext: () => void;
+  onEnd: () => void;
+  onAddPlayer: (player: Player) => void;
+}) {
+  const category = getCategoryForGame("mime_expressions", expression.category);
+  const isFinal = state.roundNumber >= totalRounds;
+
+  return (
+    <section key={`revealed-${state.currentExpressionId}`} className="card flex flex-1 flex-col p-5 animate-reveal-in">
+      <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
+        <span className="chip border-neon-green/50 text-neon-green">Expression révélée</span>
+      </div>
+
+      <div className="rounded-2xl border border-neon-green/40 bg-neon-green/10 p-5 text-center">
+        <div className="text-xs font-bold uppercase tracking-wider text-neon-green">Expression</div>
+        <div className="mt-3 text-4xl font-black leading-tight">{expression.text}</div>
+        <div className="mt-4 text-white/60">
+          Mime : <span className="font-bold text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
+        </div>
+      </div>
+
+      <MimeHostActions
+        busy={busy}
+        isFinal={isFinal}
+        revealDisabled
+        onReveal={() => {}}
+        onRestart={onRestart}
+        onNext={onNext}
+        onEnd={onEnd}
+      />
+
+      <MimeOrderPanel
+        currentMimePlayerId={state.currentMimePlayerId}
+        orderedPlayers={orderedPlayers}
+        playersOutsideOrder={playersOutsideOrder}
+        busy={busy}
+        onAddPlayer={onAddPlayer}
+      />
+    </section>
+  );
+}
+
+function MimeHostActions({
+  busy,
+  isFinal,
+  revealDisabled,
+  onReveal,
+  onRestart,
+  onNext,
+  onEnd,
+}: {
+  busy: boolean;
+  isFinal: boolean;
+  revealDisabled: boolean;
+  onReveal: () => void;
+  onRestart: () => void;
+  onNext: () => void;
+  onEnd: () => void;
+}) {
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <button type="button" disabled={busy || revealDisabled} onClick={onReveal} className="btn-primary">
+        Révéler l'expression
+      </button>
+      <button type="button" disabled={busy} onClick={onRestart} className="btn-secondary">
+        Relancer la manche
+      </button>
+      <button type="button" disabled={busy} onClick={isFinal ? onEnd : onNext} className="btn-secondary">
+        {isFinal ? "Résultats finaux" : "Manche suivante"}
+      </button>
+      <button type="button" disabled={busy} onClick={onEnd} className="btn-ghost text-neon-pink">
+        Terminer la partie
+      </button>
+    </div>
+  );
+}
+
+function MimeOrderPanel({
+  currentMimePlayerId,
+  orderedPlayers,
+  playersOutsideOrder,
+  busy,
+  onAddPlayer,
+}: {
+  currentMimePlayerId: string;
+  orderedPlayers: Player[];
+  playersOutsideOrder: Player[];
+  busy: boolean;
+  onAddPlayer: (player: Player) => void;
+}) {
+  return (
+    <div className="mt-5 rounded-2xl border border-white/10 bg-bg-soft p-4">
+      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-white/50">Ordre de passage</div>
+      <ol className="space-y-2">
+        {orderedPlayers.map((player, index) => (
+          <li
+            key={player.id}
+            className={`flex items-center gap-3 rounded-xl p-3 ${
+              player.id === currentMimePlayerId
+                ? "border border-neon-cyan/50 bg-neon-cyan/10"
+                : "border border-white/10 bg-white/5"
+            }`}
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-black">
+              {index + 1}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-semibold">{player.name}</span>
+            {player.id === currentMimePlayerId && <span className="text-xs font-bold text-neon-cyan">En cours</span>}
+          </li>
+        ))}
+      </ol>
+
+      {playersOutsideOrder.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 text-xs font-bold uppercase tracking-wider text-white/50">Nouveaux joueurs</div>
+          <div className="grid gap-2">
+            {playersOutsideOrder.map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                disabled={busy}
+                onClick={() => onAddPlayer(player)}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left font-semibold transition hover:border-neon-cyan/50 disabled:opacity-50"
+              >
+                Ajouter {player.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1765,10 +2644,14 @@ function getWhoOfUsStats(players: Player[], votes: Vote[]) {
   };
 }
 
-function labelStatus(status: string) {
+function sameOrder(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function labelStatus(status: string, gameLabel?: string) {
   switch (status) {
     case "lobby": return "Lobby";
-    case "question_active": return "Vote en cours";
+    case "question_active": return gameLabel === "Mime" ? "Mime en cours" : "Vote en cours";
     case "reveal_results": return "Révélation";
     case "scoreboard": return "Scoreboard";
     case "ended": return "Terminée";

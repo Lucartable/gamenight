@@ -16,9 +16,15 @@ import {
   type MajorityCategory,
   type MajorityCategoryMeta,
 } from "./majorityQuestions";
+import {
+  MIME_EXPRESSION_CATEGORIES,
+  MIME_EXPRESSIONS,
+  type MimeExpressionCategory,
+  type MimeExpressionCategoryMeta,
+} from "./mimeExpressions";
 import type { GameType } from "@/types/database";
 
-export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory;
+export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory | MimeExpressionCategory;
 
 export interface GameDefinition {
   id: GameType;
@@ -50,8 +56,15 @@ export interface PredictionGameQuestion {
   options: string[];
 }
 
-export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion;
-export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta) & { id: GameCategory };
+export interface MimeExpressionQuestion {
+  id: number;
+  gameType: "mime_expressions";
+  category: MimeExpressionCategory;
+  text: string;
+}
+
+export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion | MimeExpressionQuestion;
+export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta | MimeExpressionCategoryMeta) & { id: GameCategory };
 
 export const GAME_DEFINITIONS: GameDefinition[] = [
   {
@@ -78,6 +91,12 @@ export const GAME_DEFINITIONS: GameDefinition[] = [
     shortLabel: "Minorité",
     description: "Trouve le choix rare sans viser une option vide.",
   },
+  {
+    id: "mime_expressions",
+    label: "Mime les expressions",
+    shortLabel: "Mime",
+    description: "Un joueur mime une expression, les autres devinent avant la fin du timer.",
+  },
 ];
 
 export const WHO_WOULD_QUESTIONS: WhoWouldQuestion[] = RAW_WHO_WOULD_QUESTIONS.map((q) => ({
@@ -93,6 +112,7 @@ export function getGameDefinition(gameType: GameType | null | undefined): GameDe
 export function getGameCategories(gameType: GameType | null | undefined): GameCategoryMeta[] {
   if (gameType === "who_of_us") return WHO_OF_US_CATEGORIES as GameCategoryMeta[];
   if (gameType === "majority" || gameType === "minority") return MAJORITY_CATEGORIES as GameCategoryMeta[];
+  if (gameType === "mime_expressions") return MIME_EXPRESSION_CATEGORIES as GameCategoryMeta[];
   if (gameType === "who_would") return WHO_WOULD_CATEGORIES as GameCategoryMeta[];
   return [];
 }
@@ -100,6 +120,7 @@ export function getGameCategories(gameType: GameType | null | undefined): GameCa
 export function getDefaultCategories(gameType: GameType | null | undefined): GameCategory[] {
   if (gameType === "who_of_us") return ["classique"];
   if (gameType === "majority" || gameType === "minority") return ["food", "internet", "party"];
+  if (gameType === "mime_expressions") return ["classique"];
   if (gameType === "who_would") return ["soft"];
   return [];
 }
@@ -118,6 +139,9 @@ export function getQuestionsForGame(gameType: GameType | null | undefined): Game
   }
   if (gameType === "majority" || gameType === "minority") {
     return MAJORITY_QUESTIONS.map((q) => ({ ...q, gameType }));
+  }
+  if (gameType === "mime_expressions") {
+    return MIME_EXPRESSIONS.map((q) => ({ ...q, gameType: "mime_expressions" as const }));
   }
   if (gameType === "who_would") return WHO_WOULD_QUESTIONS;
   return [];

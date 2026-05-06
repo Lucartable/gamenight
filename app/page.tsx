@@ -152,6 +152,13 @@ export default function HomePage() {
                 </div>
                 <div className="chip">Stratégie</div>
               </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-bold text-white">Mime les expressions</div>
+                  <div className="text-white/50">Mime une expression à tour de rôle.</div>
+                </div>
+                <div className="chip">Mime</div>
+              </div>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
 import {
+  type MimeExpressionQuestion,
   type PredictionGameQuestion,
   type WhoOfUsGameQuestion,
   type WhoWouldQuestion,
@@ -13,6 +14,7 @@ import {
   getGameDefinition,
   getQuestionForGame,
 } from "@/lib/gameQuestions";
+import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
 import {
   PredictionEndGamePanel,
   PredictionRevealPanel,
@@ -29,7 +31,7 @@ import {
   getOrCreateClientId,
   triggerHaptic,
 } from "@/lib/utils";
-import type { Choice, Player, Vote } from "@/types/database";
+import type { Choice, MimeGameState, Player, Vote } from "@/types/database";
 
 interface LocalVote {
   qid: number;
@@ -63,8 +65,14 @@ export default function PlayerPage() {
 
   const gameType = room?.game_type ?? null;
   const predictionMode = isPredictionGame(gameType) ? gameType : null;
+  const mimeMode = isMimeGame(gameType);
   const gameDefinition = getGameDefinition(gameType);
   const currentQ = getQuestionForGame(gameType, room?.current_question_id);
+  const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
+  const currentMimePlayer = useMemo(
+    () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
+    [mimeGameState?.currentMimePlayerId, players]
+  );
 
   useEffect(() => {
     setSelectedOption(null);
@@ -92,6 +100,12 @@ export default function PlayerPage() {
       : voteToLocalVote(myVote);
   const endedStartedAt = room?.status === "ended" ? room.scoreboard_started_at : null;
   const endReturnLeft = useCountdown(endedStartedAt, END_GAME_RETURN_DELAY_SEC);
+  const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
+  const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
+  const mimeRoundLeft = useCountdown(
+    mimeMode && room?.status === "question_active" ? room.question_started_at : null,
+    mimeGameState?.timerDuration ?? voteDuration
+  );
 
   async function submitVote() {
     setVoteError(null);
@@ -164,8 +178,6 @@ export default function PlayerPage() {
       />
     );
 
-  const voteDuration = room.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
-  const revealDuration = room.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
   const targetPlayers = players;
 
   return (
@@ -183,7 +195,24 @@ export default function PlayerPage() {
         </div>
       )}
 
-      {room.status === "lobby" && <Lobby players={players} gameLabel={gameDefinition?.label} />}
+      {room.status === "lobby" && (
+        <Lobby
+          players={players}
+          gameLabel={gameDefinition?.label}
+          preparingMime={gameType === "mime_expressions"}
+        />
+      )}
+
+      {room.status === "question_active" && currentQ && mimeGameState && gameType === "mime_expressions" && (
+        <MimeRoundScreen
+          expression={currentQ as MimeExpressionQuestion}
+          state={mimeGameState}
+          me={me}
+          currentMimePlayer={currentMimePlayer}
+          roundLeft={mimeRoundLeft}
+          totalRounds={room.total_questions}
+        />
+      )}
 
       {room.status === "question_active" && currentQ && gameType === "who_would" && (
         <WhoWouldVoteScreen
@@ -223,6 +252,15 @@ export default function PlayerPage() {
           submitting={submitting}
           onSelect={setSelectedPredictionOption}
           onSubmit={submitVote}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentQ && mimeGameState && gameType === "mime_expressions" && (
+        <MimeRevealScreen
+          expression={currentQ as MimeExpressionQuestion}
+          state={mimeGameState}
+          currentMimePlayer={currentMimePlayer}
+          totalRounds={room.total_questions}
         />
       )}
 
@@ -300,15 +338,23 @@ function PlayerHeader({
   );
 }
 
-function Lobby({ players, gameLabel }: { players: Player[]; gameLabel: string | undefined }) {
+function Lobby({
+  players,
+  gameLabel,
+  preparingMime,
+}: {
+  players: Player[];
+  gameLabel: string | undefined;
+  preparingMime: boolean;
+}) {
   return (
     <section className="card flex flex-1 flex-col items-center justify-center p-8 text-center">
       <div className="animate-floaty text-6xl">🎉</div>
       <h2 className="mt-4 text-2xl font-bold">
-        {gameLabel ? "En attente de la question" : "Choix du jeu en cours"}
+        {preparingMime ? "L'hôte prépare l'ordre de passage" : gameLabel ? "En attente de la question" : "Choix du jeu en cours"}
       </h2>
       <p className="mt-2 text-white/60">
-        {gameLabel ? `${gameLabel} va commencer.` : "L'hôte prépare la partie."}
+        {preparingMime ? "La partie démarre dès que l'ordre est validé." : gameLabel ? `${gameLabel} va commencer.` : "L'hôte prépare la partie."}
       </p>
       <div className="mt-6 w-full">
         <div className="text-xs uppercase tracking-wider text-white/50">Joueurs</div>
@@ -320,6 +366,105 @@ function Lobby({ players, gameLabel }: { players: Player[]; gameLabel: string | 
           ))}
         </ul>
       </div>
+    </section>
+  );
+}
+
+function MimeRoundScreen({
+  expression,
+  state,
+  me,
+  currentMimePlayer,
+  roundLeft,
+  totalRounds,
+}: {
+  expression: MimeExpressionQuestion;
+  state: MimeGameState;
+  me: Player;
+  currentMimePlayer: Player | undefined;
+  roundLeft: number;
+  totalRounds: number;
+}) {
+  const category = getCategoryForGame("mime_expressions", expression.category);
+  const isMime = me.id === state.currentMimePlayerId;
+  const isInOrder = state.playerOrder.includes(me.id);
+  const timeIsHot = roundLeft <= 5;
+  const ended = state.roundStatus === "ended" || roundLeft === 0;
+
+  return (
+    <section key={state.currentMimePlayerId} className="flex flex-1 flex-col animate-reveal-in">
+      <div className="card mb-3 flex items-center justify-between gap-3 p-3 px-4">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <div className={timeIsHot ? "animate-pulseSoft text-neon-pink" : "text-white"}>
+          <span className="text-3xl font-black tabular-nums">{roundLeft}</span>
+          <span className="ml-2 text-white/60">sec</span>
+        </div>
+      </div>
+
+      <div className="card flex flex-1 flex-col justify-center p-6 text-center">
+        <div className="text-xs font-bold uppercase tracking-wider text-white/50">
+          Manche {state.roundNumber} / {totalRounds}
+        </div>
+        <h2 className="mt-3 text-3xl font-black leading-tight">
+          {isMime ? "À toi de mimer" : `${currentMimePlayer?.name ?? "Un joueur"} mime`}
+        </h2>
+
+        {isMime ? (
+          <div className="mt-6 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-5">
+            <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">Expression à mimer</div>
+            <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="text-xs font-bold uppercase tracking-wider text-white/50">À deviner</div>
+            <div className="mt-3 text-xl font-bold text-white/80">
+              Regarde le mime, pas besoin de toucher au téléphone.
+            </div>
+          </div>
+        )}
+
+        {!isInOrder && (
+          <p className="mt-4 text-sm text-neon-yellow">
+            Tu observes cette partie, l'hôte peut t'ajouter à l'ordre.
+          </p>
+        )}
+        {ended && (
+          <p className="mt-4 text-sm font-semibold text-neon-pink">
+            Temps écoulé, l'hôte choisit la suite.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MimeRevealScreen({
+  expression,
+  state,
+  currentMimePlayer,
+  totalRounds,
+}: {
+  expression: MimeExpressionQuestion;
+  state: MimeGameState;
+  currentMimePlayer: Player | undefined;
+  totalRounds: number;
+}) {
+  const category = getCategoryForGame("mime_expressions", expression.category);
+
+  return (
+    <section key={`revealed-${state.currentExpressionId}`} className="card flex flex-1 flex-col justify-center p-6 text-center animate-reveal-in">
+      <div className="mb-4 flex flex-wrap justify-center gap-2">
+        {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
+      </div>
+
+      <div className="rounded-2xl border border-neon-green/40 bg-neon-green/10 p-5">
+        <div className="text-xs font-bold uppercase tracking-wider text-neon-green">Expression révélée</div>
+        <div className="mt-3 text-4xl font-black leading-tight">{expression.text}</div>
+      </div>
+      <p className="mt-4 text-white/60">
+        Mime : <span className="font-bold text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
+      </p>
     </section>
   );
 }

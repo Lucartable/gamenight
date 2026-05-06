@@ -9,12 +9,13 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 
 ## ✨ Fonctionnalités
 
-- 🎲 **Deux jeux** : `Qui pourrait ?` et `Qui de nous ?`
-- 🧩 **765 questions embarquées** avec thèmes/filtres par jeu
+- 🎲 **Cinq jeux** : `Tu préfères`, `Qui de nous ?`, `Majorité`, `Minorité`, `Mime les expressions`
+- 🧩 **Questions et expressions embarquées** avec thèmes/filtres par jeu
 - ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
 - ▶️ **Lecture automatique** optionnelle pour enchaîner les questions
 - ✅ **Validation manuelle du vote** avant envoi Supabase
+- 🎭 **Ordre de mime automatique** configuré une seule fois par l'hôte
 - 📱 **Mobile first** : gros boutons, fonctionne sur tous les téléphones
 - 🎨 **Thème sombre festif** (néon rose/cyan)
 - 🚫 **Aucune question ne se répète** dans la même partie
@@ -38,6 +39,7 @@ npm install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
+> Pour une base déjà installée, exécute plutôt [`supabase/mime_expressions_migration.sql`](supabase/mime_expressions_migration.sql).
 
 ### 3. Configurer les variables d'environnement
 
@@ -66,8 +68,8 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 
 1. **L'hôte** clique sur *Créer une salle* → reçoit un code (ex : `LOUP-42`).
 2. **Les joueurs** ouvrent le site sur leur téléphone, cliquent sur *Rejoindre une salle*, entrent le code et leur prénom.
-3. L'hôte choisit un jeu : **Qui pourrait ?** ou **Qui de nous ?**.
-4. L'hôte configure le nombre de questions, les durées, la lecture automatique et les thèmes.
+3. L'hôte choisit un jeu.
+4. L'hôte configure le nombre de questions/manches, les durées, la lecture automatique quand elle existe, et les thèmes.
 5. L'hôte clique sur **Lancer la partie** → une question aléatoire compatible démarre.
 6. Chaque joueur — **y compris l'hôte** — sélectionne son choix puis clique sur **Valider mon choix**.
 7. À la révélation, tout le monde voit les résultats adaptés au jeu : pourcentages ou classement des personnes désignées.
@@ -93,6 +95,8 @@ gamenight/
 │   ├── useCountdown.ts           # Compte à rebours basé sur un timestamp serveur
 │   ├── questions.ts              # Questions du jeu Qui pourrait ?
 │   ├── whoOfUsQuestions.ts       # Questions du jeu Qui de nous ?
+│   ├── mimeExpressions.ts        # Expressions du jeu Mime les expressions
+│   ├── mimeGame.ts               # Helpers d'ordre/tours du mode mime
 │   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
 │   └── utils.ts                  # Code de salle, client_id, durées
 ├── types/
@@ -120,6 +124,7 @@ gamenight/
 - **Source de vérité côté serveur** : les timers utilisent un timestamp `started_at` stocké en base. Le client recalcule juste l'affichage. Pas de désynchro entre joueurs.
 - **Realtime via Supabase** : on s'abonne aux changements des 4 tables et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
+- **État du mime partagé** : `rooms.mime_game_state` garde l'ordre, le mime courant, l'expression, le timer et la manche.
 - **RLS publique** : pour aller vite, les tables sont en lecture/écriture publique. À durcir pour un usage prod (par ex. exiger le code de la salle dans une RPC).
 
 ---
@@ -155,6 +160,17 @@ Les questions viennent de [`lib/whoOfUsQuestions.ts`](lib/whoOfUsQuestions.ts), 
 | Dark Humor | oui | Humour noir et questions plus piquantes |
 | Cringe | non | Gênance, dossiers et souvenirs honteux |
 | Random | non | Questions imprévisibles |
+
+### Mime les expressions
+
+Les expressions viennent de [`lib/mimeExpressions.ts`](lib/mimeExpressions.ts), importées depuis `Expression gamenight.rtf`.
+
+| Catégorie | 18+ | Description |
+| --- | --- | --- |
+| Classique | non | Expressions et proverbes français connus |
+| Apéro +18 | oui | Expressions familières, beauf/trash, réservées aux adultes |
+
+L'hôte choisit l'ordre de passage au lancement : ordre d'arrivée, aléatoire ou personnalisé. Ensuite, chaque manche passe automatiquement au joueur suivant, avec retour au début de la liste.
 
 ---
 

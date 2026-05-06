@@ -19,6 +19,7 @@ drop table if exists public.rooms cascade;
 --   'who_of_us' = joueur désigné
 --   'majority' = prédire la réponse majoritaire
 --   'minority' = viser une minorité valide
+--   'mime_expressions' = ordre de passage automatique + expression à mimer
 
 -- ----- ROOMS ---------------------------------------------------------------
 create table public.rooms (
@@ -26,7 +27,7 @@ create table public.rooms (
   code text unique not null,
   host_client_id text not null,
   game_type text
-    check (game_type in ('who_would','who_of_us','majority','minority')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   status text not null default 'lobby'
     check (status in ('lobby','question_active','reveal_results','scoreboard','ended')),
   current_question_id integer,
@@ -48,6 +49,7 @@ create table public.rooms (
   score_target integer
     check (score_target is null or score_target between 1 and 999),
   selected_categories text[] not null default '{}',
+  mime_game_state jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -60,7 +62,7 @@ create index rooms_game_type_idx on public.rooms(game_type);
 create table public.questions (
   id integer primary key,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   text text,
   option_a text,
   option_b text,
@@ -72,6 +74,8 @@ create table public.questions (
     (game_type = 'who_would' and option_a is not null and option_b is not null)
     or
     (game_type = 'who_of_us' and text is not null and option_a is null and option_b is null)
+    or
+    (game_type = 'mime_expressions' and text is not null and option_a is null and option_b is null)
     or
     (
       game_type in ('majority','minority')
@@ -103,7 +107,7 @@ create table public.votes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   voter_player_id uuid not null references public.players(id) on delete cascade,
   question_id integer not null,
   selected_option text,
@@ -116,6 +120,8 @@ create table public.votes (
     (game_type = 'who_of_us' and selected_option is null and selected_player_id is not null)
     or
     (game_type in ('majority','minority') and selected_option is not null and selected_player_id is null)
+    or
+    (game_type = 'mime_expressions' and selected_option is null and selected_player_id is null)
   )
 );
 
@@ -128,7 +134,7 @@ create table public.asked_questions (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   question_id integer not null,
   asked_at timestamptz not null default now(),
   unique (room_id, game_type, question_id)
