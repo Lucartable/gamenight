@@ -1,4 +1,4 @@
-# 🎉 GameNight
+# 🎉 Badaboum
 
 Application web de jeux de soirée multijoueur en temps réel.
 L'hôte crée une salle, les autres rejoignent depuis leur téléphone, puis le groupe choisit un jeu.
@@ -16,6 +16,7 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 - ▶️ **Lecture automatique** optionnelle pour enchaîner les questions
 - ✅ **Validation manuelle du vote** avant envoi Supabase
 - 🎭 **Ordre de mime automatique** configuré une seule fois par l'hôte
+- 🧨 **Bilan de soirée** animé avec awards, heatmap sociale et scoreboard final
 - 📱 **Mobile first** : gros boutons, fonctionne sur tous les téléphones
 - 🎨 **Thème sombre festif** (néon rose/cyan)
 - 🚫 **Aucune question ne se répète** dans la même partie
@@ -75,7 +76,7 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 7. À la révélation, tout le monde voit les résultats adaptés au jeu : pourcentages ou classement des personnes désignées.
 8. L'hôte lance la question suivante, ou la lecture automatique s'en charge.
 9. À tout moment, l'hôte peut **passer le rôle d'hôte** à un autre joueur via le bouton 👑 Transférer.
-10. L'hôte peut terminer la partie à tout moment.
+10. L'hôte peut terminer la partie à tout moment et déclencher le **Bilan de soirée**.
 
 ---
 
@@ -89,6 +90,8 @@ gamenight/
 │   ├── play/[code]/page.tsx      # Vue joueur (vote + résultats)
 │   ├── layout.tsx
 │   └── globals.css
+├── components/
+│   └── endGameSummary.tsx        # Bilan de soirée animé
 ├── lib/
 │   ├── supabase.ts               # Client Supabase singleton
 │   ├── useRoom.ts                # Hook de synchro temps réel (rooms, players, votes, asked_questions)
@@ -97,6 +100,7 @@ gamenight/
 │   ├── whoOfUsQuestions.ts       # Questions du jeu Qui de nous ?
 │   ├── mimeExpressions.ts        # Expressions du jeu Mime les expressions
 │   ├── mimeGame.ts               # Helpers d'ordre/tours du mode mime
+│   ├── endGameSummary.ts         # Moteur de stats sociales universelles
 │   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
 │   └── utils.ts                  # Code de salle, client_id, durées
 ├── types/
@@ -125,6 +129,7 @@ gamenight/
 - **Realtime via Supabase** : on s'abonne aux changements des 4 tables et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
 - **État du mime partagé** : `rooms.mime_game_state` garde l'ordre, le mime courant, l'expression, le timer et la manche.
+- **Bilan modulaire** : `lib/endGameSummary.ts` calcule scoreboard, awards, moments rares et relations depuis les votes.
 - **RLS publique** : pour aller vite, les tables sont en lecture/écriture publique. À durcir pour un usage prod (par ex. exiger le code de la salle dans une RPC).
 
 ---

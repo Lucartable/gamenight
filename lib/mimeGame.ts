@@ -24,6 +24,21 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
   const usedExpressionIds = Array.isArray(raw.usedExpressionIds)
     ? raw.usedExpressionIds.map((id) => toInt(id, 0)).filter((id) => id > 0)
     : [];
+  const mimeHistory = Array.isArray(raw.mimeHistory)
+    ? raw.mimeHistory
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const item = entry as { roundNumber?: unknown; mimePlayerId?: unknown; expressionId?: unknown };
+          return {
+            roundNumber: toInt(item.roundNumber, 0),
+            mimePlayerId: typeof item.mimePlayerId === "string" ? item.mimePlayerId : "",
+            expressionId: toInt(item.expressionId, 0),
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> =>
+          Boolean(entry && entry.roundNumber > 0 && entry.mimePlayerId && entry.expressionId > 0)
+        )
+    : [];
   const roundNumber = toInt(raw.roundNumber, 0);
   const timerDuration = toInt(raw.timerDuration, 30);
   const roundStatus = isMimeRoundStatus(raw.roundStatus) ? raw.roundStatus : "waiting";
@@ -37,6 +52,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
     currentMimePlayerId,
     currentExpressionId,
     usedExpressionIds,
+    mimeHistory,
     roundNumber,
     timerDuration,
     roundStatus,
@@ -114,6 +130,7 @@ export function buildMimeGameState({
   currentMimeIndex,
   expressionId,
   usedExpressionIds,
+  mimeHistory,
   roundNumber,
   timerDuration,
   roundStatus,
@@ -123,6 +140,7 @@ export function buildMimeGameState({
   currentMimeIndex: number;
   expressionId: number;
   usedExpressionIds: number[];
+  mimeHistory?: MimeGameState["mimeHistory"];
   roundNumber: number;
   timerDuration: number;
   roundStatus: MimeRoundStatus;
@@ -135,6 +153,13 @@ export function buildMimeGameState({
     currentMimePlayerId: playerOrder[safeIndex] ?? "",
     currentExpressionId: expressionId,
     usedExpressionIds,
+    mimeHistory: mimeHistory ?? [
+      {
+        roundNumber,
+        mimePlayerId: playerOrder[safeIndex] ?? "",
+        expressionId,
+      },
+    ],
     roundNumber,
     timerDuration,
     roundStatus,

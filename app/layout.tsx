@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GameNight — Jeux de soirée",
+  title: "Badaboum — Jeux de soirée",
   description: "Jeux de soirée à jouer entre amis depuis ton téléphone.",
 };
 

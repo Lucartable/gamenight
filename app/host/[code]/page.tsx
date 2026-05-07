@@ -37,12 +37,11 @@ import {
   type MimeOrderMode,
 } from "@/lib/mimeGame";
 import {
-  PredictionEndGamePanel,
   PredictionRevealPanel,
   PredictionScoreboardPanel,
   PredictionVoteScreen,
 } from "@/components/predictionMode";
-import { FinalReturnPanel } from "@/components/finalReturn";
+import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import {
   computePredictionScores,
   hasReachedScoreTarget,
@@ -54,7 +53,6 @@ import {
   DEFAULT_SCOREBOARD_DURATION_SEC,
   DEFAULT_TOTAL_QUESTIONS,
   DEFAULT_VOTE_DURATION_SEC,
-  END_GAME_RETURN_DELAY_SEC,
   QUESTION_COUNT_PRESETS,
   REVEAL_DURATION_OPTIONS,
   SCORE_TARGET_OPTIONS,
@@ -246,12 +244,6 @@ export default function HostPage() {
   const scoreboardHasExpired =
     scoreboardStartedAt !== null && secondsLeft(scoreboardStartedAt, scoreboardDuration) === 0;
 
-  const endedStartedAt = room?.status === "ended" ? room.scoreboard_started_at : null;
-  const endReturnLeft = useCountdown(endedStartedAt, END_GAME_RETURN_DELAY_SEC);
-  const endReturnHasExpired =
-    room?.status === "ended" &&
-    (!endedStartedAt || secondsLeft(endedStartedAt, END_GAME_RETURN_DELAY_SEC) === 0);
-
   useEffect(() => {
     if (!mimeMode && room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
@@ -272,7 +264,7 @@ export default function HostPage() {
   }, [mimeMode, room?.status, mimeGameState?.roundStatus, mimeTimerHasExpired, currentQ?.id]);
 
   useEffect(() => {
-    if (!mimeMode || !room || !mimeGameState || room.status === "lobby" || room.status === "ended") return;
+    if (!mimeMode || !room || !mimeGameState || room.status === "lobby" || room.status === "ended" || room.status === "end_game_summary") return;
     const liveOrder = prunePlayerOrder(mimeGameState.playerOrder, players);
     if (!liveOrder.length || sameOrder(liveOrder, mimeGameState.playerOrder)) return;
     if (!liveOrder.includes(mimeGameState.currentMimePlayerId)) {
@@ -300,13 +292,6 @@ export default function HostPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.status, autoplay, scoreboardHasExpired, roundsPlayed, filteredAvailable.length, scoreTargetReached]);
-
-  useEffect(() => {
-    if (endReturnHasExpired) {
-      void resetFinishedGameToLobby();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endReturnHasExpired, room?.id]);
 
   async function runTransition(action: () => Promise<void>) {
     if (transitionRef.current) return;
@@ -457,6 +442,13 @@ export default function HostPage() {
             currentMimeIndex: 0,
             expressionId: expression.id,
             usedExpressionIds: [expression.id],
+            mimeHistory: [
+              {
+                roundNumber: 1,
+                mimePlayerId: liveOrder[0] ?? "",
+                expressionId: expression.id,
+              },
+            ],
             roundNumber: 1,
             timerDuration: voteDuration,
             roundStatus: "playing",
@@ -489,6 +481,15 @@ export default function HostPage() {
     }
     const nextIndex = findNextMimeIndex(mimeGameState, liveOrder);
     const usedExpressionIds = [...mimeGameState.usedExpressionIds, expression.id];
+    const roundNumber = mimeGameState.roundNumber + 1;
+    const mimeHistory = [
+      ...mimeGameState.mimeHistory,
+      {
+        roundNumber,
+        mimePlayerId: liveOrder[nextIndex] ?? "",
+        expressionId: expression.id,
+      },
+    ];
 
     await runTransition(async () => {
       const supabase = getSupabase();
@@ -513,7 +514,8 @@ export default function HostPage() {
             currentMimeIndex: nextIndex,
             expressionId: expression.id,
             usedExpressionIds,
-            roundNumber: mimeGameState.roundNumber + 1,
+            mimeHistory,
+            roundNumber,
             timerDuration: mimeGameState.timerDuration || voteDuration,
             roundStatus: "playing",
             hostPlayMode: mimeGameState.hostPlayMode,
@@ -663,12 +665,12 @@ export default function HostPage() {
 
   async function finishGame(requireConfirm: boolean) {
     if (!room) return;
-    if (requireConfirm && !confirm("Afficher les résultats finaux puis revenir au lobby ?")) return;
+    if (requireConfirm && !confirm("Afficher le Bilan de soirée ?")) return;
     await runTransition(async () => {
       const { error } = await getSupabase()
         .from("rooms")
         .update({
-          status: "ended",
+          status: "end_game_summary",
           scoreboard_started_at: new Date().toISOString(),
         })
         .eq("id", room.id);
@@ -776,27 +778,17 @@ export default function HostPage() {
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
-  if (room.status === "ended" && predictionMode)
+  if (room.status === "end_game_summary" || room.status === "ended")
     return (
-      <PredictionEndGamePanel
-        mode={predictionMode}
+      <EndGameSummaryPanel
+        gameType={gameType}
         players={players}
         votes={votes}
-        returnLeft={endReturnLeft}
+        askedQuestions={askedQuestions}
+        mimeGameState={mimeGameState}
         isHost
         busy={busy}
-        onRestart={resetFinishedGameToLobby}
-      />
-    );
-  if (room.status === "ended")
-    return (
-      <FinalReturnPanel
-        title="Résultats terminés"
-        subtitle="La salle reste ouverte avec les mêmes joueurs."
-        returnLeft={endReturnLeft}
-        isHost
-        busy={busy}
-        onRestart={resetFinishedGameToLobby}
+        onReplay={resetFinishedGameToLobby}
       />
     );
 
@@ -2693,6 +2685,7 @@ function labelStatus(status: string, gameLabel?: string) {
     case "question_active": return gameLabel === "Mime" ? "Mime en cours" : "Vote en cours";
     case "reveal_results": return "Révélation";
     case "scoreboard": return "Scoreboard";
+    case "end_game_summary": return "Bilan";
     case "ended": return "Terminée";
     default: return status;
   }

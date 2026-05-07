@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import {
@@ -10,6 +10,14 @@ import {
 } from "@/lib/utils";
 
 type Mode = "menu" | "create" | "join";
+
+const GAME_TEASERS = [
+  { title: "Tu préfères", detail: "Choix rapides, débats immédiats.", tag: "Duel" },
+  { title: "Qui de nous ?", detail: "Accusations sociales en douceur.", tag: "Social" },
+  { title: "Majorité", detail: "Lis le groupe, marque des points.", tag: "Mindgame" },
+  { title: "Minorité", detail: "Sois rare, mais pas seul dans le vide.", tag: "Chaos" },
+  { title: "Mime les expressions", detail: "Un ordre auto, des grands gestes.", tag: "Show" },
+];
 
 export default function HomePage() {
   const router = useRouter();
@@ -104,114 +112,135 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center px-5 py-10">
-      <header className="mb-10 text-center">
-        <h1 className="bg-gradient-to-r from-neon-pink via-neon-purple to-neon-cyan bg-clip-text text-5xl font-black tracking-tight text-transparent">
-          GameNight
-        </h1>
-        <p className="mt-3 text-white/60">Jeux de soirée à jouer ensemble depuis ton tel.</p>
-      </header>
-
-      {mode === "menu" && (
-        <div className="w-full space-y-4">
-          <button onClick={() => setMode("create")} className="btn-primary w-full">
-            Créer une salle
-          </button>
-          <button onClick={() => setMode("join")} className="btn-secondary w-full">
-            Rejoindre une salle
-          </button>
-
-          <div className="card mt-8 p-5 text-sm text-white/70">
-            <div className="mb-3 font-semibold text-white">Jeux disponibles</div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-bold text-white">Tu préfères</div>
-                  <div className="text-white/50">Choisis entre deux options.</div>
-                </div>
-                <div className="chip">2+ joueurs</div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-bold text-white">Qui de nous ?</div>
-                  <div className="text-white/50">Désigne quelqu'un du groupe.</div>
-                </div>
-                <div className="chip">Nouveau</div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-bold text-white">Majorité</div>
-                  <div className="text-white/50">Prédit la réponse du groupe.</div>
-                </div>
-                <div className="chip">Party</div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-bold text-white">Minorité</div>
-                  <div className="text-white/50">Marque avec les choix rares.</div>
-                </div>
-                <div className="chip">Stratégie</div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-bold text-white">Mime les expressions</div>
-                  <div className="text-white/50">Mime une expression à tour de rôle.</div>
-                </div>
-                <div className="chip">Mime</div>
-              </div>
-            </div>
+    <main className="home-stage min-h-dvh px-5 py-6 text-white">
+      <div className="home-grid" aria-hidden="true" />
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] max-w-md flex-col">
+        <header className="home-hero pt-6 text-center">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] border border-neon-yellow/40 bg-neon-yellow/10 shadow-glow">
+            <span className="home-burst-mark">B</span>
           </div>
-        </div>
-      )}
+          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">party games calibrés soirée</div>
+          <h1 className="home-brand mt-2 text-6xl font-black leading-none">Badaboum</h1>
+          <p className="mx-auto mt-4 max-w-xs text-sm font-semibold text-white/65">
+            Votes, mimes, accusations amicales et bilans de fin qui restent dans les mémoires.
+          </p>
+        </header>
 
-      {mode === "create" && (
-        <form onSubmit={handleCreate} className="w-full space-y-4">
-          <h2 className="text-xl font-bold">Ton prénom</h2>
-          <input
-            autoFocus
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex : Léa"
-            maxLength={20}
-          />
-          {error && <p className="text-neon-pink">{error}</p>}
-          <button disabled={loading} className="btn-primary w-full" type="submit">
-            {loading ? "Création..." : "Créer la salle"}
-          </button>
-          <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
-            ← Retour
-          </button>
-        </form>
-      )}
+        {mode === "menu" && (
+          <div className="mt-8 flex flex-1 flex-col">
+            <section className="home-action-panel p-3">
+              <button
+                type="button"
+                onClick={() => setMode("create")}
+                className="home-primary-action w-full"
+              >
+                <span>Créer une salle</span>
+                <span className="home-action-key">HOST</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("join")}
+                className="home-secondary-action mt-3 w-full"
+              >
+                <span>Rejoindre</span>
+                <span className="home-action-key">CODE</span>
+              </button>
+            </section>
 
-      {mode === "join" && (
-        <form onSubmit={handleJoin} className="w-full space-y-4">
-          <h2 className="text-xl font-bold">Rejoindre une salle</h2>
-          <input
-            autoFocus
-            className="input uppercase tracking-widest"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="CODE (ex : LOUP-42)"
-            maxLength={10}
-          />
-          <input
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ton prénom"
-            maxLength={20}
-          />
-          {error && <p className="text-neon-pink">{error}</p>}
-          <button disabled={loading} className="btn-primary w-full" type="submit">
-            {loading ? "On rejoint..." : "Rejoindre"}
-          </button>
-          <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
-            ← Retour
-          </button>
-        </form>
-      )}
+            <section className="mt-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
+                  mobile first
+                </span>
+              </div>
+              <div className="grid gap-2">
+                {GAME_TEASERS.map((game, index) => (
+                  <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-black">{game.title}</div>
+                      <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
+                    </div>
+                    <span className="home-game-tag">{game.tag}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {mode === "create" && (
+          <HomeFormShell title="Créer une salle" subtitle="Lance Badaboum et invite la table.">
+            <form onSubmit={handleCreate} className="space-y-4">
+              <input
+                autoFocus
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ton prénom"
+                maxLength={20}
+              />
+              {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
+              <button disabled={loading} className="btn-primary w-full" type="submit">
+                {loading ? "Création..." : "Créer la salle"}
+              </button>
+              <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
+                Retour
+              </button>
+            </form>
+          </HomeFormShell>
+        )}
+
+        {mode === "join" && (
+          <HomeFormShell title="Rejoindre" subtitle="Entre le code de la salle et ton prénom.">
+            <form onSubmit={handleJoin} className="space-y-4">
+              <input
+                autoFocus
+                className="input uppercase tracking-widest"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="CODE"
+                maxLength={10}
+              />
+              <input
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ton prénom"
+                maxLength={20}
+              />
+              {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
+              <button disabled={loading} className="btn-primary w-full" type="submit">
+                {loading ? "Connexion..." : "Rejoindre la salle"}
+              </button>
+              <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
+                Retour
+              </button>
+            </form>
+          </HomeFormShell>
+        )}
+      </div>
     </main>
+  );
+}
+
+function HomeFormShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="home-action-panel mt-8 p-5 animate-reveal-in">
+      <div className="mb-5">
+        <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Badaboum</div>
+        <h2 className="mt-1 text-3xl font-black">{title}</h2>
+        <p className="mt-2 text-sm font-medium text-white/55">{subtitle}</p>
+      </div>
+      {children}
+    </section>
   );
 }

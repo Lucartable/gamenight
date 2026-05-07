@@ -16,18 +16,16 @@ import {
 } from "@/lib/gameQuestions";
 import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
 import {
-  PredictionEndGamePanel,
   PredictionRevealPanel,
   PredictionScoreboardPanel,
   PredictionVoteScreen,
 } from "@/components/predictionMode";
-import { FinalReturnPanel } from "@/components/finalReturn";
+import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import { isPredictionGame } from "@/lib/scoring";
 import { useCountUp } from "@/lib/useCountUp";
 import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_VOTE_DURATION_SEC,
-  END_GAME_RETURN_DELAY_SEC,
   getOrCreateClientId,
   triggerHaptic,
 } from "@/lib/utils";
@@ -43,7 +41,7 @@ export default function PlayerPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, loading, error, refresh } = useRoom(code);
+  const { room, players, votes, askedQuestions, loading, error, refresh } = useRoom(code);
   const [selectedOption, setSelectedOption] = useState<Choice | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedPredictionOption, setSelectedPredictionOption] = useState<string | null>(null);
@@ -98,8 +96,6 @@ export default function PlayerPage() {
     optimisticVote && currentQ && optimisticVote.qid === currentQ.id
       ? optimisticVote
       : voteToLocalVote(myVote);
-  const endedStartedAt = room?.status === "ended" ? room.scoreboard_started_at : null;
-  const endReturnLeft = useCountdown(endedStartedAt, END_GAME_RETURN_DELAY_SEC);
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
   const mimeRoundLeft = useCountdown(
@@ -160,21 +156,14 @@ export default function PlayerPage() {
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
   if (!me)
     return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
-  if (room.status === "ended" && predictionMode)
+  if (room.status === "end_game_summary" || room.status === "ended")
     return (
-      <PredictionEndGamePanel
-        mode={predictionMode}
+      <EndGameSummaryPanel
+        gameType={gameType}
         players={players}
         votes={votes}
-        returnLeft={endReturnLeft}
-      />
-    );
-  if (room.status === "ended")
-    return (
-      <FinalReturnPanel
-        title="Résultats terminés"
-        subtitle="La salle reste ouverte, l'hôte prépare la suite."
-        returnLeft={endReturnLeft}
+        askedQuestions={askedQuestions}
+        mimeGameState={mimeGameState}
       />
     );
 

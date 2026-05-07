@@ -1,4 +1,4 @@
-export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "ended";
+export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "end_game_summary" | "ended";
 export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
@@ -10,10 +10,17 @@ export interface MimeGameState {
   currentMimePlayerId: string;
   currentExpressionId: number;
   usedExpressionIds: number[];
+  mimeHistory: MimeRoundRecord[];
   roundNumber: number;
   timerDuration: number;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+}
+
+export interface MimeRoundRecord {
+  roundNumber: number;
+  mimePlayerId: string;
+  expressionId: number;
 }
 
 export interface Room {

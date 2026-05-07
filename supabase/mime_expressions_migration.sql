@@ -8,6 +8,7 @@ alter table public.rooms
   add column if not exists mime_game_state jsonb;
 
 alter table public.rooms drop constraint if exists rooms_game_type_check;
+alter table public.rooms drop constraint if exists rooms_status_check;
 alter table public.questions drop constraint if exists questions_game_type_check;
 alter table public.questions drop constraint if exists questions_check;
 alter table public.votes drop constraint if exists votes_game_type_check;
@@ -16,7 +17,9 @@ alter table public.asked_questions drop constraint if exists asked_questions_gam
 
 alter table public.rooms
   add constraint rooms_game_type_check
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions'));
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
+  add constraint rooms_status_check
+    check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended'));
 
 alter table public.questions
   add constraint questions_game_type_check

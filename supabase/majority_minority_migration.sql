@@ -34,7 +34,7 @@ alter table public.rooms
   add constraint rooms_game_type_check
     check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   add constraint rooms_status_check
-    check (status in ('lobby','question_active','reveal_results','scoreboard','ended')),
+    check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended')),
   add constraint rooms_scoreboard_duration_sec_check
     check (scoreboard_duration_sec between 3 and 60),
   add constraint rooms_scoreboard_frequency_check

@@ -1,5 +1,5 @@
 -- =========================================================================
--- GameNight - Schéma Supabase complet
+-- Badaboum - Schéma Supabase complet
 -- À exécuter dans l'éditeur SQL Supabase pour repartir sur une base propre.
 --
 -- ATTENTION : ce script supprime les anciennes tables de jeu avant de les
@@ -29,7 +29,7 @@ create table public.rooms (
   game_type text
     check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
   status text not null default 'lobby'
-    check (status in ('lobby','question_active','reveal_results','scoreboard','ended')),
+    check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended')),
   current_question_id integer,
   question_started_at timestamptz,
   reveal_started_at timestamptz,
