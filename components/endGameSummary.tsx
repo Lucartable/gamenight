@@ -102,12 +102,12 @@ export function EndGameSummaryPanel({
   }, [summary.title]);
 
   return (
-    <main className="summary-stage min-h-dvh overflow-hidden px-4 py-5 text-white">
+    <main className={`summary-stage summary-mode-${summary.profile} min-h-dvh overflow-hidden px-4 py-5 text-white`}>
       <div className="summary-scanlines" aria-hidden="true" />
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         <SummaryHero summary={summary} visible={stage >= 1} />
-        <LiveScoreboard rows={summary.scoreboard} visible={stage >= 2} />
-        <SpotlightGrid spotlights={summary.spotlights} visible={stage >= 3} />
+        <LiveScoreboard summary={summary} visible={stage >= 2} />
+        <SpotlightGrid summary={summary} visible={stage >= 3} />
         <RelationHeatmap summary={summary} visible={stage >= 4} />
         <RareMoments summary={summary} visible={stage >= 5} />
         <FinalRecap summary={summary} visible={stage >= 6} isHost={isHost} busy={busy} onReplay={onReplay} />
@@ -132,7 +132,7 @@ function SummaryHero({ summary, visible }: { summary: EndGameSummary; visible: b
           <div className="mx-auto mt-5 flex w-fit items-center gap-3 rounded-2xl border border-neon-yellow/40 bg-neon-yellow/10 px-4 py-3 shadow-glow">
             <PlayerAvatar player={summary.leader.player} size="lg" />
             <div className="text-left">
-              <div className="text-xs font-bold uppercase tracking-wider text-neon-yellow">Leader final</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-neon-yellow">{summary.leaderLabel}</div>
               <div className="text-2xl font-black">{summary.leader.player.name}</div>
             </div>
           </div>
@@ -142,16 +142,18 @@ function SummaryHero({ summary, visible }: { summary: EndGameSummary; visible: b
   );
 }
 
-function LiveScoreboard({ rows, visible }: { rows: SummaryScoreRow[]; visible: boolean }) {
+function LiveScoreboard({ summary, visible }: { summary: EndGameSummary; visible: boolean }) {
+  const rows = summary.scoreboard;
+  const labels = summary.sectionLabels;
   return (
     <section className={`summary-panel p-4 ${visible ? "summary-in" : "summary-out"}`}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs font-black uppercase tracking-wider text-white/45">Scoreboard vivant</div>
-          <h2 className="text-2xl font-black">Podium final</h2>
+          <div className="text-xs font-black uppercase tracking-wider text-white/45">{labels.scoreboardEyebrow}</div>
+          <h2 className="text-2xl font-black">{labels.scoreboardTitle}</h2>
         </div>
         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/60">
-          live reveal
+          {labels.scoreboardPill}
         </div>
       </div>
 
@@ -160,7 +162,7 @@ function LiveScoreboard({ rows, visible }: { rows: SummaryScoreRow[]; visible: b
           <ScoreRow key={row.player.id} row={row} index={index} />
         )) : (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-white/60">
-            Pas encore assez de données pour classer la table.
+            {labels.scoreboardEmpty}
           </div>
         )}
       </div>
@@ -199,15 +201,15 @@ function ScoreRow({ row, index }: { row: SummaryScoreRow; index: number }) {
   );
 }
 
-function SpotlightGrid({ spotlights, visible }: { spotlights: SummarySpotlight[]; visible: boolean }) {
+function SpotlightGrid({ summary, visible }: { summary: EndGameSummary; visible: boolean }) {
   return (
     <section className={`summary-panel p-4 ${visible ? "summary-in" : "summary-out"}`}>
       <div className="mb-4">
-        <div className="text-xs font-black uppercase tracking-wider text-white/45">Awards absurdes</div>
-        <h2 className="text-2xl font-black">Les dossiers de la table</h2>
+        <div className="text-xs font-black uppercase tracking-wider text-white/45">{summary.sectionLabels.spotlightsEyebrow}</div>
+        <h2 className="text-2xl font-black">{summary.sectionLabels.spotlightsTitle}</h2>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {spotlights.map((spotlight, index) => (
+        {summary.spotlights.map((spotlight, index) => (
           <SpotlightCard key={spotlight.id} spotlight={spotlight} index={index} />
         ))}
       </div>
@@ -241,10 +243,8 @@ function RelationHeatmap({ summary, visible }: { summary: EndGameSummary; visibl
   return (
     <section className={`summary-panel p-4 ${visible ? "summary-in" : "summary-out"}`}>
       <div className="mb-4">
-        <div className="text-xs font-black uppercase tracking-wider text-white/45">Heatmap relationnelle</div>
-        <h2 className="text-2xl font-black">
-          {summary.heatmapMode === "targets" ? "Qui vote le plus pour qui" : summary.heatmapMode === "alliances" ? "Qui pense comme qui" : "Circulation du chaos"}
-        </h2>
+        <div className="text-xs font-black uppercase tracking-wider text-white/45">{summary.sectionLabels.heatmapEyebrow}</div>
+        <h2 className="text-2xl font-black">{summary.sectionLabels.heatmapTitle}</h2>
       </div>
 
       {summary.heatmap.length > 0 ? (
@@ -255,7 +255,7 @@ function RelationHeatmap({ summary, visible }: { summary: EndGameSummary; visibl
         </div>
       ) : (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-white/60">
-          Pas assez de relations détectées pour dessiner la carte.
+          {summary.sectionLabels.heatmapEmpty}
         </div>
       )}
 
@@ -272,7 +272,13 @@ function RelationHeatmap({ summary, visible }: { summary: EndGameSummary; visibl
 
 function HeatRow({ cell, index, mode }: { cell: SummaryHeatCell; index: number; mode: EndGameSummary["heatmapMode"] }) {
   const value = useCountUp(cell.percent, 560 + index * 40);
-  const label = mode === "targets" ? "vise" : mode === "alliances" ? "sync" : "mime";
+  const label = mode === "targets" ? "vise" : mode === "alliances" ? "sync" : "relais";
+  const metric = cell.metricLabel ?? `${value}%`;
+  const detail =
+    cell.detail ??
+    (mode === "alliances"
+      ? `${cell.value} manche${cell.value > 1 ? "s" : ""} synchronisée${cell.value > 1 ? "s" : ""}`
+      : `${cell.value} interaction${cell.value > 1 ? "s" : ""}`);
   return (
     <div className="summary-heat-row rounded-2xl border border-white/10 bg-white/5 p-3" style={{ animationDelay: `${index * 70}ms` }}>
       <div className="mb-2 flex items-center gap-2">
@@ -288,9 +294,9 @@ function HeatRow({ cell, index, mode }: { cell: SummaryHeatCell; index: number; 
         <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/10">
           <div className="summary-heat-fill h-full rounded-full bg-gradient-to-r from-neon-cyan via-neon-pink to-neon-yellow" style={{ width: `${Math.max(5, cell.percent)}%` }} />
         </div>
-        <div className="w-14 text-right text-lg font-black tabular-nums">{value}%</div>
+        <div className="w-14 text-right text-lg font-black tabular-nums">{metric}</div>
       </div>
-      <div className="mt-1 text-xs text-white/45">{cell.value} interaction{cell.value > 1 ? "s" : ""}</div>
+      <div className="mt-1 text-xs text-white/45">{detail}</div>
     </div>
   );
 }
@@ -299,11 +305,11 @@ function RareMoments({ summary, visible }: { summary: EndGameSummary; visible: b
   return (
     <section className={`summary-panel p-4 ${visible ? "summary-in" : "summary-out"}`}>
       <div className="mb-4">
-        <div className="text-xs font-black uppercase tracking-wider text-white/45">Événements rares</div>
-        <h2 className="text-2xl font-black">Les moments qui font du bruit</h2>
+        <div className="text-xs font-black uppercase tracking-wider text-white/45">{summary.sectionLabels.rareEyebrow}</div>
+        <h2 className="text-2xl font-black">{summary.sectionLabels.rareTitle}</h2>
       </div>
       <div className="grid gap-3">
-        {(summary.rareMoments.length ? summary.rareMoments : [{ title: "Chaos standard", detail: "Aucun événement rarissime, mais la soirée a laissé des traces.", tone: "cyan" as const }]).map((moment, index) => {
+        {(summary.rareMoments.length ? summary.rareMoments : [{ title: summary.sectionLabels.rareFallbackTitle, detail: summary.sectionLabels.rareFallbackDetail, tone: "cyan" as const }]).map((moment, index) => {
           const tone = TONE_STYLES[moment.tone];
           return (
             <div key={`${moment.title}-${index}`} className={`summary-moment rounded-2xl border p-4 ${tone.border} ${tone.bg} ${tone.glow}`} style={{ animationDelay: `${index * 90}ms` }}>
@@ -334,8 +340,8 @@ function FinalRecap({
   return (
     <section className={`summary-panel mb-8 p-4 ${visible ? "summary-in" : "summary-out"}`}>
       <div className="mb-4">
-        <div className="text-xs font-black uppercase tracking-wider text-white/45">Recap final</div>
-        <h2 className="text-2xl font-black">À retenir avant de relancer</h2>
+        <div className="text-xs font-black uppercase tracking-wider text-white/45">{summary.sectionLabels.recapEyebrow}</div>
+        <h2 className="text-2xl font-black">{summary.sectionLabels.recapTitle}</h2>
       </div>
       <div className="grid gap-2">
         {summary.recapLines.map((line, index) => (

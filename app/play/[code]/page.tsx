@@ -170,7 +170,7 @@ export default function PlayerPage() {
   const targetPlayers = players;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
       <PlayerHeader
         code={room.code}
         me={me}
@@ -312,7 +312,7 @@ function PlayerHeader({
   gameLabel: string | undefined;
 }) {
   return (
-    <header className="card mb-4 flex items-center justify-between p-4">
+    <header className="card game-topbar mb-4 flex items-center justify-between p-4">
       <div>
         <div className="text-xs uppercase tracking-wider text-white/50">Salle</div>
         <div className="text-xl font-black tracking-widest">{code}</div>
@@ -337,7 +337,7 @@ function Lobby({
   preparingMime: boolean;
 }) {
   return (
-    <section className="card flex flex-1 flex-col items-center justify-center p-8 text-center">
+    <section className="card game-panel-enter flex flex-1 flex-col items-center justify-center p-8 text-center">
       <div className="animate-floaty text-6xl">🎉</div>
       <h2 className="mt-4 text-2xl font-bold">
         {preparingMime ? "L'hôte prépare l'ordre de passage" : gameLabel ? "En attente de la question" : "Choix du jeu en cours"}
@@ -381,10 +381,10 @@ function MimeRoundScreen({
   const ended = state.roundStatus === "ended" || roundLeft === 0;
 
   return (
-    <section key={state.currentMimePlayerId} className="flex flex-1 flex-col animate-reveal-in">
+    <section key={state.currentMimePlayerId} className="game-panel-enter flex flex-1 flex-col animate-reveal-in">
       <div className="card mb-3 flex items-center justify-between gap-3 p-3 px-4">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
-        <div className={timeIsHot ? "animate-pulseSoft text-neon-pink" : "text-white"}>
+        <div className={timeIsHot ? "timer-hot text-neon-pink" : "text-white"}>
           <span className="text-3xl font-black tabular-nums">{roundLeft}</span>
           <span className="ml-2 text-white/60">sec</span>
         </div>
@@ -441,7 +441,7 @@ function MimeRevealScreen({
   const category = getCategoryForGame("mime_expressions", expression.category);
 
   return (
-    <section key={`revealed-${state.currentExpressionId}`} className="card flex flex-1 flex-col justify-center p-6 text-center animate-reveal-in">
+    <section key={`revealed-${state.currentExpressionId}`} className="card game-panel-enter flex flex-1 flex-col justify-center p-6 text-center animate-reveal-in">
       <div className="mb-4 flex flex-wrap justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
@@ -472,10 +472,10 @@ function VoteShell({
   const left = useCountdown(startedAt, durationSec);
 
   return (
-    <section className="flex flex-1 flex-col animate-reveal-in">
+    <section className="game-panel-enter flex flex-1 flex-col animate-reveal-in">
       <div className="card mb-3 flex items-center justify-between p-3 px-4">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
-        <div>
+        <div className={left <= 5 ? "timer-hot text-neon-pink" : ""}>
           <span className="text-3xl font-black tabular-nums">{left}</span>
           <span className="ml-2 text-white/60">sec</span>
         </div>
@@ -805,7 +805,7 @@ function RevealShell({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-1 flex-col">
+    <section className="game-panel-enter flex flex-1 flex-col">
       <div className="card mb-3 flex items-center justify-between p-3 px-4">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
@@ -898,7 +898,7 @@ function CenteredMessage({
   action?: { label: string; href: string };
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
       <h1 className="text-3xl font-black">{title}</h1>
       {subtitle && <p className="mt-2 text-white/60">{subtitle}</p>}
       {action && (

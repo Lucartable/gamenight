@@ -16,7 +16,7 @@ export function FinalReturnPanel({
   onRestart?: () => void;
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
       <section className="card w-full p-7 animate-reveal-in">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl border border-neon-cyan/30 bg-neon-cyan/10 text-4xl shadow-glow-cyan animate-floaty">
           ★

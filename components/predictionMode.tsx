@@ -94,11 +94,11 @@ export function PredictionVoteScreen({
   }
 
   return (
-    <section className="flex flex-1 flex-col">
+    <section className="game-panel-enter flex flex-1 flex-col">
       <div className="card mb-3 overflow-hidden p-4">
         <div className="flex items-center justify-between gap-3">
           {category && <span className="chip">{category.emoji} {category.label}</span>}
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right">
+          <div className={`rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right ${left <= 5 ? "timer-hot text-neon-pink" : ""}`}>
             <div className="text-3xl font-black tabular-nums">{left}</div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/50">sec</div>
           </div>
@@ -243,7 +243,7 @@ export function PredictionRevealPanel({
   }, [mode, question.id]);
 
   return (
-    <section className="card relative flex flex-1 flex-col overflow-hidden p-5">
+    <section className="card game-panel-enter relative flex flex-1 flex-col overflow-hidden p-5">
       {ready && result.winners.length > 0 && <MiniConfetti />}
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -421,7 +421,7 @@ export function PredictionScoreboardPanel({
   const showControls = Boolean(onPrimary);
 
   return (
-    <section className="card flex flex-1 flex-col p-5">
+    <section className="card game-panel-enter flex flex-1 flex-col p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-white/50">
@@ -519,8 +519,8 @@ export function PredictionEndGamePanel({
   const podium = rows.slice(0, 3);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
-      <section className="card flex flex-1 flex-col p-5 text-center">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
+      <section className="card game-panel-enter flex flex-1 flex-col p-5 text-center">
         <div className="text-xs font-bold uppercase tracking-wider text-white/50">Fin de partie</div>
         <h1 className="mt-2 bg-gradient-to-r from-neon-yellow via-neon-pink to-neon-cyan bg-clip-text text-5xl font-black text-transparent">
           {podium[0]?.player.name ?? "Partie terminée"}

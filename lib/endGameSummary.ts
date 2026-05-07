@@ -3,6 +3,7 @@ import { getQuestionForGame } from "./gameQuestions";
 import { computePredictionScores, isPredictionGame } from "./scoring";
 
 export type SummaryTone = "gold" | "cyan" | "pink" | "green" | "purple" | "ghost" | "danger";
+export type SummaryProfile = "mime" | "social_vote" | "duel" | "prediction" | "generic";
 
 export interface SummaryScoreRow {
   player: Player;
@@ -28,6 +29,8 @@ export interface SummaryHeatCell {
   to: Player;
   value: number;
   percent: number;
+  detail?: string;
+  metricLabel?: string;
 }
 
 export interface SummaryRareMoment {
@@ -37,8 +40,11 @@ export interface SummaryRareMoment {
 }
 
 export interface EndGameSummary {
+  profile: SummaryProfile;
   title: string;
   subtitle: string;
+  leaderLabel: string;
+  sectionLabels: SummarySectionLabels;
   roundsPlayed: number;
   totalVotes: number;
   leader: SummaryScoreRow | null;
@@ -49,6 +55,24 @@ export interface EndGameSummary {
   relationInsights: string[];
   rareMoments: SummaryRareMoment[];
   recapLines: string[];
+}
+
+export interface SummarySectionLabels {
+  scoreboardEyebrow: string;
+  scoreboardTitle: string;
+  scoreboardPill: string;
+  scoreboardEmpty: string;
+  spotlightsEyebrow: string;
+  spotlightsTitle: string;
+  heatmapEyebrow: string;
+  heatmapTitle: string;
+  heatmapEmpty: string;
+  rareEyebrow: string;
+  rareTitle: string;
+  rareFallbackTitle: string;
+  rareFallbackDetail: string;
+  recapEyebrow: string;
+  recapTitle: string;
 }
 
 interface BuildSummaryInput {
@@ -139,7 +163,8 @@ export function buildEndGameSummary({
     mimeCounts,
   });
   const leader = scoreboard[0] ?? null;
-  const spotlights = buildSpotlights({
+  const spotlights = buildModeSpotlights({
+    gameType,
     players: activePlayers,
     roundsPlayed,
     targetCountByPlayer,
@@ -149,32 +174,47 @@ export function buildEndGameSummary({
     rareChoices,
     soloChoices,
     bestMajorityStreaks,
-  });
-  const relationInsights = buildRelationInsights({
-    players: activePlayers,
     targetPairs,
     sameChoicePairs,
-    targetCountByPlayer,
-    gameVotes,
+    optionRoundStats,
+    mimeCounts,
+    mimeGameState,
   });
-  const rareMoments = buildRareMoments(optionRoundStats, gameVotes, playerById);
+  const relationInsights = gameType === "mime_expressions"
+    ? buildMimeInsights(activePlayers, mimeGameState, mimeCounts)
+    : buildRelationInsights({
+      gameType,
+      players: activePlayers,
+      targetPairs,
+      sameChoicePairs,
+      targetCountByPlayer,
+      gameVotes,
+    });
+  const rareMoments = gameType === "mime_expressions"
+    ? buildMimeRareMoments(activePlayers, mimeGameState, mimeCounts)
+    : buildRareMoments(optionRoundStats, gameVotes, playerById);
   const heatmapMode =
-    targetPairs.length > 0
+    gameType === "mime_expressions" && (mimeGameState?.playerOrder.length ?? 0) > 0
+      ? "mime"
+      : targetPairs.length > 0
       ? "targets"
       : sameChoicePairs.length > 0
         ? "alliances"
-        : gameType === "mime_expressions" && (mimeGameState?.mimeHistory.length ?? 0) > 0
-          ? "mime"
-          : "empty";
+        : "empty";
   const heatmap = heatmapMode === "targets"
     ? targetPairs
     : heatmapMode === "alliances"
       ? sameChoicePairs
       : buildMimeHeatmap(activePlayers, mimeGameState);
+  const profile = getSummaryProfile(gameType);
+  const sectionLabels = getSectionLabels(profile);
 
   return {
-    title: leader ? `${leader.player.name} fait trembler le classement` : "Bilan de soirée",
-    subtitle: buildSubtitle(gameType, roundsPlayed, gameVotes.length),
+    profile,
+    title: buildTitle(gameType, leader, roundsPlayed, mimeGameState, activePlayers),
+    subtitle: buildSubtitle(gameType, roundsPlayed, gameVotes.length, activePlayers, mimeGameState),
+    leaderLabel: getLeaderLabel(profile),
+    sectionLabels,
     roundsPlayed,
     totalVotes: gameVotes.length,
     leader,
@@ -184,7 +224,7 @@ export function buildEndGameSummary({
     heatmap,
     relationInsights,
     rareMoments,
-    recapLines: buildRecapLines({ leader, spotlights, relationInsights, rareMoments, roundsPlayed }),
+    recapLines: buildRecapLines({ gameType, leader, spotlights, relationInsights, rareMoments, roundsPlayed }),
   };
 }
 
@@ -231,7 +271,7 @@ function buildScoreboard({
       gameType === "who_of_us"
         ? "votes"
         : gameType === "mime_expressions"
-          ? "mimes"
+          ? "passages"
           : "impact";
     const detail =
       gameType === "who_of_us"
@@ -251,7 +291,79 @@ function buildScoreboard({
     }));
 }
 
-function buildSpotlights({
+function buildModeSpotlights({
+  gameType,
+  players,
+  roundsPlayed,
+  targetCountByPlayer,
+  castCountByPlayer,
+  majorityHits,
+  minorityChoices,
+  rareChoices,
+  soloChoices,
+  bestMajorityStreaks,
+  targetPairs,
+  sameChoicePairs,
+  optionRoundStats,
+  mimeCounts,
+  mimeGameState,
+}: {
+  gameType: GameType | null | undefined;
+  players: Player[];
+  roundsPlayed: number;
+  targetCountByPlayer: Map<string, number>;
+  castCountByPlayer: Map<string, number>;
+  majorityHits: Map<string, number>;
+  minorityChoices: Map<string, number>;
+  rareChoices: Map<string, number>;
+  soloChoices: Map<string, number>;
+  bestMajorityStreaks: Map<string, number>;
+  targetPairs: SummaryHeatCell[];
+  sameChoicePairs: SummaryHeatCell[];
+  optionRoundStats: Map<number, RoundOptionStats>;
+  mimeCounts: Map<string, number>;
+  mimeGameState: MimeGameState | null;
+}): SummarySpotlight[] {
+  if (gameType === "mime_expressions") {
+    return buildMimeSpotlights(players, mimeGameState, mimeCounts);
+  }
+
+  if (gameType === "who_of_us") {
+    return buildSocialVoteSpotlights(players, targetCountByPlayer, castCountByPlayer, targetPairs);
+  }
+
+  if (gameType === "who_would") {
+    return buildDuelSpotlights(players, castCountByPlayer, majorityHits, rareChoices, soloChoices, sameChoicePairs, optionRoundStats);
+  }
+
+  if (gameType === "majority" || gameType === "minority") {
+    return buildPredictionSpotlights({
+      gameType,
+      players,
+      roundsPlayed,
+      castCountByPlayer,
+      majorityHits,
+      minorityChoices,
+      rareChoices,
+      soloChoices,
+      bestMajorityStreaks,
+    });
+  }
+
+  return buildGenericSpotlights({
+    players,
+    roundsPlayed,
+    targetCountByPlayer,
+    castCountByPlayer,
+    majorityHits,
+    minorityChoices,
+    rareChoices,
+    soloChoices,
+    bestMajorityStreaks,
+  });
+}
+
+function buildGenericSpotlights({
   players,
   roundsPlayed,
   targetCountByPlayer,
@@ -343,6 +455,351 @@ function buildSpotlights({
       value: invisible?.player ? `${invisible.value}` : "0",
       detail: invisible?.player ? `${invisible.player.name} a traversé la soirée en silence radio.` : "Tout le monde a laissé des traces.",
       tone: "ghost",
+    },
+  ];
+}
+
+function buildMimeSpotlights(
+  players: Player[],
+  state: MimeGameState | null,
+  mimeCounts: Map<string, number>
+): SummarySpotlight[] {
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const history = state?.mimeHistory ?? [];
+  const firstRecord = history[0];
+  const lastRecord = history[history.length - 1];
+  const firstMime = firstRecord ? playerById.get(firstRecord.mimePlayerId) ?? null : null;
+  const lastMime = lastRecord ? playerById.get(lastRecord.mimePlayerId) ?? null : null;
+  const mostOnStage = maxPlayer(players, mimeCounts);
+  const waiting = players.find((player) => (mimeCounts.get(player.id) ?? 0) === 0) ?? null;
+  const nextPlayer = getNextMimePlayer(players, state);
+  const lastExpression = lastRecord ? getQuestionText("mime_expressions", lastRecord.expressionId) : null;
+
+  return [
+    {
+      id: "mime-opener",
+      label: "Ouverture de scène",
+      title: firstMime ? "Premier mime" : "Rideau fermé",
+      player: firstMime,
+      value: firstMime ? "#1" : "0",
+      detail: firstMime
+        ? `${firstMime.name} a lancé le show${lastExpression && history.length === 1 ? ` avec "${lastExpression}"` : ""}.`
+        : "Aucun passage au mime enregistré.",
+      tone: "gold",
+    },
+    {
+      id: "mime-last",
+      label: "Dernière expression",
+      title: lastExpression ?? "Expression gardée secrète",
+      player: lastMime,
+      value: history.length ? `${history.length}` : "0",
+      detail: lastMime
+        ? `${lastMime.name} était sur scène pour la dernière manche jouée.`
+        : "La partie n'a pas encore laissé de dernière scène.",
+      tone: "cyan",
+    },
+    {
+      id: "mime-spotlight",
+      label: "Le plus exposé",
+      title: mostOnStage?.player ? "Aimant à spotlight" : "Spotlight disponible",
+      player: mostOnStage?.player ?? null,
+      value: mostOnStage?.player ? `${mostOnStage.value}` : "0",
+      detail: mostOnStage?.player
+        ? `${mostOnStage.player.name} a pris la lumière ${mostOnStage.value} fois.`
+        : "Personne n'a encore vraiment monopolisé la scène.",
+      tone: "pink",
+    },
+    {
+      id: "mime-next",
+      label: "Dans la file",
+      title: nextPlayer ? "Prochain à surveiller" : "File vide",
+      player: nextPlayer,
+      value: nextPlayer && state ? `#${Math.max(1, state.playerOrder.indexOf(nextPlayer.id) + 1)}` : "-",
+      detail: nextPlayer
+        ? `${nextPlayer.name} attend son passage dans l'ordre automatique.`
+        : "Aucun prochain joueur détecté dans l'ordre.",
+      tone: "purple",
+    },
+    {
+      id: "mime-waiting",
+      label: "Encore en coulisses",
+      title: waiting ? "Pas encore passé" : "Tout le monde a joué",
+      player: waiting,
+      value: waiting ? "0" : "OK",
+      detail: waiting
+        ? `${waiting.name} n'a pas encore eu son moment de mime.`
+        : "La rotation a déjà donné une scène à tout le monde.",
+      tone: waiting ? "ghost" : "green",
+    },
+    {
+      id: "mime-host-mode",
+      label: "Mode hôte",
+      title: state?.hostPlayMode ? "Hôte joueur activé" : "Hôte régisseur",
+      player: null,
+      value: state?.hostPlayMode ? "ON" : "OFF",
+      detail: state?.hostPlayMode
+        ? "L'hôte ne voit l'expression que quand c'est son tour de mimer."
+        : "L'hôte garde la vision complète pour animer la partie.",
+      tone: state?.hostPlayMode ? "green" : "cyan",
+    },
+  ];
+}
+
+function buildSocialVoteSpotlights(
+  players: Player[],
+  targetCountByPlayer: Map<string, number>,
+  castCountByPlayer: Map<string, number>,
+  targetPairs: SummaryHeatCell[]
+): SummarySpotlight[] {
+  const mostVoted = maxPlayer(players, targetCountByPlayer);
+  const topVoter = maxPlayer(players, castCountByPlayer);
+  const invisible = minPlayer(players, targetCountByPlayer, castCountByPlayer);
+  const topPair = targetPairs[0];
+  const controversial = mostVoted;
+
+  return [
+    {
+      id: "most-voted",
+      label: "Joueur le plus désigné",
+      title: mostVoted?.player ? "Aimant à accusations" : "Pas encore de suspect",
+      player: mostVoted?.player ?? null,
+      value: mostVoted?.player ? `${mostVoted.value}` : "0",
+      detail: mostVoted?.player ? `${mostVoted.player.name} a été choisi ${mostVoted.value} fois.` : "Aucun vote nominatif sur cette partie.",
+      tone: "gold",
+    },
+    {
+      id: "top-voter",
+      label: "Accusateur actif",
+      title: topVoter?.player ? "Doigt pointé" : "Personne ne balance",
+      player: topVoter?.player ?? null,
+      value: topVoter?.player ? `${topVoter.value}` : "0",
+      detail: topVoter?.player ? `${topVoter.player.name} a envoyé le plus de votes nominaux.` : "Pas assez de votes envoyés.",
+      tone: "cyan",
+    },
+    {
+      id: "favorite-target",
+      label: "Fixette sociale",
+      title: topPair ? `${topPair.from.name} -> ${topPair.to.name}` : "Aucune fixette",
+      player: topPair?.to ?? null,
+      value: topPair ? `${topPair.value}` : "0",
+      detail: topPair ? `${topPair.from.name} a choisi ${topPair.to.name} dans ${topPair.percent}% de ses votes.` : "Aucune relation assez nette pour accuser quelqu'un.",
+      tone: "pink",
+    },
+    {
+      id: "controversial",
+      label: "Plus controversé",
+      title: controversial?.player ? "Dossier sensible" : "Calme plat",
+      player: controversial?.player ?? null,
+      value: controversial?.player ? `${controversial.value}` : "0",
+      detail: controversial?.player ? `Impossible de ne pas parler de ${controversial.player.name}.` : "Aucune controverse mesurable.",
+      tone: "purple",
+    },
+    {
+      id: "invisible",
+      label: "Invisible",
+      title: invisible?.player ? "Mode furtif" : "Tout le monde est visible",
+      player: invisible?.player ?? null,
+      value: invisible?.player ? `${invisible.value}` : "0",
+      detail: invisible?.player ? `${invisible.player.name} a reçu le moins de désignations.` : "Tout le monde a laissé des traces.",
+      tone: "ghost",
+    },
+  ];
+}
+
+function buildDuelSpotlights(
+  players: Player[],
+  castCountByPlayer: Map<string, number>,
+  majorityHits: Map<string, number>,
+  rareChoices: Map<string, number>,
+  soloChoices: Map<string, number>,
+  sameChoicePairs: SummaryHeatCell[],
+  rounds: Map<number, RoundOptionStats>
+): SummarySpotlight[] {
+  const activeVoter = maxPlayer(players, castCountByPlayer);
+  const groupReader = maxPlayer(players, majorityHits);
+  const solo = maxPlayer(players, soloChoices, rareChoices);
+  const alliance = sameChoicePairs[0];
+  const tightRounds = [...rounds.values()].filter((round) => {
+    const positive = [...round.counts.values()].filter((count) => count > 0);
+    return positive.length === 2 && Math.abs(positive[0] - positive[1]) <= 1;
+  }).length;
+
+  return [
+    {
+      id: "duel-group",
+      label: "Camp dominant",
+      title: groupReader?.player ? "Lit le groupe" : "Camp illisible",
+      player: groupReader?.player ?? null,
+      value: groupReader?.player ? `${groupReader.value}` : "0",
+      detail: groupReader?.player ? `${groupReader.player.name} s'est retrouvé du côté populaire ${groupReader.value} fois.` : "Pas assez de duels pour dégager un camp.",
+      tone: "gold",
+    },
+    {
+      id: "duel-solo",
+      label: "Choix radical",
+      title: solo?.player ? "Seul dans son délire" : "Aucun solo",
+      player: solo?.player ?? null,
+      value: solo?.player ? `${solo.value}` : "0",
+      detail: solo?.player ? `${solo.player.name} a souvent pris l'option la plus rare.` : "Personne ne s'est vraiment isolé.",
+      tone: "danger",
+    },
+    {
+      id: "duel-alliance",
+      label: "Duo synchronisé",
+      title: alliance ? `${alliance.from.name} + ${alliance.to.name}` : "Pas de duo net",
+      player: alliance?.from ?? null,
+      value: alliance ? `${alliance.percent}%` : "0%",
+      detail: alliance ? `Même choix dans ${alliance.percent}% de leurs duels communs.` : "Les choix sont trop dispersés pour former un duo.",
+      tone: "cyan",
+    },
+    {
+      id: "duel-active",
+      label: "Voteur le plus actif",
+      title: activeVoter?.player ? "Toujours prêt" : "Participation discrète",
+      player: activeVoter?.player ?? null,
+      value: activeVoter?.player ? `${activeVoter.value}` : "0",
+      detail: activeVoter?.player ? `${activeVoter.player.name} a le plus participé aux duels.` : "Aucun vote exploitable.",
+      tone: "green",
+    },
+    {
+      id: "duel-tight",
+      label: "Duel serré",
+      title: tightRounds ? "Table coupée en deux" : "Pas de split",
+      player: null,
+      value: `${tightRounds}`,
+      detail: tightRounds ? `${tightRounds} manche${tightRounds > 1 ? "s" : ""} se joue${tightRounds > 1 ? "nt" : ""} à presque rien.` : "Les duels ont eu des camps plutôt nets.",
+      tone: tightRounds ? "pink" : "ghost",
+    },
+  ];
+}
+
+function buildPredictionSpotlights({
+  gameType,
+  players,
+  roundsPlayed,
+  castCountByPlayer,
+  majorityHits,
+  minorityChoices,
+  rareChoices,
+  soloChoices,
+  bestMajorityStreaks,
+}: {
+  gameType: "majority" | "minority";
+  players: Player[];
+  roundsPlayed: number;
+  castCountByPlayer: Map<string, number>;
+  majorityHits: Map<string, number>;
+  minorityChoices: Map<string, number>;
+  rareChoices: Map<string, number>;
+  soloChoices: Map<string, number>;
+  bestMajorityStreaks: Map<string, number>;
+}): SummarySpotlight[] {
+  const majority = maxPlayer(players, majorityHits);
+  const unpredictable = maxPlayer(players, minorityChoices);
+  const chaos = maxPlayer(players, rareChoices, soloChoices);
+  const active = maxPlayer(players, castCountByPlayer);
+  const bestStreakPlayer = players
+    .map((player) => ({ player, value: bestMajorityStreaks.get(player.id) ?? 0 }))
+    .sort((a, b) => b.value - a.value || a.player.name.localeCompare(b.player.name))[0];
+  const leaderRate = majority?.player && roundsPlayed > 0
+    ? Math.round((majority.value / Math.max(1, castCountByPlayer.get(majority.player.id) ?? roundsPlayed)) * 100)
+    : 0;
+
+  if (gameType === "minority") {
+    return [
+      {
+        id: "minority-master",
+        label: "Champion minorité",
+        title: chaos?.player ? "Rare mais rentable" : "Minorité introuvable",
+        player: chaos?.player ?? null,
+        value: chaos?.player ? `${chaos.value}` : "0",
+        detail: chaos?.player ? `${chaos.player.name} a trouvé les choix les plus rares.` : "Personne n'a vraiment capté le choix rare.",
+        tone: "gold",
+      },
+      {
+        id: "solo-choice",
+        label: "Seul contre tous",
+        title: chaos?.player ? "Option solitaire" : "Jamais seul",
+        player: chaos?.player ?? null,
+        value: chaos?.player ? `${soloChoices.get(chaos.player.id) ?? 0}` : "0",
+        detail: chaos?.player ? `${chaos.player.name} a osé les réponses les moins peuplées.` : "Aucun vrai choix solitaire détecté.",
+        tone: "danger",
+      },
+      {
+        id: "too-mainstream",
+        label: "Trop mainstream",
+        title: majority?.player ? "Attiré par le groupe" : "Groupe flou",
+        player: majority?.player ?? null,
+        value: majority?.player ? `${leaderRate}%` : "0%",
+        detail: majority?.player ? `${majority.player.name} tombe souvent dans le choix populaire.` : "Pas assez de votes pour mesurer le piège.",
+        tone: "pink",
+      },
+      {
+        id: "unpredictable",
+        label: "Anti-groupe",
+        title: unpredictable?.player ? "Esprit indépendant" : "Tout le monde suit",
+        player: unpredictable?.player ?? null,
+        value: unpredictable?.player ? `${unpredictable.value}` : "0",
+        detail: unpredictable?.player ? `${unpredictable.player.name} s'est éloigné du groupe ${unpredictable.value} fois.` : "Aucune vraie divergence détectée.",
+        tone: "purple",
+      },
+      {
+        id: "active",
+        label: "Participation",
+        title: active?.player ? "Toujours dans le game" : "Silence radio",
+        player: active?.player ?? null,
+        value: active?.player ? `${active.value}` : "0",
+        detail: active?.player ? `${active.player.name} a joué le plus de manches.` : "Aucun vote exploitable.",
+        tone: "cyan",
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "majority-master",
+      label: "Dans la majorité",
+      title: majority?.player ? "Radar collectif" : "Majorité introuvable",
+      player: majority?.player ?? null,
+      value: majority?.player ? `${leaderRate}%` : "0%",
+      detail: majority?.player ? `${majority.player.name} colle au groupe avec un streak max de ${bestMajorityStreaks.get(majority.player.id) ?? 0}.` : "Pas assez de votes comparables.",
+      tone: "gold",
+    },
+    {
+      id: "best-streak",
+      label: "Meilleure série",
+      title: bestStreakPlayer?.value ? "Streak propre" : "Pas de série",
+      player: bestStreakPlayer?.value ? bestStreakPlayer.player : null,
+      value: bestStreakPlayer?.value ? `${bestStreakPlayer.value}` : "0",
+      detail: bestStreakPlayer?.value ? `${bestStreakPlayer.player.name} a enchaîné ${bestStreakPlayer.value} bonnes lectures.` : "Aucun streak assez net.",
+      tone: "cyan",
+    },
+    {
+      id: "sheep",
+      label: "Mouton officiel",
+      title: majority?.player ? "Synchronisé au groupe" : "Pas de troupeau",
+      player: majority?.player ?? null,
+      value: majority?.player ? `${majority.value}` : "0",
+      detail: majority?.player ? `${majority.player.name} suit le tempo collectif sans trembler.` : "Le groupe n'a pas assez voté pareil.",
+      tone: "green",
+    },
+    {
+      id: "unpredictable",
+      label: "Joueur imprévisible",
+      title: unpredictable?.player ? "Anti-NPC" : "Tout le monde est sage",
+      player: unpredictable?.player ?? null,
+      value: unpredictable?.player ? `${unpredictable.value}` : "0",
+      detail: unpredictable?.player ? `${unpredictable.player.name} s'est éloigné du groupe ${unpredictable.value} fois.` : "Aucune vraie divergence détectée.",
+      tone: "purple",
+    },
+    {
+      id: "chaos",
+      label: "Agent du chaos",
+      title: chaos?.player ? "Détonateur social" : "Chaos contenu",
+      player: chaos?.player ?? null,
+      value: chaos?.player ? `${chaos.value}` : "0",
+      detail: chaos?.player ? `${chaos.player.name} a signé les choix les plus rares.` : "Aucun choix vraiment explosif.",
+      tone: "danger",
     },
   ];
 }
@@ -456,24 +913,38 @@ function buildSameChoicePairs(votes: Vote[], playerById: Map<string, Player>): S
 function buildMimeHeatmap(players: Player[], state: MimeGameState | null): SummaryHeatCell[] {
   if (!state) return [];
   const playerById = new Map(players.map((player) => [player.id, player]));
+  const orderedPlayers = state.playerOrder
+    .map((playerId) => playerById.get(playerId))
+    .filter((player): player is Player => Boolean(player));
   const counts = countBy(players.map((player) => player.id), state.mimeHistory.map((entry) => entry.mimePlayerId));
-  return players
-    .map((player) => ({
+
+  return orderedPlayers.map((player, index) => {
+    const next = orderedPlayers[(index + 1) % orderedPlayers.length] ?? player;
+    const count = counts.get(player.id) ?? 0;
+    const current = player.id === state.currentMimePlayerId;
+    return {
       from: player,
-      to: player,
-      value: counts.get(player.id) ?? 0,
-      percent: Math.round(((counts.get(player.id) ?? 0) / Math.max(1, state.mimeHistory.length)) * 100),
-    }))
-    .filter((cell) => playerById.has(cell.from.id) && cell.value > 0)
-    .sort((a, b) => b.value - a.value);
+      to: next,
+      value: count,
+      percent: current ? 100 : count > 0 ? 72 : 32,
+      metricLabel: `#${index + 1}`,
+      detail: current
+        ? "Mime actuel"
+        : count > 0
+          ? `${count} passage${count > 1 ? "s" : ""} déjà joué${count > 1 ? "s" : ""}`
+          : "Encore à venir",
+    };
+  });
 }
 
 function buildRelationInsights({
+  gameType,
   targetPairs,
   sameChoicePairs,
   targetCountByPlayer,
   players,
 }: {
+  gameType: GameType | null | undefined;
   players: Player[];
   targetPairs: SummaryHeatCell[];
   sameChoicePairs: SummaryHeatCell[];
@@ -490,9 +961,48 @@ function buildRelationInsights({
   if (asymmetry) lines.push(`${asymmetry.from.name} pense beaucoup à ${asymmetry.to.name}. L'inverse, beaucoup moins.`);
   const alliance = sameChoicePairs[0];
   if (alliance) lines.push(`${alliance.from.name} et ${alliance.to.name} répondent pareil ${alliance.percent}% du temps.`);
-  const invisible = players.find((player) => (targetCountByPlayer.get(player.id) ?? 0) === 0);
-  if (invisible) lines.push(`Personne ne choisit ${invisible.name}. Profil ninja confirmé.`);
-  if (!lines.length) lines.push("La soirée manque encore de preuves, mais les soupçons montent.");
+  if (gameType === "who_of_us") {
+    const invisible = players.find((player) => (targetCountByPlayer.get(player.id) ?? 0) === 0);
+    if (invisible) lines.push(`${invisible.name} esquive les désignations. Personne ne l'a vraiment ciblé.`);
+  }
+  if (!lines.length) {
+    lines.push(
+      gameType === "who_would"
+        ? "Les duels restent trop serrés pour former une alliance officielle."
+        : "La soirée manque encore de preuves, mais les soupçons montent."
+    );
+  }
+  return lines.slice(0, 4);
+}
+
+function buildMimeInsights(
+  players: Player[],
+  state: MimeGameState | null,
+  mimeCounts: Map<string, number>
+): string[] {
+  if (!state || state.mimeHistory.length === 0) {
+    return ["Le rideau n'a presque pas eu le temps de s'ouvrir."];
+  }
+
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const firstRecord = state.mimeHistory[0];
+  const lastRecord = state.mimeHistory[state.mimeHistory.length - 1];
+  const first = playerById.get(firstRecord.mimePlayerId);
+  const last = playerById.get(lastRecord.mimePlayerId);
+  const next = getNextMimePlayer(players, state);
+  const waiting = players.filter((player) => (mimeCounts.get(player.id) ?? 0) === 0);
+  const lastExpression = getQuestionText("mime_expressions", lastRecord.expressionId);
+
+  const lines: string[] = [];
+  if (first) lines.push(`${first.name} a ouvert la scène, donc tout le monde peut le remercier ou lui en vouloir.`);
+  if (last && lastExpression) lines.push(`Dernier dossier mimé : "${lastExpression}" par ${last.name}.`);
+  if (next) lines.push(`Le relais automatique pointe maintenant vers ${next.name}.`);
+  if (waiting.length) {
+    lines.push(`${waiting.map((player) => player.name).join(", ")} attend${waiting.length > 1 ? "ent" : ""} encore le spotlight.`);
+  } else {
+    lines.push("La rotation a déjà fait passer toute la table.");
+  }
+
   return lines.slice(0, 4);
 }
 
@@ -521,19 +1031,87 @@ function buildRareMoments(
   return uniqueBy(moments, (moment) => moment.title).slice(0, 5);
 }
 
+function buildMimeRareMoments(
+  players: Player[],
+  state: MimeGameState | null,
+  mimeCounts: Map<string, number>
+): SummaryRareMoment[] {
+  const moments: SummaryRareMoment[] = [];
+  const history = state?.mimeHistory ?? [];
+  if (!state || history.length === 0) return moments;
+
+  if (history.length === 1) {
+    moments.push({
+      title: "Premier rideau levé",
+      detail: "Une seule manche, donc le bilan garde surtout la trace du lancement du show.",
+      tone: "cyan",
+    });
+  }
+
+  const everyonePassed = players.length > 0 && players.every((player) => (mimeCounts.get(player.id) ?? 0) > 0);
+  if (everyonePassed) {
+    moments.push({
+      title: "Tour complet",
+      detail: "Chaque joueur a eu son passage au mime. Rotation propre.",
+      tone: "gold",
+    });
+  }
+
+  const repeat = maxPlayer(players, mimeCounts);
+  if (repeat && repeat.value >= 2) {
+    moments.push({
+      title: "Rappel sur scène",
+      detail: `${repeat.player.name} est passé ${repeat.value} fois au mime.`,
+      tone: "pink",
+    });
+  }
+
+  if (state.hostPlayMode) {
+    moments.push({
+      title: "Hôte dans l'arène",
+      detail: "Le mode hôte joueur était activé : pas de spoiler permanent pour l'hôte.",
+      tone: "green",
+    });
+  }
+
+  return moments.slice(0, 5);
+}
+
 function buildRecapLines({
+  gameType,
   leader,
   spotlights,
   relationInsights,
   rareMoments,
   roundsPlayed,
 }: {
+  gameType: GameType | null | undefined;
   leader: SummaryScoreRow | null;
   spotlights: SummarySpotlight[];
   relationInsights: string[];
   rareMoments: SummaryRareMoment[];
   roundsPlayed: number;
 }): string[] {
+  if (gameType === "mime_expressions") {
+    const waiting = spotlights.find((spotlight) => spotlight.id === "mime-waiting");
+    return [
+      `${roundsPlayed} passage${roundsPlayed > 1 ? "s" : ""} au mime enregistré${roundsPlayed > 1 ? "s" : ""}.`,
+      leader ? `${leader.player.name} a le plus pris la lumière.` : "Le show n'a pas encore de star statistique.",
+      waiting?.detail ?? "La file de passage reste prête pour la suite.",
+      rareMoments[0]?.title ? `Moment de scène : ${rareMoments[0].title}.` : "Pas de moment rare, juste une rotation propre.",
+    ];
+  }
+
+  if (gameType === "who_of_us") {
+    const mostVoted = spotlights.find((spotlight) => spotlight.id === "most-voted");
+    return [
+      mostVoted?.player ? `${mostVoted.player.name} finit au centre des accusations.` : "Aucun suspect officiel ne ressort.",
+      relationInsights[0] ?? "Les relations restent à clarifier.",
+      rareMoments[0]?.title ? `Moment rare : ${rareMoments[0].title}.` : "Les votes nominaux sont restés plutôt sages.",
+      `${roundsPlayed} question${roundsPlayed > 1 ? "s" : ""} sociale${roundsPlayed > 1 ? "s" : ""} analysée${roundsPlayed > 1 ? "s" : ""}.`,
+    ];
+  }
+
   const chaos = spotlights.find((spotlight) => spotlight.id === "chaos");
   return [
     leader ? `${leader.player.name} sort en tête après ${roundsPlayed} manche${roundsPlayed > 1 ? "s" : ""}.` : "Aucun vainqueur net, mais beaucoup de matière.",
@@ -543,7 +1121,13 @@ function buildRecapLines({
   ];
 }
 
-function buildSubtitle(gameType: GameType | null | undefined, rounds: number, votes: number): string {
+function buildSubtitle(
+  gameType: GameType | null | undefined,
+  rounds: number,
+  votes: number,
+  players: Player[],
+  mimeGameState: MimeGameState | null
+): string {
   const label =
     gameType === "who_would"
       ? "Tu préfères"
@@ -556,7 +1140,188 @@ function buildSubtitle(gameType: GameType | null | undefined, rounds: number, vo
             : gameType === "mime_expressions"
               ? "Mime les expressions"
               : "Partie";
-  return `${label} · ${rounds} manche${rounds > 1 ? "s" : ""} · ${votes} vote${votes > 1 ? "s" : ""} analysé${votes > 1 ? "s" : ""}`;
+
+  if (gameType === "mime_expressions") {
+    const orderSize = mimeGameState?.playerOrder.length || players.length;
+    return `${label} · ${rounds} passage${rounds > 1 ? "s" : ""} sur scène · ${orderSize} joueur${orderSize > 1 ? "s" : ""} dans la file`;
+  }
+
+  if (gameType === "who_of_us") {
+    return `${label} · ${rounds} manche${rounds > 1 ? "s" : ""} · ${votes} vote${votes > 1 ? "s" : ""} nominatif${votes > 1 ? "s" : ""}`;
+  }
+
+  if (gameType === "majority" || gameType === "minority") {
+    return `${label} · ${rounds} manche${rounds > 1 ? "s" : ""} · ${votes} prédiction${votes > 1 ? "s" : ""} analysée${votes > 1 ? "s" : ""}`;
+  }
+
+  return `${label} · ${rounds} manche${rounds > 1 ? "s" : ""} · ${votes} choix analysé${votes > 1 ? "s" : ""}`;
+}
+
+function buildTitle(
+  gameType: GameType | null | undefined,
+  leader: SummaryScoreRow | null,
+  roundsPlayed: number,
+  mimeGameState: MimeGameState | null,
+  players: Player[]
+): string {
+  if (gameType === "mime_expressions") {
+    const playerById = new Map(players.map((player) => [player.id, player]));
+    const firstRecord = mimeGameState?.mimeHistory[0];
+    const firstMime = firstRecord ? playerById.get(firstRecord.mimePlayerId) : null;
+    if (roundsPlayed <= 0) return "Le rideau attend son premier mime";
+    if (firstMime && roundsPlayed === 1) return `${firstMime.name} a ouvert le show`;
+    if (leader) return `${leader.player.name} a pris la lumière`;
+    return "Le show du mime est lancé";
+  }
+
+  if (gameType === "who_of_us") {
+    return leader ? `${leader.player.name} finit dans le viseur` : "Les accusations restent ouvertes";
+  }
+
+  if (gameType === "who_would") {
+    return leader ? `${leader.player.name} influence les duels` : "Les duels ont parlé";
+  }
+
+  if (gameType === "majority") {
+    return leader ? `${leader.player.name} lit la table` : "La majorité garde ses secrets";
+  }
+
+  if (gameType === "minority") {
+    return leader ? `${leader.player.name} trouve les angles morts` : "La minorité brouille les pistes";
+  }
+
+  return leader ? `${leader.player.name} fait trembler le classement` : "Bilan de soirée";
+}
+
+function getSummaryProfile(gameType: GameType | null | undefined): SummaryProfile {
+  if (gameType === "mime_expressions") return "mime";
+  if (gameType === "who_of_us") return "social_vote";
+  if (gameType === "who_would") return "duel";
+  if (gameType === "majority" || gameType === "minority") return "prediction";
+  return "generic";
+}
+
+function getLeaderLabel(profile: SummaryProfile): string {
+  if (profile === "mime") return "Spotlight";
+  if (profile === "social_vote") return "Au centre des débats";
+  if (profile === "duel") return "Influence du soir";
+  if (profile === "prediction") return "Leader final";
+  return "Leader final";
+}
+
+function getSectionLabels(profile: SummaryProfile): SummarySectionLabels {
+  if (profile === "mime") {
+    return {
+      scoreboardEyebrow: "Rotation de scène",
+      scoreboardTitle: "Ordre des passages",
+      scoreboardPill: "file auto",
+      scoreboardEmpty: "Aucun passage au mime enregistré pour le moment.",
+      spotlightsEyebrow: "Dossiers du show",
+      spotlightsTitle: "Ce que la scène raconte",
+      heatmapEyebrow: "File de passage",
+      heatmapTitle: "Qui passe le relais à qui",
+      heatmapEmpty: "Pas encore assez d'ordre pour dessiner la rotation.",
+      rareEyebrow: "Moments de scène",
+      rareTitle: "Les détails qui font rire après",
+      rareFallbackTitle: "Show encore jeune",
+      rareFallbackDetail: "Pas de moment rare pour l'instant, mais la file automatique est prête.",
+      recapEyebrow: "Recap du show",
+      recapTitle: "À retenir avant de relancer",
+    };
+  }
+
+  if (profile === "social_vote") {
+    return {
+      scoreboardEyebrow: "Accusations finales",
+      scoreboardTitle: "Les plus désignés",
+      scoreboardPill: "votes sociaux",
+      scoreboardEmpty: "Aucun vote nominatif à classer.",
+      spotlightsEyebrow: "Awards sociaux",
+      spotlightsTitle: "Les dossiers de la table",
+      heatmapEyebrow: "Carte relationnelle",
+      heatmapTitle: "Qui vote le plus pour qui",
+      heatmapEmpty: "Pas assez de votes nominaux pour dessiner une relation.",
+      rareEyebrow: "Événements rares",
+      rareTitle: "Les votes qui font parler",
+      rareFallbackTitle: "Table calme",
+      rareFallbackDetail: "Aucune unanimité ou égalité parfaite détectée.",
+      recapEyebrow: "Recap social",
+      recapTitle: "Les accusations à garder en mémoire",
+    };
+  }
+
+  if (profile === "duel") {
+    return {
+      scoreboardEyebrow: "Influence des choix",
+      scoreboardTitle: "Les duellistes du soir",
+      scoreboardPill: "duels",
+      scoreboardEmpty: "Aucun choix à classer.",
+      spotlightsEyebrow: "Awards de duel",
+      spotlightsTitle: "Les camps et les solos",
+      heatmapEyebrow: "Synchronisation",
+      heatmapTitle: "Qui choisit pareil",
+      heatmapEmpty: "Pas assez de choix communs pour former une alliance.",
+      rareEyebrow: "Moments serrés",
+      rareTitle: "Les duels qui ont coupé la table",
+      rareFallbackTitle: "Duel standard",
+      rareFallbackDetail: "Aucun split rarissime, mais les préférences sont enregistrées.",
+      recapEyebrow: "Recap des duels",
+      recapTitle: "Ce que les choix racontent",
+    };
+  }
+
+  if (profile === "prediction") {
+    return {
+      scoreboardEyebrow: "Scoreboard vivant",
+      scoreboardTitle: "Podium final",
+      scoreboardPill: "live reveal",
+      scoreboardEmpty: "Pas encore assez de prédictions pour classer la table.",
+      spotlightsEyebrow: "Awards de lecture",
+      spotlightsTitle: "Qui comprend vraiment le groupe",
+      heatmapEyebrow: "Carte des alliances",
+      heatmapTitle: "Qui pense comme qui",
+      heatmapEmpty: "Pas assez de votes comparables pour détecter les alliances.",
+      rareEyebrow: "Événements rares",
+      rareTitle: "Les prédictions qui ont secoué la table",
+      rareFallbackTitle: "Chaos standard",
+      rareFallbackDetail: "Aucun événement rarissime, mais les choix ont laissé des traces.",
+      recapEyebrow: "Recap final",
+      recapTitle: "À retenir avant de relancer",
+    };
+  }
+
+  return {
+    scoreboardEyebrow: "Scoreboard vivant",
+    scoreboardTitle: "Podium final",
+    scoreboardPill: "live reveal",
+    scoreboardEmpty: "Pas encore assez de données pour classer la table.",
+    spotlightsEyebrow: "Awards absurdes",
+    spotlightsTitle: "Les dossiers de la table",
+    heatmapEyebrow: "Heatmap relationnelle",
+    heatmapTitle: "Circulation du chaos",
+    heatmapEmpty: "Pas assez de relations détectées pour dessiner la carte.",
+    rareEyebrow: "Événements rares",
+    rareTitle: "Les moments qui font du bruit",
+    rareFallbackTitle: "Chaos standard",
+    rareFallbackDetail: "Aucun événement rarissime, mais la soirée a laissé des traces.",
+    recapEyebrow: "Recap final",
+    recapTitle: "À retenir avant de relancer",
+  };
+}
+
+function getNextMimePlayer(players: Player[], state: MimeGameState | null): Player | null {
+  if (!state || state.playerOrder.length === 0) return null;
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const nextIndex = (state.currentMimeIndex + 1) % state.playerOrder.length;
+  return playerById.get(state.playerOrder[nextIndex]) ?? null;
+}
+
+function getQuestionText(gameType: GameType, questionId: number): string | null {
+  const question = getQuestionForGame(gameType, questionId);
+  if (!question) return null;
+  if ("text" in question && question.text) return question.text;
+  if ("optionA" in question && "optionB" in question) return `${question.optionA} / ${question.optionB}`;
+  return null;
 }
 
 function maxPlayer(players: Player[], primary: Map<string, number>, secondary?: Map<string, number>) {
@@ -609,4 +1374,3 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string): T[] {
   }
   return output;
 }
-

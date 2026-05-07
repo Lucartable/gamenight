@@ -119,6 +119,44 @@ body {
   to { transform: translateY(24px); }
 }
 
+@keyframes gameAuraDrift {
+  0%, 100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+    opacity: 0.62;
+  }
+  50% {
+    transform: translate3d(4%, 3%, 0) scale(1.06);
+    opacity: 0.88;
+  }
+}
+
+@keyframes gameCardIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes gamePressGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(34, 211, 238, 0); }
+  50% { box-shadow: 0 0 24px rgba(34, 211, 238, 0.22); }
+}
+
+@keyframes gameTimerHot {
+  0%, 100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 rgba(255, 62, 165, 0);
+  }
+  50% {
+    transform: scale(1.045);
+    text-shadow: 0 0 28px rgba(255, 62, 165, 0.75);
+  }
+}
+
 .animate-reveal-in {
   animation: revealIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
@@ -133,8 +171,84 @@ body {
 }
 
 .prediction-card {
+  position: relative;
+  overflow: hidden;
   transform: translateZ(0);
   will-change: transform;
+}
+
+.prediction-card::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 10%, rgba(255, 255, 255, 0.18), transparent 90%);
+  opacity: 0;
+  transform: translateX(-120%);
+}
+
+.prediction-card:hover::after,
+.prediction-card:focus-visible::after {
+  opacity: 1;
+  animation: summarySheen 820ms ease;
+}
+
+.game-stage {
+  position: relative;
+  overflow-x: clip;
+}
+
+.game-stage::before,
+.game-stage::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+  border-radius: 999px;
+  filter: blur(44px);
+  transform: translateZ(0);
+  animation: gameAuraDrift 9s ease-in-out infinite;
+}
+
+.game-stage::before {
+  left: -92px;
+  top: 12%;
+  height: 240px;
+  width: 240px;
+  background: radial-gradient(circle, rgba(255, 62, 165, 0.28), transparent 68%);
+}
+
+.game-stage::after {
+  right: -108px;
+  bottom: 10%;
+  height: 280px;
+  width: 280px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 70%);
+  animation-delay: -4s;
+}
+
+.game-stage .card {
+  animation: gameCardIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.game-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+.game-topbar {
+  border-color: rgba(34, 211, 238, 0.22) !important;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.09), transparent 42%),
+    rgba(18, 14, 28, 0.82) !important;
+}
+
+.game-panel-enter {
+  animation: gameCardIn 460ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.timer-hot {
+  animation: gameTimerHot 650ms ease-in-out infinite;
 }
 
 .confetti-field {
@@ -308,6 +422,27 @@ body {
     #08040d;
 }
 
+.summary-mode-mime {
+  background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.16), transparent 28%),
+    linear-gradient(32deg, transparent 36%, rgba(250, 204, 21, 0.16), rgba(255, 62, 165, 0.12)),
+    #07050d;
+}
+
+.summary-mode-social_vote {
+  background:
+    linear-gradient(145deg, rgba(255, 62, 165, 0.17), transparent 30%),
+    linear-gradient(32deg, transparent 40%, rgba(168, 85, 247, 0.18), rgba(34, 211, 238, 0.10)),
+    #08040d;
+}
+
+.summary-mode-duel {
+  background:
+    linear-gradient(145deg, rgba(250, 204, 21, 0.16), transparent 28%),
+    linear-gradient(32deg, transparent 38%, rgba(34, 211, 238, 0.15), rgba(255, 62, 165, 0.12)),
+    #08040d;
+}
+
 .summary-scanlines {
   pointer-events: none;
   position: fixed;
@@ -401,6 +536,86 @@ body {
     @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm
            bg-white/5 border border-white/10 text-white/80;
   }
+}
+
+.btn-primary,
+.btn-secondary {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+
+.btn-primary {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 62, 165, 0.98), rgba(168, 85, 247, 0.92) 52%, rgba(34, 211, 238, 0.82)) !important;
+}
+
+.btn-secondary {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(34, 211, 238, 0.06)),
+    rgba(29, 17, 48, 0.82) !important;
+}
+
+.btn-primary::after,
+.btn-secondary::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 18%, rgba(255, 255, 255, 0.24), transparent 78%);
+  transform: translateX(-120%);
+}
+
+.btn-primary:hover::after,
+.btn-primary:focus-visible::after,
+.btn-secondary:hover::after,
+.btn-secondary:focus-visible::after {
+  animation: summarySheen 740ms ease;
+}
+
+.card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 36%),
+    linear-gradient(320deg, rgba(34, 211, 238, 0.055), transparent 42%),
+    rgba(18, 14, 28, 0.82) !important;
+  box-shadow:
+    0 20px 65px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.card::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 62, 165, 0.12), transparent 32%),
+    radial-gradient(circle at 88% 18%, rgba(34, 211, 238, 0.11), transparent 34%);
+  opacity: 0.85;
+}
+
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chip {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.input {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
+    rgba(18, 14, 28, 0.86) !important;
 }
 
 /* Évite que le clavier mobile ne fasse zoomer iOS sur les inputs. */

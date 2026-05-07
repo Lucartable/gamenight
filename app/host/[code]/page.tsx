@@ -809,7 +809,7 @@ export default function HostPage() {
   const displayRound = mimeMode ? mimeGameState?.roundNumber ?? 0 : roundsPlayed;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
       <RoomHeader
         code={room.code}
         status={room.status}
@@ -1058,7 +1058,7 @@ function GameSelectionView({
   onChoose: (gameType: GameType) => void;
 }) {
   return (
-    <section className="flex flex-1 flex-col justify-center">
+    <section className="game-panel-enter flex flex-1 flex-col justify-center">
       <div className="mb-5 text-center">
         <h1 className="text-3xl font-black">Choisir un jeu</h1>
         <p className="mt-2 text-white/60">Deux ambiances rapides, un seul code de salle.</p>
@@ -1108,7 +1108,7 @@ function RoomHeader({
   canTransfer: boolean;
 }) {
   return (
-    <header className="card mb-4 p-5">
+    <header className="card game-topbar mb-4 p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-white/50">Code de la salle</div>
@@ -1768,7 +1768,7 @@ function MimeActiveHostView({
   const showExpression = !state.hostPlayMode || isHostMime;
 
   return (
-    <section key={state.currentMimePlayerId} className="card flex flex-1 flex-col p-5 animate-reveal-in">
+    <section key={state.currentMimePlayerId} className="card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
@@ -1777,7 +1777,7 @@ function MimeActiveHostView({
         </span>
       </div>
 
-      <div className={`text-center text-7xl font-black tabular-nums ${timeIsHot ? "animate-pulseSoft text-neon-pink" : "text-white"}`}>
+      <div className={`text-center text-7xl font-black tabular-nums ${timeIsHot ? "timer-hot text-neon-pink" : "text-white"}`}>
         {roundLeft}
       </div>
       <div className="text-center text-sm text-white/50">secondes</div>
@@ -1851,7 +1851,7 @@ function MimeRevealHostView({
   const isFinal = state.roundNumber >= totalRounds;
 
   return (
-    <section key={`revealed-${state.currentExpressionId}`} className="card flex flex-1 flex-col p-5 animate-reveal-in">
+    <section key={`revealed-${state.currentExpressionId}`} className="card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
@@ -2029,14 +2029,14 @@ function QuestionShell({
   children: ReactNode;
 }) {
   return (
-    <section className="card flex flex-1 flex-col p-5 text-center animate-reveal-in">
+    <section className="card game-panel-enter flex flex-1 flex-col p-5 text-center animate-reveal-in">
       <div className="flex items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="rounded-full bg-neon-pink/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-neon-pink animate-pulseSoft">
           Vote ouvert
         </span>
       </div>
-      <div className="mt-4 text-7xl font-black tabular-nums text-white">{voteLeft}</div>
+      <div className={`mt-4 text-7xl font-black tabular-nums ${voteLeft <= 5 ? "timer-hot text-neon-pink" : "text-white"}`}>{voteLeft}</div>
       <div className="text-sm text-white/50">{votedCount} / {totalPlayers} vote{totalPlayers > 1 ? "s" : ""} envoyés</div>
       {children}
     </section>
@@ -2431,7 +2431,7 @@ function RevealShell({
   children: ReactNode;
 }) {
   return (
-    <section className="card flex flex-1 flex-col p-5">
+    <section className="card game-panel-enter flex flex-1 flex-col p-5">
       <div className="mb-4 flex items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
@@ -2555,7 +2555,7 @@ function CenteredMessage({
   action?: { label: string; href: string };
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
+    <main className="game-stage mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center">
       <h1 className="text-3xl font-black">{title}</h1>
       {subtitle && <p className="mt-2 text-white/60">{subtitle}</p>}
       {action && (
