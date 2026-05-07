@@ -7,6 +7,9 @@
 alter table public.rooms
   add column if not exists mime_game_state jsonb;
 
+alter table public.rooms
+  add column if not exists round_question_ids integer[] not null default '{}';
+
 alter table public.rooms drop constraint if exists rooms_game_type_check;
 alter table public.rooms drop constraint if exists rooms_status_check;
 alter table public.questions drop constraint if exists questions_game_type_check;

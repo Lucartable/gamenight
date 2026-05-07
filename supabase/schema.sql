@@ -49,6 +49,7 @@ create table public.rooms (
   score_target integer
     check (score_target is null or score_target between 1 and 999),
   selected_categories text[] not null default '{}',
+  round_question_ids integer[] not null default '{}',
   mime_game_state jsonb,
   created_at timestamptz not null default now()
 );

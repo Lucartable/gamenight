@@ -78,6 +78,7 @@ type RoomConfigPatch = Partial<
     | "hide_scores"
     | "scoreboard_frequency"
     | "score_target"
+    | "round_question_ids"
     | "mime_game_state"
   >
 >;
@@ -177,11 +178,18 @@ export default function HostPage() {
         : [],
     [askedQuestions, gameType]
   );
+  const roundQuestionIds = useMemo(
+    () => uniqueIds(room?.round_question_ids ?? []),
+    [room?.round_question_ids]
+  );
   const blockedQuestionIds = useMemo(() => {
     if (!currentQ || askedForGameIds.includes(currentQ.id)) return askedForGameIds;
     return [...askedForGameIds, currentQ.id];
   }, [askedForGameIds, currentQ]);
-  const roundsPlayed = blockedQuestionIds.length;
+  const roundsPlayed = useMemo(() => {
+    const ids = currentQ ? addUniqueId(roundQuestionIds, currentQ.id) : roundQuestionIds;
+    return ids.length;
+  }, [currentQ, roundQuestionIds]);
 
   const currentVotes = useMemo(
     () =>
@@ -336,6 +344,7 @@ export default function HostPage() {
       game_type: nextGameType,
       selected_categories: getDefaultCategories(nextGameType),
       current_question_id: null,
+      round_question_ids: [],
       mime_game_state: null,
     });
   }
@@ -345,6 +354,7 @@ export default function HostPage() {
       game_type: null,
       selected_categories: [],
       current_question_id: null,
+      round_question_ids: [],
       mime_game_state: null,
     });
   }
@@ -379,6 +389,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: question.id,
+          round_question_ids: addUniqueId(room.round_question_ids ?? [], question.id),
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
           scoreboard_started_at: null,
@@ -414,7 +425,7 @@ export default function HostPage() {
       setActionError("Ajoute au moins un joueur dans l'ordre de passage.");
       return;
     }
-    const expression = pickMimeExpression(selectedCategories, []);
+    const expression = pickMimeExpression(selectedCategories, blockedQuestionIds);
     if (!expression) {
       setActionError("Aucune expression disponible avec ces thèmes.");
       return;
@@ -434,6 +445,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: expression.id,
+          round_question_ids: [expression.id],
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
           scoreboard_started_at: null,
@@ -474,7 +486,10 @@ export default function HostPage() {
       await finishGame(false);
       return;
     }
-    const expression = pickMimeExpression(selectedCategories, mimeGameState.usedExpressionIds);
+    const expression = pickMimeExpression(
+      selectedCategories,
+      uniqueIds([...blockedQuestionIds, ...mimeGameState.usedExpressionIds])
+    );
     if (!expression) {
       await finishGame(false);
       return;
@@ -506,6 +521,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: expression.id,
+          round_question_ids: addUniqueId(roundQuestionIds, expression.id),
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
           scoreboard_started_at: null,
@@ -653,6 +669,7 @@ export default function HostPage() {
         .update({
           status: "lobby",
           current_question_id: null,
+          round_question_ids: [],
           question_started_at: null,
           reveal_started_at: null,
           scoreboard_started_at: null,
@@ -688,17 +705,12 @@ export default function HostPage() {
         .eq("room_id", room.id);
       if (votesError) throw votesError;
 
-      const { error: askedError } = await supabase
-        .from("asked_questions")
-        .delete()
-        .eq("room_id", room.id);
-      if (askedError) throw askedError;
-
       const { error: roomError } = await supabase
         .from("rooms")
         .update({
           status: "lobby",
           current_question_id: null,
+          round_question_ids: [],
           question_started_at: null,
           reveal_started_at: null,
           scoreboard_started_at: null,
@@ -706,6 +718,26 @@ export default function HostPage() {
         })
         .eq("id", room.id);
       if (roomError) throw roomError;
+    });
+  }
+
+  async function endRoomFromSummary() {
+    if (!room) return;
+    if (!confirm("Terminer la partie pour tout le monde ?")) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "ended",
+          current_question_id: null,
+          round_question_ids: [],
+          question_started_at: null,
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: null,
+        })
+        .eq("id", room.id);
+      if (error) throw error;
     });
   }
 
@@ -778,17 +810,27 @@ export default function HostPage() {
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
-  if (room.status === "end_game_summary" || room.status === "ended")
+  if (room.status === "ended")
+    return (
+      <CenteredMessage
+        title="Partie terminée"
+        subtitle="La salle est clôturée. Tu peux revenir à l'accueil pour créer une nouvelle soirée."
+        action={{ label: "Accueil", href: "/" }}
+      />
+    );
+  if (room.status === "end_game_summary")
     return (
       <EndGameSummaryPanel
         gameType={gameType}
         players={players}
         votes={votes}
         askedQuestions={askedQuestions}
+        roundQuestionIds={roundQuestionIds}
         mimeGameState={mimeGameState}
         isHost
         busy={busy}
-        onReplay={resetFinishedGameToLobby}
+        onBackToLobby={resetFinishedGameToLobby}
+        onEnd={endRoomFromSummary}
       />
     );
 
@@ -2677,6 +2719,14 @@ function getWhoOfUsStats(players: Player[], votes: Vote[]) {
 
 function sameOrder(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function uniqueIds(ids: number[]): number[] {
+  return [...new Set(ids.filter((id) => Number.isFinite(id) && id > 0))];
+}
+
+function addUniqueId(ids: number[], id: number): number[] {
+  return uniqueIds([...ids, id]);
 }
 
 function labelStatus(status: string, gameLabel?: string) {

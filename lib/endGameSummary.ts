@@ -80,6 +80,7 @@ interface BuildSummaryInput {
   players: Player[];
   votes: Vote[];
   askedQuestions: AskedQuestion[];
+  roundQuestionIds?: number[];
   mimeGameState: MimeGameState | null;
 }
 
@@ -98,6 +99,7 @@ export function buildEndGameSummary({
   players,
   votes,
   askedQuestions,
+  roundQuestionIds = [],
   mimeGameState,
 }: BuildSummaryInput): EndGameSummary {
   const activePlayers = [...players].sort((a, b) => a.name.localeCompare(b.name));
@@ -106,10 +108,13 @@ export function buildEndGameSummary({
   const askedForGame = gameType
     ? askedQuestions.filter((asked) => asked.game_type === gameType)
     : askedQuestions;
+  const currentRoundIds = unique(roundQuestionIds.filter((id) => Number.isFinite(id) && id > 0));
   const voteRounds = unique(gameVotes.map((vote) => vote.question_id));
   const roundsPlayed = gameType === "mime_expressions"
     ? mimeGameState?.mimeHistory.length ?? mimeGameState?.roundNumber ?? 0
-    : Math.max(voteRounds.length, askedForGame.length);
+    : currentRoundIds.length
+      ? Math.max(voteRounds.length, currentRoundIds.length)
+      : Math.max(voteRounds.length, askedForGame.length);
 
   const targetVotes = gameVotes.filter((vote) => vote.selected_player_id && playerById.has(vote.selected_player_id));
   const targetCountByPlayer = countBy(activePlayers.map((player) => player.id), targetVotes.map((vote) => vote.selected_player_id ?? ""));

@@ -42,6 +42,7 @@ export interface Room {
   scoreboard_frequency: ScoreboardFrequency;
   score_target: number | null;
   selected_categories: string[];
+  round_question_ids: number[];
   mime_game_state: MimeGameState | null;
   created_at: string;
 }

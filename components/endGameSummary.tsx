@@ -70,23 +70,29 @@ export function EndGameSummaryPanel({
   players,
   votes,
   askedQuestions,
+  roundQuestionIds,
   mimeGameState,
   isHost = false,
   busy = false,
   onReplay,
+  onBackToLobby,
+  onEnd,
 }: {
   gameType: GameType | null | undefined;
   players: Player[];
   votes: Vote[];
   askedQuestions: AskedQuestion[];
+  roundQuestionIds?: number[];
   mimeGameState: MimeGameState | null;
   isHost?: boolean;
   busy?: boolean;
   onReplay?: () => void;
+  onBackToLobby?: () => void;
+  onEnd?: () => void;
 }) {
   const summary = useMemo(
-    () => buildEndGameSummary({ gameType, players, votes, askedQuestions, mimeGameState }),
-    [askedQuestions, gameType, mimeGameState, players, votes]
+    () => buildEndGameSummary({ gameType, players, votes, askedQuestions, roundQuestionIds, mimeGameState }),
+    [askedQuestions, gameType, mimeGameState, players, roundQuestionIds, votes]
   );
   const [stage, setStage] = useState(0);
 
@@ -110,7 +116,15 @@ export function EndGameSummaryPanel({
         <SpotlightGrid summary={summary} visible={stage >= 3} />
         <RelationHeatmap summary={summary} visible={stage >= 4} />
         <RareMoments summary={summary} visible={stage >= 5} />
-        <FinalRecap summary={summary} visible={stage >= 6} isHost={isHost} busy={busy} onReplay={onReplay} />
+        <FinalRecap
+          summary={summary}
+          visible={stage >= 6}
+          isHost={isHost}
+          busy={busy}
+          onReplay={onReplay}
+          onBackToLobby={onBackToLobby}
+          onEnd={onEnd}
+        />
       </div>
     </main>
   );
@@ -330,12 +344,16 @@ function FinalRecap({
   isHost,
   busy,
   onReplay,
+  onBackToLobby,
+  onEnd,
 }: {
   summary: EndGameSummary;
   visible: boolean;
   isHost: boolean;
   busy: boolean;
   onReplay?: () => void;
+  onBackToLobby?: () => void;
+  onEnd?: () => void;
 }) {
   return (
     <section className={`summary-panel mb-8 p-4 ${visible ? "summary-in" : "summary-out"}`}>
@@ -350,10 +368,19 @@ function FinalRecap({
           </div>
         ))}
       </div>
-      {isHost && onReplay && (
-        <button type="button" disabled={busy} onClick={onReplay} className="btn-primary mt-5 w-full">
-          Relancer Badaboum
-        </button>
+      {isHost && (onBackToLobby || onReplay || onEnd) && (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {(onBackToLobby || onReplay) && (
+            <button type="button" disabled={busy} onClick={onBackToLobby ?? onReplay} className="btn-primary w-full">
+              Retour au lobby
+            </button>
+          )}
+          {onEnd && (
+            <button type="button" disabled={busy} onClick={onEnd} className="btn-secondary w-full text-neon-pink">
+              Terminer la partie
+            </button>
+          )}
+        </div>
       )}
     </section>
   );

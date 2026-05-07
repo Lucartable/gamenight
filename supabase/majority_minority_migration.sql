@@ -10,6 +10,7 @@ alter table public.rooms
   add column if not exists hide_scores boolean not null default false,
   add column if not exists scoreboard_frequency text not null default 'round',
   add column if not exists score_target integer,
+  add column if not exists round_question_ids integer[] not null default '{}',
   add column if not exists mime_game_state jsonb;
 
 alter table public.questions

@@ -156,13 +156,22 @@ export default function PlayerPage() {
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
   if (!me)
     return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
-  if (room.status === "end_game_summary" || room.status === "ended")
+  if (room.status === "ended")
+    return (
+      <CenteredMessage
+        title="Partie terminée"
+        subtitle="L'hôte a clôturé la salle."
+        action={{ label: "Accueil", href: "/" }}
+      />
+    );
+  if (room.status === "end_game_summary")
     return (
       <EndGameSummaryPanel
         gameType={gameType}
         players={players}
         votes={votes}
         askedQuestions={askedQuestions}
+        roundQuestionIds={room.round_question_ids ?? []}
         mimeGameState={mimeGameState}
       />
     );
