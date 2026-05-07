@@ -16,12 +16,16 @@ import {
 } from "@/lib/gameQuestions";
 import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
 import {
-  addJaugePlayerQuestion,
   getJaugeCurrentQuestion,
   getJaugeGameState,
   getJaugeRequiredVoters,
   isJaugeGame,
 } from "@/lib/jaugeGame";
+import {
+  generateLocalQuestionId,
+  getQuestionSourceSettings,
+  questionFromSnapshot,
+} from "@/lib/questionPoolEngine";
 import {
   PredictionRevealPanel,
   PredictionScoreboardPanel,
@@ -40,7 +44,7 @@ import {
   getOrCreateClientId,
   triggerHaptic,
 } from "@/lib/utils";
-import type { Choice, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
+import type { Choice, GameType, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 interface LocalVote {
   qid: number;
@@ -57,12 +61,15 @@ export default function PlayerPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, ratings, askedQuestions, loading, error, refresh } = useRoom(code);
+  const { room, players, votes, ratings, customQuestions, askedQuestions, loading, error, refresh } = useRoom(code);
   const [selectedOption, setSelectedOption] = useState<Choice | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedPredictionOption, setSelectedPredictionOption] = useState<string | null>(null);
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [questionDraft, setQuestionDraft] = useState("");
+  const [questionOptionA, setQuestionOptionA] = useState("");
+  const [questionOptionB, setQuestionOptionB] = useState("");
+  const [questionOptions, setQuestionOptions] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
@@ -86,7 +93,18 @@ export default function PlayerPage() {
   const mimeMode = isMimeGame(gameType);
   const jaugeMode = isJaugeGame(gameType);
   const gameDefinition = getGameDefinition(gameType);
-  const currentQ = getQuestionForGame(gameType, room?.current_question_id);
+  const questionSourceSettings = useMemo(
+    () => getQuestionSourceSettings(room?.question_source_settings),
+    [room?.question_source_settings]
+  );
+  const currentSnapshotQuestion = useMemo(
+    () => {
+      const snapshot = questionFromSnapshot(room?.current_question_snapshot);
+      return snapshot && snapshot.id === room?.current_question_id && snapshot.gameType === gameType ? snapshot : undefined;
+    },
+    [gameType, room?.current_question_id, room?.current_question_snapshot]
+  );
+  const currentQ = currentSnapshotQuestion ?? getQuestionForGame(gameType, room?.current_question_id);
   const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
   const jaugeGameState = useMemo(() => getJaugeGameState(room?.jauge_game_state), [room?.jauge_game_state]);
   const currentMimePlayer = useMemo(
@@ -111,6 +129,13 @@ export default function PlayerPage() {
         ? ratings.filter((rating) => rating.question_id === room.current_question_id && rating.target_player_id === jaugeGameState.currentTargetPlayerId)
         : [],
     [jaugeGameState, ratings, room?.current_question_id]
+  );
+  const mySubmittedQuestionCount = useMemo(
+    () =>
+      me && gameType
+        ? customQuestions.filter((question) => question.game_type === gameType && question.author_player_id === me.id).length
+        : 0,
+    [customQuestions, gameType, me]
   );
 
   useEffect(() => {
@@ -237,28 +262,38 @@ export default function PlayerPage() {
 
   async function submitPlayerQuestion() {
     setVoteError(null);
-    if (!room || !me || submittingQuestion) return;
-    const baseState = getJaugeLobbyState(room.jauge_game_state, gameType === "jauge");
-    const question = addJaugePlayerQuestion(baseState, questionDraft, me.id);
-    if (!question) {
-      setVoteError("Ta question doit faire au moins 8 caractères.");
+    if (!room || !gameType || !me || submittingQuestion) return;
+    if (mySubmittedQuestionCount >= questionSourceSettings.maxQuestionsPerPlayer) {
+      setVoteError("Tu as déjà proposé le maximum de questions pour ce jeu.");
+      return;
+    }
+    const submission = buildCustomQuestionSubmission({
+      gameType,
+      text: questionDraft,
+      optionA: questionOptionA,
+      optionB: questionOptionB,
+      options: questionOptions,
+    });
+    if (!submission) {
+      setVoteError("Question incomplète pour ce mode.");
       return;
     }
     setSubmittingQuestion(true);
     try {
-      const { error } = await getSupabase()
-        .from("rooms")
-        .update({
-          jauge_game_state: {
-            ...baseState,
-            allowPlayerQuestions: true,
-            playerQuestions: [...baseState.playerQuestions, question],
-          },
-        })
-        .eq("id", room.id)
-        .eq("status", "lobby");
+      const { error } = await getSupabase().from("custom_questions").insert({
+        room_id: room.id,
+        author_player_id: me.id,
+        game_type: gameType,
+        local_question_id: generateLocalQuestionId("live"),
+        question_text: submission.questionText,
+        category: submission.category,
+        payload: submission.payload,
+      });
       if (error) throw error;
       setQuestionDraft("");
+      setQuestionOptionA("");
+      setQuestionOptionB("");
+      setQuestionOptions("");
       await refresh();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
@@ -317,11 +352,20 @@ export default function PlayerPage() {
           gameLabel={gameDefinition?.label}
           preparingMime={gameType === "mime_expressions"}
           preparingJauge={gameType === "jauge"}
-          allowJaugeQuestions={Boolean(jaugeGameState?.allowPlayerQuestions)}
-          playerQuestionCount={jaugeGameState?.playerQuestions.length ?? 0}
+          gameType={gameType}
+          allowQuestions={questionSourceSettings.useLiveQuestions}
+          playerQuestionCount={customQuestions.filter((question) => question.game_type === gameType).length}
+          myQuestionCount={mySubmittedQuestionCount}
+          maxQuestionsPerPlayer={questionSourceSettings.maxQuestionsPerPlayer}
           questionDraft={questionDraft}
+          questionOptionA={questionOptionA}
+          questionOptionB={questionOptionB}
+          questionOptions={questionOptions}
           submittingQuestion={submittingQuestion}
           onQuestionDraftChange={setQuestionDraft}
+          onQuestionOptionAChange={setQuestionOptionA}
+          onQuestionOptionBChange={setQuestionOptionB}
+          onQuestionOptionsChange={setQuestionOptions}
           onSubmitQuestion={submitPlayerQuestion}
         />
       )}
@@ -495,22 +539,40 @@ function Lobby({
   gameLabel,
   preparingMime,
   preparingJauge,
-  allowJaugeQuestions,
+  gameType,
+  allowQuestions,
   playerQuestionCount,
+  myQuestionCount,
+  maxQuestionsPerPlayer,
   questionDraft,
+  questionOptionA,
+  questionOptionB,
+  questionOptions,
   submittingQuestion,
   onQuestionDraftChange,
+  onQuestionOptionAChange,
+  onQuestionOptionBChange,
+  onQuestionOptionsChange,
   onSubmitQuestion,
 }: {
   players: Player[];
   gameLabel: string | undefined;
   preparingMime: boolean;
   preparingJauge: boolean;
-  allowJaugeQuestions: boolean;
+  gameType: GameType | null;
+  allowQuestions: boolean;
   playerQuestionCount: number;
+  myQuestionCount: number;
+  maxQuestionsPerPlayer: number;
   questionDraft: string;
+  questionOptionA: string;
+  questionOptionB: string;
+  questionOptions: string;
   submittingQuestion: boolean;
   onQuestionDraftChange: (value: string) => void;
+  onQuestionOptionAChange: (value: string) => void;
+  onQuestionOptionBChange: (value: string) => void;
+  onQuestionOptionsChange: (value: string) => void;
   onSubmitQuestion: () => void;
 }) {
   const title = preparingMime
@@ -534,27 +596,43 @@ function Lobby({
       <h2 className="mt-4 text-2xl font-bold">{title}</h2>
       <p className="mt-2 text-white/60">{subtitle}</p>
 
-      {preparingJauge && allowJaugeQuestions && (
+      {gameType && allowQuestions && (
         <div className="mt-6 w-full rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-4 text-left">
           <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Question joueur</div>
-          <textarea
-            value={questionDraft}
-            onChange={(event) => onQuestionDraftChange(event.target.value)}
-            maxLength={180}
-            rows={3}
-            className="input mt-3 min-h-24 w-full resize-none rounded-2xl p-3"
-            placeholder="À quel point cette personne..."
-          />
+          {gameType === "who_would" ? (
+            <div className="mt-3 grid gap-2">
+              <input className="input rounded-2xl p-3" value={questionOptionA} onChange={(event) => onQuestionOptionAChange(event.target.value)} placeholder="Option A" />
+              <input className="input rounded-2xl p-3" value={questionOptionB} onChange={(event) => onQuestionOptionBChange(event.target.value)} placeholder="Option B" />
+            </div>
+          ) : (
+            <textarea
+              value={questionDraft}
+              onChange={(event) => onQuestionDraftChange(event.target.value)}
+              maxLength={180}
+              rows={3}
+              className="input mt-3 min-h-24 w-full resize-none rounded-2xl p-3"
+              placeholder={gameType === "jauge" ? "À quel point cette personne..." : "Écris ta question..."}
+            />
+          )}
+          {(gameType === "majority" || gameType === "minority") && (
+            <textarea
+              value={questionOptions}
+              onChange={(event) => onQuestionOptionsChange(event.target.value)}
+              rows={3}
+              className="input mt-2 min-h-20 w-full resize-none rounded-2xl p-3"
+              placeholder="Options, une par ligne"
+            />
+          )}
           <button
             type="button"
-            disabled={submittingQuestion || questionDraft.trim().length < 8}
+            disabled={submittingQuestion || myQuestionCount >= maxQuestionsPerPlayer}
             onClick={onSubmitQuestion}
             className="btn-secondary mt-3 w-full"
           >
-            {submittingQuestion ? "Ajout..." : "Proposer la question"}
+            {submittingQuestion ? "Ajout..." : myQuestionCount >= maxQuestionsPerPlayer ? "Limite atteinte" : "Proposer la question"}
           </button>
           <p className="mt-2 text-center text-xs font-semibold text-white/45">
-            {playerQuestionCount} question{playerQuestionCount > 1 ? "s" : ""} proposée{playerQuestionCount > 1 ? "s" : ""}
+            {playerQuestionCount} proposée{playerQuestionCount > 1 ? "s" : ""} dans la room · toi {myQuestionCount}/{maxQuestionsPerPlayer}
           </p>
         </div>
       )}
@@ -1164,26 +1242,38 @@ function countSubmittedRatings(requiredPlayers: Player[], ratings: Rating[]): nu
   return voterIds.size;
 }
 
-function getJaugeLobbyState(value: unknown, isJaugeSelected: boolean): JaugeGameState {
-  const parsed = isJaugeSelected ? getJaugeGameState(value) : null;
-  return parsed ?? {
-    targetMode: "random",
-    targetOrder: [],
-    currentTargetIndex: 0,
-    currentTargetPlayerId: "",
-    questionMode: "random",
-    questionOrder: [],
-    currentQuestionOrderIndex: 0,
-    currentQuestionText: "",
-    currentQuestionCategory: "jauge",
-    usedQuestionIds: [],
-    roundNumber: 0,
-    anonymityMode: "visible",
-    brutalMode: false,
-    autoJaugeMode: false,
-    allowPlayerQuestions: true,
-    playerQuestions: [],
-  };
+function buildCustomQuestionSubmission({
+  gameType,
+  text,
+  optionA,
+  optionB,
+  options,
+}: {
+  gameType: GameType;
+  text: string;
+  optionA: string;
+  optionB: string;
+  options: string;
+}): { questionText: string; category: string; payload: Record<string, unknown> } | null {
+  if (gameType === "who_would") {
+    const a = optionA.trim();
+    const b = optionB.trim();
+    if (a.length < 2 || b.length < 2) return null;
+    return { questionText: `${a} / ${b}`, category: "joueurs", payload: { optionA: a, optionB: b } };
+  }
+  if (gameType === "majority" || gameType === "minority") {
+    const cleanText = text.trim().replace(/\s+/g, " ");
+    const parsedOptions = options
+      .split(/\n|,/)
+      .map((option) => option.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    if (cleanText.length < 8 || parsedOptions.length < 2) return null;
+    return { questionText: cleanText, category: "joueurs", payload: { options: parsedOptions } };
+  }
+  const cleanText = text.trim().replace(/\s+/g, " ");
+  if (cleanText.length < 8) return null;
+  return { questionText: cleanText, category: "joueurs", payload: {} };
 }
 
 function getWhoWouldStats(players: Player[], votes: Vote[]): WhoWouldStats {

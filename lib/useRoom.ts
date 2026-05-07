@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AskedQuestion, Player, Rating, Room, Vote } from "@/types/database";
+import type { AskedQuestion, CustomQuestion, Player, Rating, Room, Vote } from "@/types/database";
 import { getSupabase } from "./supabase";
 
 interface UseRoomState {
@@ -9,6 +9,7 @@ interface UseRoomState {
   players: Player[];
   votes: Vote[];
   ratings: Rating[];
+  customQuestions: CustomQuestion[];
   askedQuestions: AskedQuestion[];
   askedQuestionIds: number[];
   loading: boolean;
@@ -33,6 +34,7 @@ export function useRoom(code: string): UseRoomState {
   const [players, setPlayers] = useState<Player[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [ratings, setRatings] = useState<Rating[]>([]);
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [askedQuestions, setAskedQuestions] = useState<AskedQuestion[]>([]);
   const [askedQuestionIds, setAskedQuestionIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +59,11 @@ export function useRoom(code: string): UseRoomState {
     async function doRefresh() {
       if (!roomId || cancelled) return;
       const mySeq = ++fetchSeq;
-      const [p, v, rt, r, aq] = await Promise.all([
+      const [p, v, rt, cq, r, aq] = await Promise.all([
         supabase.from("players").select("*").eq("room_id", roomId).order("joined_at"),
         supabase.from("votes").select("*").eq("room_id", roomId),
         supabase.from("ratings").select("*").eq("room_id", roomId),
+        supabase.from("custom_questions").select("*").eq("room_id", roomId).order("created_at"),
         supabase.from("rooms").select("*").eq("id", roomId).single(),
         supabase.from("asked_questions").select("*").eq("room_id", roomId),
       ]);
@@ -70,6 +73,7 @@ export function useRoom(code: string): UseRoomState {
       if (p.data) setPlayers(p.data as Player[]);
       if (v.data) setVotes(v.data as Vote[]);
       if (rt.data) setRatings(rt.data as Rating[]);
+      if (cq.data) setCustomQuestions(cq.data as CustomQuestion[]);
       if (r.data) setRoom(r.data as Room);
       if (aq.data) {
         const asked = aq.data as AskedQuestion[];
@@ -116,6 +120,10 @@ export function useRoom(code: string): UseRoomState {
           () => doRefresh()
         )
         .on("postgres_changes",
+          { event: "*", schema: "public", table: "custom_questions", filter: `room_id=eq.${r.id}` },
+          () => doRefresh()
+        )
+        .on("postgres_changes",
           { event: "*", schema: "public", table: "asked_questions", filter: `room_id=eq.${r.id}` },
           () => doRefresh()
         )
@@ -135,5 +143,5 @@ export function useRoom(code: string): UseRoomState {
     };
   }, [code]);
 
-  return { room, players, votes, ratings, askedQuestions, askedQuestionIds, loading, error, refresh };
+  return { room, players, votes, ratings, customQuestions, askedQuestions, askedQuestionIds, loading, error, refresh };
 }

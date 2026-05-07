@@ -11,6 +11,9 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 
 - 🎲 **Six jeux** : `Tu préfères`, `Qui de nous ?`, `Majorité`, `Minorité`, `Mime les expressions`, `Jauge`
 - 🧩 **Questions et expressions embarquées** avec thèmes/filtres par jeu
+- ✍️ **Questions écrites par les joueurs** sur tous les modes, avec mix intelligent garanti
+- 🔐 **Rôles Supabase Auth** : `player`, `trusted`, `admin`
+- 📚 **Bibliothèque de questions sauvegardées** + packs réservés aux rôles `trusted/admin`
 - ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
 - ▶️ **Lecture automatique** optionnelle pour enchaîner les questions
@@ -40,7 +43,13 @@ npm install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
-> Pour une base déjà installée, exécute plutôt [`supabase/jauge_migration.sql`](supabase/jauge_migration.sql).
+> Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql) pour la bibliothèque globale et les rôles.
+
+Pour autoriser un compte à gérer la bibliothèque, connecte-toi une première fois dans l'app, récupère l'UUID dans `auth.users`, puis exécute :
+
+```sql
+update public.profiles set role = 'trusted' where id = '<USER_UUID>';
+```
 
 ### 3. Configurer les variables d'environnement
 
@@ -88,6 +97,7 @@ gamenight/
 │   ├── page.tsx                  # Accueil (créer / rejoindre)
 │   ├── host/[code]/page.tsx      # Vue hôte (lobby + contrôle + révélation)
 │   ├── play/[code]/page.tsx      # Vue joueur (vote + résultats)
+│   ├── questions/page.tsx        # Bibliothèque trusted/admin
 │   ├── layout.tsx
 │   └── globals.css
 ├── components/
@@ -95,7 +105,9 @@ gamenight/
 │   └── jaugeMode.tsx             # UI de vote/reveal du mode Jauge
 ├── lib/
 │   ├── supabase.ts               # Client Supabase singleton
-│   ├── useRoom.ts                # Hook de synchro temps réel (rooms, players, votes, ratings, asked_questions)
+│   ├── useRoom.ts                # Hook de synchro temps réel
+│   ├── useProfile.ts             # Supabase Auth + rôle
+│   ├── useSavedQuestions.ts      # Bibliothèque personnelle
 │   ├── useCountdown.ts           # Compte à rebours basé sur un timestamp serveur
 │   ├── questions.ts              # Questions du jeu Qui pourrait ?
 │   ├── whoOfUsQuestions.ts       # Questions du jeu Qui de nous ?
@@ -105,6 +117,7 @@ gamenight/
 │   ├── mimeGame.ts               # Helpers d'ordre/tours du mode mime
 │   ├── endGameSummary.ts         # Moteur de stats sociales universelles
 │   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
+│   ├── questionPoolEngine.ts     # Mix système/live/sauvegardées
 │   └── utils.ts                  # Code de salle, client_id, durées
 ├── types/
 │   └── database.ts               # Types Supabase
@@ -127,14 +140,16 @@ gamenight/
 
 ## 🧠 Choix techniques
 
-- **Pas d'authentification** : un `client_id` est généré par navigateur et stocké dans `localStorage`. Suffisant pour un jeu de soirée éphémère.
+- **Identité de partie simple** : un `client_id` est généré par navigateur pour jouer sans friction.
+- **Auth pour la bibliothèque** : Supabase Auth sert uniquement aux rôles et aux opérations persistantes (`trusted/admin`) : sauvegarde, suppression, modération et packs.
 - **Source de vérité côté serveur** : les timers utilisent un timestamp `started_at` stocké en base. Le client recalcule juste l'affichage. Pas de désynchro entre joueurs.
 - **Realtime via Supabase** : on s'abonne aux changements des tables de jeu et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
+- **Moteur global de questions** : `questionPoolEngine` construit le plan de partie depuis les questions système, live et sauvegardées, avec déduplication et garantie d'insertion des questions joueurs en mix intelligent.
 - **État du mime partagé** : `rooms.mime_game_state` garde l'ordre, le mime courant, l'expression, le timer et la manche.
 - **État de Jauge partagé** : `rooms.jauge_game_state` garde l'ordre des cibles, la question active, l'anonymat, les questions joueurs et les options de manche. Les notes sont stockées dans `ratings`.
 - **Bilan modulaire** : `lib/endGameSummary.ts` calcule scoreboard, awards, moments rares et relations depuis les votes.
-- **RLS publique** : pour aller vite, les tables sont en lecture/écriture publique. À durcir pour un usage prod (par ex. exiger le code de la salle dans une RPC).
+- **RLS hybride** : les tables de salle restent ouvertes pour le jeu éphémère, mais la bibliothèque, les packs et la modération sont protégés côté SQL par rôles `trusted/admin`.
 
 ---
 
@@ -190,11 +205,21 @@ Le jeu sélectionne une question et un joueur cible. Tous les autres joueurs don
 
 Réglages hôte :
 - cible aléatoire, ordre automatique ou ordre personnalisé ;
-- questions aléatoires, ordre fixe ou questions écrites par les joueurs ;
+- questions système, questions joueurs live, questions sauvegardées, ou mix intelligent ;
 - votes visibles, anonymes pendant la partie, reveal final des auteurs, ou anonymat permanent ;
 - mode auto-jauge et mode brutal.
 
 Le bilan de soirée de Jauge calcule les meilleures moyennes, le joueur le plus controversé, les juges généreux/sévères, les notes extrêmes et les relations de notes.
+
+### Questions joueurs globales
+
+Tous les jeux peuvent maintenant utiliser trois sources :
+
+- **Système uniquement** : questions embarquées du jeu.
+- **Joueurs uniquement** : questions écrites dans la room.
+- **Mix intelligent** : les questions joueurs et sauvegardées activées sont injectées en priorité, puis les questions système complètent la partie.
+
+Exemple : pour une partie de 25 questions avec 15 questions joueurs disponibles, les 15 sont garanties dans le plan, puis 10 questions système complètent le reste avant un shuffle final.
 
 ---
 

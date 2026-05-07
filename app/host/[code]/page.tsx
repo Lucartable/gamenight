@@ -19,8 +19,20 @@ import {
   getGameDefinition,
   getQuestionForGame,
   getQuestionsForGame,
-  pickRandomQuestionForGame,
 } from "@/lib/gameQuestions";
+import { useProfile } from "@/lib/useProfile";
+import { useSavedQuestions } from "@/lib/useSavedQuestions";
+import {
+  buildQuestionPlan,
+  generateLocalQuestionId,
+  getQuestionSourceSettings,
+  getQuestionTextForSave,
+  makeQuestionSnapshot,
+  pickNextQuestionFromPlan,
+  questionFromSnapshot,
+  questionToSavedPayload,
+  type QuestionPoolItem,
+} from "@/lib/questionPoolEngine";
 import {
   buildMimeGameState,
   findNextMimeIndex,
@@ -82,6 +94,7 @@ import type {
   JaugeQuestionMode,
   JaugeTargetMode,
   Player,
+  QuestionSourceSettings,
   Rating,
   Room,
   Vote,
@@ -102,6 +115,8 @@ type RoomConfigPatch = Partial<
     | "scoreboard_frequency"
     | "score_target"
     | "round_question_ids"
+    | "question_source_settings"
+    | "current_question_snapshot"
     | "mime_game_state"
     | "jauge_game_state"
   >
@@ -122,7 +137,9 @@ export default function HostPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, ratings, askedQuestions, loading, error, refresh } = useRoom(code);
+  const { room, players, votes, ratings, customQuestions, askedQuestions, loading, error, refresh } = useRoom(code);
+  const profileState = useProfile();
+  const { savedQuestions, refresh: refreshSavedQuestions } = useSavedQuestions(room?.game_type, profileState.canManageQuestions);
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -147,6 +164,7 @@ export default function HostPage() {
   const [jaugeBrutalMode, setJaugeBrutalMode] = useState(false);
   const [jaugeAutoJaugeMode, setJaugeAutoJaugeMode] = useState(false);
   const [jaugeAllowPlayerQuestions, setJaugeAllowPlayerQuestions] = useState(false);
+  const [savingQuestion, setSavingQuestion] = useState(false);
   const transitionRef = useRef(false);
 
   useEffect(() => {
@@ -170,7 +188,18 @@ export default function HostPage() {
     [room]
   );
   const gameDefinition = getGameDefinition(gameType);
-  const currentQ = getQuestionForGame(gameType, room?.current_question_id);
+  const questionSourceSettings = useMemo(
+    () => getQuestionSourceSettings(room?.question_source_settings),
+    [room?.question_source_settings]
+  );
+  const currentSnapshotQuestion = useMemo(
+    () => {
+      const snapshot = questionFromSnapshot(room?.current_question_snapshot);
+      return snapshot && snapshot.id === room?.current_question_id && snapshot.gameType === gameType ? snapshot : undefined;
+    },
+    [gameType, room?.current_question_id, room?.current_question_snapshot]
+  );
+  const currentQ = currentSnapshotQuestion ?? getQuestionForGame(gameType, room?.current_question_id);
   const totalQuestions = room?.total_questions ?? DEFAULT_TOTAL_QUESTIONS;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
@@ -220,6 +249,31 @@ export default function HostPage() {
   );
   const allJaugeRatingsSubmitted =
     requiredJaugeVoters.length > 0 && submittedJaugeCount >= requiredJaugeVoters.length;
+  const jaugeExternalQuestions = useMemo(
+    () =>
+      buildQuestionPlan({
+        gameType: "jauge",
+        selectedCategories,
+        totalQuestions,
+        excludeIds: [],
+        liveQuestions: customQuestions,
+        savedQuestions,
+        settings: {
+          ...questionSourceSettings,
+          mode: questionSourceSettings.mode === "system_only" ? "players_only" : questionSourceSettings.mode,
+          useSystemQuestions: false,
+        },
+      })
+        .filter((question) => question.gameType === "jauge")
+        .map((question) => ({
+          id: question.id,
+          text: question.text,
+          authorPlayerId: question.authorPlayerId ?? question.savedQuestionId ?? "saved",
+          category: question.category,
+          source: question.source === "saved" ? "saved" as const : "live" as const,
+        })),
+    [customQuestions, questionSourceSettings, savedQuestions, selectedCategories, totalQuestions]
+  );
 
   useEffect(() => {
     if (!mimeMode || room?.status !== "lobby") return;
@@ -281,12 +335,23 @@ export default function HostPage() {
 
   const filteredAvailable = useMemo(() => {
     if (!gameType) return [];
-    return getQuestionsForGame(gameType).filter(
-      (question) =>
-        selectedCategories.includes(question.category) &&
-        !blockedQuestionIds.includes(question.id)
-    );
-  }, [gameType, selectedCategories, blockedQuestionIds]);
+    if (gameType === "mime_expressions") {
+      return getQuestionsForGame(gameType).filter(
+        (question) =>
+          selectedCategories.includes(question.category) &&
+          !blockedQuestionIds.includes(question.id)
+      );
+    }
+    return buildQuestionPlan({
+      gameType,
+      selectedCategories,
+      totalQuestions,
+      excludeIds: blockedQuestionIds,
+      liveQuestions: customQuestions,
+      savedQuestions,
+      settings: questionSourceSettings,
+    });
+  }, [blockedQuestionIds, customQuestions, gameType, questionSourceSettings, savedQuestions, selectedCategories, totalQuestions]);
 
   const submittedVotesCount = useMemo(
     () => countSubmittedVotes(gameType, players, currentVotes),
@@ -470,6 +535,8 @@ export default function HostPage() {
       selected_categories: getDefaultCategories(nextGameType),
       current_question_id: null,
       round_question_ids: [],
+      current_question_snapshot: null,
+      question_source_settings: getQuestionSourceSettings(null),
       mime_game_state: null,
       jauge_game_state: null,
     });
@@ -481,6 +548,7 @@ export default function HostPage() {
       selected_categories: [],
       current_question_id: null,
       round_question_ids: [],
+      current_question_snapshot: null,
       mime_game_state: null,
       jauge_game_state: null,
     });
@@ -499,7 +567,7 @@ export default function HostPage() {
     void updateConfig({ total_questions: next });
   }
 
-  async function askQuestion(question: GameQuestion) {
+  async function askQuestion(question: GameQuestion | QuestionPoolItem) {
     if (!room || !gameType) return;
     await runTransition(async () => {
       const supabase = getSupabase();
@@ -516,6 +584,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: question.id,
+          current_question_snapshot: makeQuestionSnapshot(question),
           round_question_ids: addUniqueId(room.round_question_ids ?? [], question.id),
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
@@ -541,7 +610,17 @@ export default function HostPage() {
       await finishGame(false);
       return;
     }
-    const question = pickRandomQuestionForGame(gameType, selectedCategories, blockedQuestionIds);
+    const question = pickNextQuestionFromPlan(
+      buildQuestionPlan({
+        gameType,
+        selectedCategories,
+        totalQuestions,
+        excludeIds: blockedQuestionIds,
+        liveQuestions: customQuestions,
+        savedQuestions,
+        settings: questionSourceSettings,
+      })
+    );
     if (!question) {
       await finishGame(false);
       return;
@@ -556,7 +635,11 @@ export default function HostPage() {
       setActionError("Il faut au moins 2 joueurs pour lancer Jauge.");
       return;
     }
-    const playerQuestions = jaugeAllowPlayerQuestions ? jaugeGameState?.playerQuestions ?? [] : [];
+    const customSourcesEnabled =
+      jaugeAllowPlayerQuestions || questionSourceSettings.useLiveQuestions || questionSourceSettings.useSavedQuestions;
+    const playerQuestions = customSourcesEnabled
+      ? dedupeJaugePlayerQuestions([...(jaugeGameState?.playerQuestions ?? []), ...jaugeExternalQuestions])
+      : [];
     if (jaugeQuestionMode === "players" && playerQuestions.length === 0) {
       setActionError("Ajoute au moins une question joueur ou repasse en questions aléatoires.");
       return;
@@ -573,6 +656,7 @@ export default function HostPage() {
       allowPlayerQuestions: jaugeAllowPlayerQuestions,
       playerQuestions,
       usedQuestionIds: uniqueIds([...askedForGameIds, ...roundQuestionIds]),
+      totalQuestions,
     });
     if (!picked) {
       setActionError("Aucune question Jauge disponible avec cette configuration.");
@@ -594,6 +678,14 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: picked.question.id,
+          current_question_snapshot: makeQuestionSnapshot({
+            id: picked.question.id,
+            gameType: "jauge",
+            category: picked.question.category as never,
+            text: picked.question.text,
+            source: picked.question.source ?? (picked.question.playerQuestion ? "live" : "system"),
+            authorPlayerId: picked.question.authorPlayerId ?? null,
+          } as QuestionPoolItem),
           round_question_ids: [picked.question.id],
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
@@ -643,6 +735,14 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: picked.question.id,
+          current_question_snapshot: makeQuestionSnapshot({
+            id: picked.question.id,
+            gameType: "jauge",
+            category: picked.question.category as never,
+            text: picked.question.text,
+            source: picked.question.source ?? (picked.question.playerQuestion ? "live" : "system"),
+            authorPlayerId: picked.question.authorPlayerId ?? null,
+          } as QuestionPoolItem),
           round_question_ids: addUniqueId(roundQuestionIds, picked.question.id),
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
@@ -682,6 +782,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: expression.id,
+          current_question_snapshot: makeQuestionSnapshot(expression),
           round_question_ids: [expression.id],
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
@@ -758,6 +859,7 @@ export default function HostPage() {
         .update({
           status: "question_active",
           current_question_id: expression.id,
+          current_question_snapshot: makeQuestionSnapshot(expression),
           round_question_ids: addUniqueId(roundQuestionIds, expression.id),
           question_started_at: new Date().toISOString(),
           reveal_started_at: null,
@@ -906,6 +1008,7 @@ export default function HostPage() {
         .update({
           status: "lobby",
           current_question_id: null,
+          current_question_snapshot: null,
           round_question_ids: [],
           question_started_at: null,
           reveal_started_at: null,
@@ -954,6 +1057,7 @@ export default function HostPage() {
         .update({
           status: "lobby",
           current_question_id: null,
+          current_question_snapshot: null,
           round_question_ids: [],
           question_started_at: null,
           reveal_started_at: null,
@@ -975,6 +1079,7 @@ export default function HostPage() {
         .update({
           status: "ended",
           current_question_id: null,
+          current_question_snapshot: null,
           round_question_ids: [],
           question_started_at: null,
           reveal_started_at: null,
@@ -1081,6 +1186,33 @@ export default function HostPage() {
       setOptimisticHostRating(null);
     } finally {
       setHostSubmitting(false);
+    }
+  }
+
+  async function saveCurrentQuestion() {
+    if (!room || !gameType || !currentQ || !profileState.userId || !profileState.canManageQuestions || savingQuestion) return;
+    setSavingQuestion(true);
+    setActionError(null);
+    try {
+      const { error } = await getSupabase()
+        .from("saved_custom_questions")
+        .insert({
+          host_user_id: profileState.userId,
+          game_type: gameType,
+          local_question_id: generateLocalQuestionId("saved"),
+          question_text: getQuestionTextForSave(currentQ),
+          category: currentQ.category,
+          payload: questionToSavedPayload(currentQ),
+          source_game: gameType,
+          original_author_id: currentSnapshotQuestion?.authorPlayerId ?? null,
+          original_room_id: room.id,
+        });
+      if (error) throw error;
+      await refreshSavedQuestions();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de sauvegarder cette question.");
+    } finally {
+      setSavingQuestion(false);
     }
   }
 
@@ -1232,6 +1364,14 @@ export default function HostPage() {
           onQuestionModeChange={(mode) => {
             setJaugeQuestionMode(mode);
             patchJaugeLobbyState({ questionMode: mode });
+            void updateConfig({
+              question_source_settings: {
+                ...questionSourceSettings,
+                mode: mode === "fixed" ? "system_only" : mode === "players" ? "players_only" : "smart_mix",
+                useSystemQuestions: mode !== "players",
+                useLiveQuestions: mode !== "fixed" && jaugeAllowPlayerQuestions,
+              },
+            });
           }}
           onAnonymityModeChange={(mode) => {
             setJaugeAnonymityMode(mode);
@@ -1252,11 +1392,23 @@ export default function HostPage() {
           onAllowPlayerQuestionsChange={(value) => {
             setJaugeAllowPlayerQuestions(value);
             patchJaugeLobbyState({ allowPlayerQuestions: value });
+            void updateConfig({
+              question_source_settings: {
+                ...questionSourceSettings,
+                mode: value && jaugeQuestionMode === "random" ? "smart_mix" : questionSourceSettings.mode,
+                useLiveQuestions: value,
+              },
+            });
           }}
           onCustomQuestionCountChange={setCustomQuestionCount}
           onCommitCustomQuestionCount={commitCustomQuestionCount}
           onToggleCategory={toggleCategory}
           onUpdateConfig={updateConfig}
+          questionSourceSettings={questionSourceSettings}
+          canUseSavedQuestions={profileState.canManageQuestions}
+          savedQuestionCount={savedQuestions.length}
+          liveQuestionCount={customQuestions.filter((question) => question.game_type === gameType).length}
+          onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
           onStart={() => void startJaugeGame(jaugeLobbyOrder)}
           onChangeGame={changeGame}
         />
@@ -1277,6 +1429,11 @@ export default function HostPage() {
           onCommitCustomQuestionCount={commitCustomQuestionCount}
           onToggleCategory={toggleCategory}
           onUpdateConfig={updateConfig}
+          questionSourceSettings={questionSourceSettings}
+          canUseSavedQuestions={profileState.canManageQuestions}
+          savedQuestionCount={savedQuestions.length}
+          liveQuestionCount={customQuestions.filter((question) => question.game_type === gameType).length}
+          onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
           onStart={goToNextQuestion}
           onChangeGame={changeGame}
         />
@@ -1472,6 +1629,20 @@ export default function HostPage() {
         />
       )}
 
+      {room.status === "reveal_results" && currentQ && profileState.canManageQuestions && (
+        <section className="card mt-4 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Bibliothèque</div>
+              <div className="text-sm font-semibold text-white/60">Sauvegarde cette question pour la rejouer plus tard.</div>
+            </div>
+            <button type="button" disabled={savingQuestion} onClick={saveCurrentQuestion} className="btn-secondary">
+              {savingQuestion ? "Sauvegarde..." : "Sauvegarder cette question"}
+            </button>
+          </div>
+        </section>
+      )}
+
       {room.status === "scoreboard" && predictionMode && (
         <PredictionScoreboardPanel
           mode={predictionMode}
@@ -1624,6 +1795,11 @@ function LobbyView({
   onCommitCustomQuestionCount,
   onToggleCategory,
   onUpdateConfig,
+  questionSourceSettings,
+  canUseSavedQuestions,
+  savedQuestionCount,
+  liveQuestionCount,
+  onQuestionSourceSettingsChange,
   onStart,
   onChangeGame,
 }: {
@@ -1640,6 +1816,11 @@ function LobbyView({
   onCommitCustomQuestionCount: () => void;
   onToggleCategory: (category: GameCategory) => void;
   onUpdateConfig: (patch: RoomConfigPatch) => void;
+  questionSourceSettings: QuestionSourceSettings;
+  canUseSavedQuestions: boolean;
+  savedQuestionCount: number;
+  liveQuestionCount: number;
+  onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
   onStart: () => void;
   onChangeGame: () => void;
 }) {
@@ -1660,6 +1841,14 @@ function LobbyView({
           </button>
         </div>
       </section>
+
+      <QuestionSourcePanel
+        settings={questionSourceSettings}
+        canUseSavedQuestions={canUseSavedQuestions}
+        savedQuestionCount={savedQuestionCount}
+        liveQuestionCount={liveQuestionCount}
+        onChange={onQuestionSourceSettingsChange}
+      />
 
       <section className="card mb-4 p-5">
         <h2 className="mb-3 text-lg font-bold">Joueurs connectés</h2>
@@ -1889,6 +2078,11 @@ function JaugeLobbyView({
   onCommitCustomQuestionCount,
   onToggleCategory,
   onUpdateConfig,
+  questionSourceSettings,
+  canUseSavedQuestions,
+  savedQuestionCount,
+  liveQuestionCount,
+  onQuestionSourceSettingsChange,
   onStart,
   onChangeGame,
 }: {
@@ -1919,6 +2113,11 @@ function JaugeLobbyView({
   onCommitCustomQuestionCount: () => void;
   onToggleCategory: (category: GameCategory) => void;
   onUpdateConfig: (patch: RoomConfigPatch) => void;
+  questionSourceSettings: QuestionSourceSettings;
+  canUseSavedQuestions: boolean;
+  savedQuestionCount: number;
+  liveQuestionCount: number;
+  onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
   onStart: () => void;
   onChangeGame: () => void;
 }) {
@@ -1926,8 +2125,10 @@ function JaugeLobbyView({
   const enoughPlayers = players.length >= 2;
   const orderedPlayers = getOrderedPlayers(finalOrder, players);
   const customPlayers = getOrderedPlayers(mergePlayerOrder(customOrder, players), players);
-  const playerQuestionCount = room.jauge_game_state?.playerQuestions?.length ?? 0;
-  const hasQuestions = questionMode === "players" ? playerQuestionCount > 0 : availableCount > 0;
+  const playerQuestionCount = liveQuestionCount + (room.jauge_game_state?.playerQuestions?.length ?? 0);
+  const customSourceCount =
+    playerQuestionCount + (questionSourceSettings.useSavedQuestions && canUseSavedQuestions ? savedQuestionCount : 0);
+  const hasQuestions = questionMode === "players" ? customSourceCount > 0 : availableCount > 0;
   const canStart = enoughPlayers && finalOrder.length >= 2 && hasQuestions && !busy;
 
   return (
@@ -2031,6 +2232,14 @@ function JaugeLobbyView({
           <span className={room.autoplay ? "text-neon-cyan" : "text-white/50"}>{room.autoplay ? "ON" : "OFF"}</span>
         </button>
       </section>
+
+      <QuestionSourcePanel
+        settings={questionSourceSettings}
+        canUseSavedQuestions={canUseSavedQuestions}
+        savedQuestionCount={savedQuestionCount}
+        liveQuestionCount={playerQuestionCount}
+        onChange={onQuestionSourceSettingsChange}
+      />
 
       <section className="card mb-4 p-5">
         <h2 className="mb-4 text-lg font-bold">Cible à noter</h2>
@@ -2529,6 +2738,103 @@ function OrderModeButton({
     >
       <div className="font-black">{title}</div>
       <div className="mt-1 text-xs text-white/50">{subtitle}</div>
+    </button>
+  );
+}
+
+function QuestionSourcePanel({
+  settings,
+  canUseSavedQuestions,
+  savedQuestionCount,
+  liveQuestionCount,
+  onChange,
+}: {
+  settings: QuestionSourceSettings;
+  canUseSavedQuestions: boolean;
+  savedQuestionCount: number;
+  liveQuestionCount: number;
+  onChange: (settings: QuestionSourceSettings) => void;
+}) {
+  const patch = (next: Partial<QuestionSourceSettings>) => onChange({ ...settings, ...next });
+  return (
+    <section className="card mb-4 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Moteur de questions</div>
+          <h2 className="text-xl font-black">Sources et mix intelligent</h2>
+        </div>
+        {canUseSavedQuestions && <a href="/questions" className="btn-ghost text-neon-cyan">Bibliothèque</a>}
+      </div>
+
+      <ConfigGroup label="Mode">
+        <ConfigButton active={settings.mode === "system_only"} disabled={false} onClick={() => patch({ mode: "system_only", useSystemQuestions: true, useLiveQuestions: false, useSavedQuestions: false })}>
+          Système uniquement
+        </ConfigButton>
+        <ConfigButton active={settings.mode === "players_only"} disabled={false} onClick={() => patch({ mode: "players_only", useSystemQuestions: false, useLiveQuestions: true })}>
+          Joueurs uniquement
+        </ConfigButton>
+        <ConfigButton active={settings.mode === "smart_mix"} disabled={false} onClick={() => patch({ mode: "smart_mix", useSystemQuestions: true, useLiveQuestions: true })}>
+          Mix intelligent
+        </ConfigButton>
+      </ConfigGroup>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <SourceToggle active={settings.useSystemQuestions} label="Questions système" detail="Base Badaboum" onClick={() => patch({ useSystemQuestions: !settings.useSystemQuestions })} />
+        <SourceToggle active={settings.useLiveQuestions} label="Questions live" detail={`${liveQuestionCount} proposée${liveQuestionCount > 1 ? "s" : ""}`} onClick={() => patch({ useLiveQuestions: !settings.useLiveQuestions })} />
+        <SourceToggle
+          active={settings.useSavedQuestions}
+          label="Sauvegardées"
+          detail={canUseSavedQuestions ? `${savedQuestionCount} dispo` : "Trusted/admin"}
+          disabled={!canUseSavedQuestions}
+          onClick={() => patch({ useSavedQuestions: !settings.useSavedQuestions })}
+        />
+      </div>
+
+      <ConfigGroup label="Auteurs">
+        <ConfigButton active={settings.authorVisibility === "hidden"} disabled={false} onClick={() => patch({ authorVisibility: "hidden" })}>Anonyme</ConfigButton>
+        <ConfigButton active={settings.authorVisibility === "final_reveal"} disabled={false} onClick={() => patch({ authorVisibility: "final_reveal" })}>Reveal final</ConfigButton>
+        <ConfigButton active={settings.authorVisibility === "visible"} disabled={false} onClick={() => patch({ authorVisibility: "visible" })}>Visible</ConfigButton>
+      </ConfigGroup>
+
+      <ConfigGroup label="Par joueur">
+        {[1, 2, 3, 5, 10].map((count) => (
+          <ConfigButton key={count} active={settings.maxQuestionsPerPlayer === count} disabled={false} onClick={() => patch({ maxQuestionsPerPlayer: count })}>
+            {count}
+          </ConfigButton>
+        ))}
+      </ConfigGroup>
+
+      <p className="mt-3 text-sm font-semibold text-white/55">
+        En mix intelligent, les questions live/sauvegardées sont injectées en priorité, puis les questions système complètent les manches restantes.
+      </p>
+    </section>
+  );
+}
+
+function SourceToggle({
+  active,
+  label,
+  detail,
+  disabled = false,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  detail: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition-transform duration-200 will-change-transform active:scale-[0.98] disabled:opacity-40 ${
+        active ? "border-neon-green/50 bg-neon-green/10" : "border-white/10 bg-white/5 text-white/70"
+      }`}
+    >
+      <div className="font-black">{label}</div>
+      <div className="mt-1 text-xs text-white/50">{detail}</div>
     </button>
   );
 }
@@ -3437,6 +3743,17 @@ function getJaugeLobbyOrder(
   if (mode === "custom") return mergePlayerOrder(customOrder, players);
   const arrivalOrder = getArrivalOrder(players);
   return randomOrder.length ? mergePlayerOrder(randomOrder, players) : shuffleJaugeIds(arrivalOrder);
+}
+
+function dedupeJaugePlayerQuestions(questions: NonNullable<Room["jauge_game_state"]>["playerQuestions"]) {
+  const seen = new Set<number>();
+  const output: NonNullable<Room["jauge_game_state"]>["playerQuestions"] = [];
+  for (const question of questions) {
+    if (seen.has(question.id)) continue;
+    seen.add(question.id);
+    output.push(question);
+  }
+  return output;
 }
 
 function getWhoWouldStats(players: Player[], votes: Vote[]): WhoWouldStats {

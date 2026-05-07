@@ -18,6 +18,7 @@ export interface JaugeRoundQuestion {
   category: string;
   playerQuestion?: boolean;
   authorPlayerId?: string;
+  source?: "system" | "live" | "saved";
 }
 
 export interface JaugeResultRow {
@@ -98,6 +99,7 @@ export function buildInitialJaugeState({
   allowPlayerQuestions,
   playerQuestions,
   usedQuestionIds,
+  totalQuestions,
 }: {
   players: Player[];
   selectedCategories: string[];
@@ -110,10 +112,11 @@ export function buildInitialJaugeState({
   allowPlayerQuestions: boolean;
   playerQuestions: JaugePlayerQuestion[];
   usedQuestionIds: number[];
+  totalQuestions: number;
 }): { state: JaugeGameState; question: JaugeRoundQuestion } | null {
   const order = buildTargetOrder(players, targetMode, targetOrder, null);
   const target = order[0];
-  const questionOrder = buildQuestionOrder(selectedCategories, questionMode, playerQuestions, usedQuestionIds);
+  const questionOrder = buildQuestionOrder(selectedCategories, questionMode, playerQuestions, usedQuestionIds, totalQuestions);
   const question = pickJaugeQuestion({
     selectedCategories,
     questionMode,
@@ -166,7 +169,7 @@ export function buildNextJaugeState({
   const usedQuestionIds = uniqueIds([...previous.usedQuestionIds, ...extraUsedQuestionIds]);
   const questionOrder = previous.questionOrder.length
     ? previous.questionOrder
-    : buildQuestionOrder(selectedCategories, previous.questionMode, previous.playerQuestions, usedQuestionIds);
+    : buildQuestionOrder(selectedCategories, previous.questionMode, previous.playerQuestions, usedQuestionIds, 400);
   const question = pickJaugeQuestion({
     selectedCategories,
     questionMode: previous.questionMode,
@@ -286,6 +289,7 @@ export function addJaugePlayerQuestion(state: JaugeGameState | null, text: strin
     text: clean,
     authorPlayerId,
     category: "joueurs",
+    source: "live",
   };
 }
 
@@ -316,11 +320,20 @@ function buildQuestionOrder(
   selectedCategories: string[],
   questionMode: JaugeQuestionMode,
   playerQuestions: JaugePlayerQuestion[],
-  usedQuestionIds: number[]
+  usedQuestionIds: number[],
+  totalQuestions: number
 ): number[] {
-  const pool = getJaugeQuestionPool(selectedCategories, questionMode, playerQuestions, usedQuestionIds);
-  const ids = pool.map((question) => question.id);
-  return questionMode === "fixed" || questionMode === "players" ? ids : shuffleIds(ids);
+  const systemPool = getJaugeQuestionPool(selectedCategories, "fixed", [], usedQuestionIds);
+  const playerPool = getJaugeQuestionPool(selectedCategories, "players", playerQuestions, usedQuestionIds);
+  if (questionMode === "players") return shuffleIds(playerPool.map((question) => question.id)).slice(0, totalQuestions);
+  if (questionMode === "fixed") return systemPool.map((question) => question.id).slice(0, totalQuestions);
+
+  const requiredPlayers = shuffleIds(playerPool.map((question) => question.id)).slice(0, totalQuestions);
+  const systemFill = shuffleIds(systemPool.map((question) => question.id)).slice(
+    0,
+    Math.max(0, totalQuestions - requiredPlayers.length)
+  );
+  return shuffleIds([...requiredPlayers, ...systemFill]).slice(0, totalQuestions);
 }
 
 function pickJaugeQuestion({
@@ -370,8 +383,15 @@ function getJaugeQuestionPool(
       id: question.id,
       text: question.text,
       category: question.category,
+      source: "system" as const,
     }));
-  return questionMode === "random" ? [...builtin, ...playerQuestions.filter((question) => !used.has(question.id))] : builtin;
+  if (questionMode === "random") {
+    const players = playerQuestions
+      .filter((question) => !used.has(question.id))
+      .map((question) => ({ ...question, playerQuestion: true }));
+    return [...players, ...builtin];
+  }
+  return builtin;
 }
 
 function buildJaugeComment(average: number, spread: number): string {
@@ -415,6 +435,7 @@ function normalizePlayerQuestion(value: unknown): JaugePlayerQuestion | null {
     text,
     authorPlayerId,
     category: typeof raw.category === "string" ? raw.category : "joueurs",
+    source: raw.source === "saved" ? "saved" : "live",
   };
 }
 

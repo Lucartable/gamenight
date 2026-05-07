@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
@@ -17,6 +18,7 @@ const GAME_TEASERS = [
   { title: "Majorité", detail: "Lis le groupe, marque des points.", tag: "Mindgame" },
   { title: "Minorité", detail: "Sois rare, mais pas seul dans le vide.", tag: "Chaos" },
   { title: "Mime les expressions", detail: "Un ordre auto, des grands gestes.", tag: "Show" },
+  { title: "Jauge", detail: "Note un joueur de 1 à 10.", tag: "Rate" },
 ];
 
 export default function HomePage() {
@@ -145,6 +147,10 @@ export default function HomePage() {
                 <span>Rejoindre</span>
                 <span className="home-action-key">CODE</span>
               </button>
+              <Link href="/questions" className="home-secondary-action mt-3 w-full">
+                <span>Bibliothèque</span>
+                <span className="home-action-key">TRUSTED</span>
+              </Link>
             </section>
 
             <section className="mt-5">
