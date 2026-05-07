@@ -11,6 +11,7 @@ interface UseProfileState {
   canManageQuestions: boolean;
   loading: boolean;
   signInWithEmail: (email: string) => Promise<string | null>;
+  signInWithPassword: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -61,6 +62,15 @@ export function useProfile(): UseProfileState {
     return error?.message ?? null;
   }, []);
 
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const clean = email.trim().toLowerCase();
+    if (!clean) return "Entre un email.";
+    if (!password) return "Entre ton mot de passe.";
+    const { error } = await getSupabase().auth.signInWithPassword({ email: clean, password });
+    if (!error) await refresh();
+    return error?.message ?? null;
+  }, [refresh]);
+
   const signOut = useCallback(async () => {
     await getSupabase().auth.signOut();
     setUserId(null);
@@ -68,7 +78,7 @@ export function useProfile(): UseProfileState {
   }, []);
 
   return useMemo(
-    () => ({ userId, profile, role, canManageQuestions, loading, signInWithEmail, signOut, refresh }),
-    [canManageQuestions, loading, profile, refresh, role, signInWithEmail, signOut, userId]
+    () => ({ userId, profile, role, canManageQuestions, loading, signInWithEmail, signInWithPassword, signOut, refresh }),
+    [canManageQuestions, loading, profile, refresh, role, signInWithEmail, signInWithPassword, signOut, userId]
   );
 }

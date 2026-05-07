@@ -297,11 +297,14 @@ function MiniStat({ label, value, hot = false }: { label: string; value: number 
 }
 
 function PlayerAvatar({ player, size = "md" }: { player: Player | null; size?: "md" | "xl" }) {
-  const initial = player?.name?.trim()?.[0]?.toUpperCase() ?? "?";
+  const label = player?.avatar || player?.name?.trim()?.[0]?.toUpperCase() || "?";
   const sizeClass = size === "xl" ? "h-24 w-24 text-5xl" : "h-11 w-11 text-xl";
   return (
-    <div className={`mx-auto flex shrink-0 items-center justify-center rounded-[1.4rem] border border-white/15 bg-gradient-to-br from-neon-cyan/25 to-neon-pink/25 font-black shadow-glow-cyan ${sizeClass}`}>
-      {initial}
+    <div
+      className={`mx-auto flex shrink-0 items-center justify-center rounded-[1.4rem] border border-white/15 font-black text-white shadow-glow-cyan ${sizeClass}`}
+      style={{ background: player?.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.68))` : undefined }}
+    >
+      {label}
     </div>
   );
 }

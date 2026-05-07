@@ -400,10 +400,10 @@ function PlayerAvatar({ player, size = "md" }: { player: Player; size?: "sm" | "
   return (
     <span
       className={`inline-flex shrink-0 items-center justify-center rounded-2xl font-black text-white shadow-lg ${dimension}`}
-      style={{ background: getPlayerGradient(player.id) }}
+      style={{ background: player.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.72))` : getPlayerGradient(player.id) }}
       aria-hidden="true"
     >
-      {player.name.slice(0, 1).toUpperCase()}
+      {player.avatar || player.name.slice(0, 1).toUpperCase()}
     </span>
   );
 }

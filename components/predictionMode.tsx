@@ -592,7 +592,7 @@ function PodiumBlock({
 }
 
 function AvatarBubble({ player, size = "md" }: { player: Player; size?: "sm" | "md" }) {
-  const color = getPlayerGradient(player.id);
+  const color = player.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.72))` : getPlayerGradient(player.id);
   const dimension = size === "sm" ? "h-5 w-5 text-[10px]" : "h-12 w-12 text-lg";
   return (
     <span
@@ -600,7 +600,7 @@ function AvatarBubble({ player, size = "md" }: { player: Player; size?: "sm" | "
       style={{ background: color }}
       aria-hidden="true"
     >
-      {player.name.slice(0, 1).toUpperCase()}
+      {player.avatar || player.name.slice(0, 1).toUpperCase()}
     </span>
   );
 }

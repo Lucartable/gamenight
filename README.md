@@ -12,7 +12,8 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 - 🎲 **Six jeux** : `Tu préfères`, `Qui de nous ?`, `Majorité`, `Minorité`, `Mime les expressions`, `Jauge`
 - 🧩 **Questions et expressions embarquées** avec thèmes/filtres par jeu
 - ✍️ **Questions écrites par les joueurs** sur tous les modes, avec mix intelligent garanti
-- 🔐 **Rôles Supabase Auth** : `player`, `trusted`, `admin`
+- ⚡ **Mode invité sans compte** : pseudo, avatar/couleur, création ou rejoindre une room instantanément
+- 🔐 **Connexion admin/trusted séparée** avec Supabase Auth : `player`, `trusted`, `admin`
 - 📚 **Bibliothèque de questions sauvegardées** + packs réservés aux rôles `trusted/admin`
 - ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
@@ -43,7 +44,7 @@ npm install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
-> Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql) pour la bibliothèque globale et les rôles.
+> Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql) et [`supabase/guest_auth_refactor_migration.sql`](supabase/guest_auth_refactor_migration.sql).
 
 Pour autoriser un compte à gérer la bibliothèque, connecte-toi une première fois dans l'app, récupère l'UUID dans `auth.users`, puis exécute :
 
@@ -76,8 +77,8 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 
 ## 🎮 Comment jouer
 
-1. **L'hôte** clique sur *Créer une salle* → reçoit un code (ex : `LOUP-42`).
-2. **Les joueurs** ouvrent le site sur leur téléphone, cliquent sur *Rejoindre une salle*, entrent le code et leur prénom.
+1. **L'hôte** clique sur *Jouer en invité*, choisit son pseudo/couleur, puis *Créer une salle* → reçoit un code (ex : `LOUP-42`).
+2. **Les joueurs** ouvrent le site sur leur téléphone, cliquent sur *Jouer en invité*, entrent le code et jouent sans compte.
 3. L'hôte choisit un jeu.
 4. L'hôte configure le nombre de questions/manches, les durées, la lecture automatique quand elle existe, et les thèmes.
 5. L'hôte clique sur **Lancer la partie** → une question aléatoire compatible démarre.
@@ -105,6 +106,7 @@ gamenight/
 │   └── jaugeMode.tsx             # UI de vote/reveal du mode Jauge
 ├── lib/
 │   ├── supabase.ts               # Client Supabase singleton
+│   ├── guestSession.ts           # Session invité locale : guest_id, pseudo, avatar/couleur
 │   ├── useRoom.ts                # Hook de synchro temps réel
 │   ├── useProfile.ts             # Supabase Auth + rôle
 │   ├── useSavedQuestions.ts      # Bibliothèque personnelle
@@ -140,8 +142,8 @@ gamenight/
 
 ## 🧠 Choix techniques
 
-- **Identité de partie simple** : un `client_id` est généré par navigateur pour jouer sans friction.
-- **Auth pour la bibliothèque** : Supabase Auth sert uniquement aux rôles et aux opérations persistantes (`trusted/admin`) : sauvegarde, suppression, modération et packs.
+- **Invités par défaut** : un `guest_id` est généré par navigateur et stocké localement avec pseudo/avatar/couleur. Il est réutilisé comme `client_id` pour rester compatible avec les rooms existantes.
+- **Auth réservée aux outils avancés** : Supabase Auth sert aux rôles et aux opérations persistantes (`trusted/admin`) : sauvegarde, suppression, modération, analytics et packs.
 - **Source de vérité côté serveur** : les timers utilisent un timestamp `started_at` stocké en base. Le client recalcule juste l'affichage. Pas de désynchro entre joueurs.
 - **Realtime via Supabase** : on s'abonne aux changements des tables de jeu et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
@@ -150,6 +152,7 @@ gamenight/
 - **État de Jauge partagé** : `rooms.jauge_game_state` garde l'ordre des cibles, la question active, l'anonymat, les questions joueurs et les options de manche. Les notes sont stockées dans `ratings`.
 - **Bilan modulaire** : `lib/endGameSummary.ts` calcule scoreboard, awards, moments rares et relations depuis les votes.
 - **RLS hybride** : les tables de salle restent ouvertes pour le jeu éphémère, mais la bibliothèque, les packs et la modération sont protégés côté SQL par rôles `trusted/admin`.
+- **Anti-spam léger côté SQL** : limite de création de rooms par `guest_id`, limite de questions live par joueur, timestamps d'activité et fonction `cleanup_inactive_rooms()`.
 
 ---
 

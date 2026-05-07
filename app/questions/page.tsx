@@ -22,6 +22,7 @@ export default function SavedQuestionsPage() {
   const profile = useProfile();
   const { savedQuestions, loading, refresh } = useSavedQuestions(null, profile.canManageQuestions);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -75,9 +76,9 @@ export default function SavedQuestionsPage() {
     e.preventDefault();
     setError(null);
     setAuthMessage(null);
-    const result = await profile.signInWithEmail(email);
+    const result = await profile.signInWithPassword(email, password);
     if (result) setError(result);
-    else setAuthMessage("Lien magique envoyé. Ouvre-le puis reviens ici.");
+    else setAuthMessage("Connexion réussie.");
   }
 
   async function createPack(e: FormEvent) {
@@ -192,7 +193,8 @@ export default function SavedQuestionsPage() {
             </p>
             <form onSubmit={signIn} className="mt-5 space-y-3">
               <input className="input" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email@exemple.com" type="email" />
-              <button className="btn-primary w-full" type="submit">Recevoir le lien magique</button>
+              <input className="input" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mot de passe" type="password" />
+              <button className="btn-primary w-full" type="submit">Connexion admin</button>
             </form>
             {authMessage && <p className="mt-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-sm font-bold text-neon-green">{authMessage}</p>}
             {error && <p className="mt-3 rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}

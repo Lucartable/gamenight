@@ -6,6 +6,16 @@
 -- recréer. Les salles, joueurs, votes et historiques existants seront perdus.
 -- =========================================================================
 
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_user() cascade;
+drop function if exists public.current_user_role() cascade;
+drop function if exists public.is_trusted_or_admin() cascade;
+drop function if exists public.enforce_guest_room_limit() cascade;
+drop function if exists public.enforce_custom_question_limit() cascade;
+drop function if exists public.touch_room_activity_on_room_update() cascade;
+drop function if exists public.touch_room_activity_from_child() cascade;
+drop function if exists public.cleanup_inactive_rooms(interval) cascade;
+
 drop table if exists public.ratings cascade;
 drop table if exists public.votes cascade;
 drop table if exists public.asked_questions cascade;
@@ -33,6 +43,8 @@ create table public.rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   host_client_id text not null,
+  created_by_guest_id text,
+  created_by_user_id uuid references auth.users(id) on delete set null,
   game_type text
     check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   status text not null default 'lobby'
@@ -61,11 +73,43 @@ create table public.rooms (
   current_question_snapshot jsonb,
   mime_game_state jsonb,
   jauge_game_state jsonb,
+  last_activity_at timestamptz not null default now(),
+  expires_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 create index rooms_code_idx on public.rooms(code);
 create index rooms_game_type_idx on public.rooms(game_type);
+create index rooms_created_by_guest_idx on public.rooms(created_by_guest_id, created_at);
+create index rooms_expires_at_idx on public.rooms(expires_at);
+
+create or replace function public.enforce_guest_room_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.created_by_guest_id is not null then
+    if (
+      select count(*)
+      from public.rooms
+      where created_by_guest_id = new.created_by_guest_id
+      and created_at > now() - interval '1 hour'
+    ) >= 8 then
+      raise exception 'Limite de création de salles atteinte pour cette session invitée.';
+    end if;
+  end if;
+
+  new.expires_at := coalesce(new.expires_at, now() + interval '12 hours');
+  new.last_activity_at := coalesce(new.last_activity_at, now());
+  return new;
+end;
+$$;
+
+create trigger rooms_guest_rate_limit
+  before insert on public.rooms
+  for each row execute function public.enforce_guest_room_limit();
 
 -- ----- QUESTIONS -----------------------------------------------------------
 -- L'app embarque aujourd'hui les questions dans le code pour rester rapide.
@@ -107,13 +151,23 @@ create table public.players (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   client_id text not null,
+  guest_id text,
+  auth_user_id uuid references auth.users(id) on delete set null,
   name text not null,
+  avatar text,
+  color text,
   is_host boolean not null default false,
+  last_seen_at timestamptz not null default now(),
   joined_at timestamptz not null default now(),
-  unique (room_id, client_id)
+  unique (room_id, client_id),
+  check (char_length(trim(name)) between 1 and 24),
+  check (avatar is null or char_length(avatar) between 1 and 8),
+  check (color is null or color ~ '^#[0-9A-Fa-f]{6}$')
 );
 
 create index players_room_id_idx on public.players(room_id);
+create index players_guest_id_idx on public.players(guest_id);
+create index players_auth_user_id_idx on public.players(auth_user_id);
 
 -- ----- VOTES ---------------------------------------------------------------
 create table public.votes (
@@ -225,11 +279,40 @@ create table public.custom_questions (
   category text not null default 'joueurs',
   payload jsonb not null default '{}',
   created_at timestamptz not null default now(),
-  unique (room_id, game_type, local_question_id)
+  unique (room_id, game_type, local_question_id),
+  check (char_length(trim(question_text)) between 4 and 280),
+  check (jsonb_typeof(payload) = 'object')
 );
 
 create index custom_questions_room_game_idx on public.custom_questions(room_id, game_type);
 create index custom_questions_author_idx on public.custom_questions(author_player_id);
+
+create or replace function public.enforce_custom_question_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.question_text := trim(regexp_replace(new.question_text, '[[:space:]]+', ' ', 'g'));
+
+  if (
+    select count(*)
+    from public.custom_questions
+    where room_id = new.room_id
+      and game_type = new.game_type
+      and author_player_id = new.author_player_id
+  ) >= 20 then
+    raise exception 'Limite de questions live atteinte pour ce joueur.';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger custom_questions_rate_limit
+  before insert on public.custom_questions
+  for each row execute function public.enforce_custom_question_limit();
 
 create table public.saved_custom_questions (
   id uuid primary key default gen_random_uuid(),
@@ -284,10 +367,81 @@ create table public.asked_questions (
 
 create index asked_questions_room_game_idx on public.asked_questions(room_id, game_type);
 
+create or replace function public.touch_room_activity_on_room_update()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.last_activity_at := now();
+  return new;
+end;
+$$;
+
+create trigger rooms_touch_activity
+  before update on public.rooms
+  for each row execute function public.touch_room_activity_on_room_update();
+
+create or replace function public.touch_room_activity_from_child()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_room_id uuid;
+begin
+  target_room_id := new.room_id;
+  update public.rooms
+  set last_activity_at = now()
+  where id = target_room_id;
+  return new;
+end;
+$$;
+
+create trigger players_touch_room_activity
+  after insert or update on public.players
+  for each row execute function public.touch_room_activity_from_child();
+
+create trigger votes_touch_room_activity
+  after insert or update on public.votes
+  for each row execute function public.touch_room_activity_from_child();
+
+create trigger ratings_touch_room_activity
+  after insert or update on public.ratings
+  for each row execute function public.touch_room_activity_from_child();
+
+create trigger custom_questions_touch_room_activity
+  after insert or update on public.custom_questions
+  for each row execute function public.touch_room_activity_from_child();
+
+create trigger asked_questions_touch_room_activity
+  after insert or update on public.asked_questions
+  for each row execute function public.touch_room_activity_from_child();
+
+create or replace function public.cleanup_inactive_rooms(max_age interval default interval '12 hours')
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.rooms
+  where coalesce(expires_at, last_activity_at + max_age, created_at + max_age) < now()
+     or last_activity_at < now() - max_age;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
 -- =========================================================================
 -- ROW LEVEL SECURITY
--- Jeu de soirée éphémère sans authentification : lecture + écriture publique.
--- À durcir si l'app devient publique à grande échelle.
+-- Jeu de soirée éphémère : rooms/players/votes restent ouverts aux invités.
+-- Les objets persistants (bibliothèque, packs, modération) sont protégés par
+-- Supabase Auth + rôles trusted/admin.
 -- =========================================================================
 alter table public.rooms enable row level security;
 alter table public.questions enable row level security;

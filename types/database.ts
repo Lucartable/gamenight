@@ -82,6 +82,8 @@ export interface Room {
   id: string;
   code: string;
   host_client_id: string;
+  created_by_guest_id: string | null;
+  created_by_user_id: string | null;
   game_type: GameType | null;
   status: RoomStatus;
   current_question_id: number | null;
@@ -102,6 +104,8 @@ export interface Room {
   current_question_snapshot: QuestionSnapshot | null;
   mime_game_state: MimeGameState | null;
   jauge_game_state: JaugeGameState | null;
+  last_activity_at: string;
+  expires_at: string | null;
   created_at: string;
 }
 
@@ -161,8 +165,13 @@ export interface Player {
   id: string;
   room_id: string;
   client_id: string;
+  guest_id: string | null;
+  auth_user_id: string | null;
   name: string;
+  avatar: string | null;
+  color: string | null;
   is_host: boolean;
+  last_seen_at: string;
   joined_at: string;
 }
 

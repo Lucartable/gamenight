@@ -27,17 +27,11 @@ export function normalizeRoomCode(input: string): string {
   return input.trim().toUpperCase().replace(/\s+/g, "");
 }
 
-// Identifiant client persisté par navigateur — sert de pseudo-session
-// (pas d'auth, on assume un appareil = un joueur).
+// Identifiant invité persisté par navigateur. Il reste compatible avec
+// l'ancien `client_id`, mais le modèle mental est maintenant clair :
+// jouer ne demande pas de compte Supabase Auth.
 export function getOrCreateClientId(): string {
-  if (typeof window === "undefined") return "";
-  const KEY = "gn_client_id";
-  let id = window.localStorage.getItem(KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    window.localStorage.setItem(KEY, id);
-  }
-  return id;
+  return getOrCreateGuestId();
 }
 
 export function secondsLeft(startIso: string | null, durationSec: number): number {
@@ -77,3 +71,4 @@ export function saveCategories(roomCode: string, categories: string[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(CATEGORIES_KEY_PREFIX + roomCode, JSON.stringify(categories));
 }
+import { getOrCreateGuestId } from "./guestSession";

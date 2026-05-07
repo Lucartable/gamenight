@@ -945,7 +945,15 @@ function PlayerTargetButton({
           : "border-white/10 bg-white/5 hover:-translate-y-0.5 hover:border-neon-cyan/50"
       }`}
     >
-      <span className="text-xl font-black">{player.name}</span>
+      <span className="flex min-w-0 items-center gap-3">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black text-white"
+          style={{ background: player.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.72))` : "rgba(255,255,255,0.12)" }}
+        >
+          {player.avatar || player.name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="truncate text-xl font-black">{player.name}</span>
+      </span>
       {selected && <span className="text-sm font-bold text-neon-cyan">Sélectionné</span>}
     </button>
   );

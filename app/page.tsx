@@ -1,16 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase";
 import {
+  GUEST_COLORS,
+  getNextGuestAvatar,
+  getOrCreateGuestSession,
+  saveGuestSession,
+} from "@/lib/guestSession";
+import {
   generateRoomCode,
-  getOrCreateClientId,
   normalizeRoomCode,
 } from "@/lib/utils";
 
-type Mode = "menu" | "create" | "join";
+type Mode = "menu" | "guest" | "admin";
 
 const GAME_TEASERS = [
   { title: "Tu préfères", detail: "Choix rapides, débats immédiats.", tag: "Duel" },
@@ -25,22 +31,32 @@ export default function HomePage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("menu");
   const [name, setName] = useState("");
+  const [avatar, setAvatar] = useState("B");
+  const [color, setColor] = useState("#ff3ea5");
   const [code, setCode] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const guest = getOrCreateGuestSession();
+    setName(guest.name);
+    setAvatar(guest.avatar);
+    setColor(guest.color);
+  }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Entre ton prénom.");
-      return;
-    }
+    const guest = saveGuestSession({ name, avatar, color });
+    setName(guest.name);
+    setAvatar(guest.avatar);
+    setColor(guest.color);
     setLoading(true);
     try {
       const supabase = getSupabase();
-      const clientId = getOrCreateClientId();
+      const userId = await getCurrentUserId();
 
       // On retente quelques fois en cas de collision de code (très rare).
       let roomId: string | null = null;
@@ -49,7 +65,13 @@ export default function HomePage() {
         roomCode = generateRoomCode();
         const { data, error } = await supabase
           .from("rooms")
-          .insert({ code: roomCode, host_client_id: clientId, status: "lobby" })
+          .insert({
+            code: roomCode,
+            host_client_id: guest.guestId,
+            created_by_guest_id: guest.guestId,
+            created_by_user_id: userId,
+            status: "lobby",
+          })
           .select("id")
           .single();
         if (!error && data) roomId = data.id;
@@ -58,8 +80,12 @@ export default function HomePage() {
 
       const { error: pErr } = await supabase.from("players").insert({
         room_id: roomId,
-        client_id: clientId,
-        name: trimmed,
+        client_id: guest.guestId,
+        guest_id: guest.guestId,
+        auth_user_id: userId,
+        name: guest.name,
+        avatar: guest.avatar,
+        color: guest.color,
         is_host: true,
       });
       if (pErr) throw pErr;
@@ -74,15 +100,17 @@ export default function HomePage() {
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const trimmedName = name.trim();
+    const guest = saveGuestSession({ name, avatar, color });
+    setName(guest.name);
+    setAvatar(guest.avatar);
+    setColor(guest.color);
     const cleanCode = normalizeRoomCode(code);
-    if (!trimmedName) return setError("Entre ton prénom.");
     if (!cleanCode) return setError("Entre un code de salle.");
 
     setLoading(true);
     try {
       const supabase = getSupabase();
-      const clientId = getOrCreateClientId();
+      const userId = await getCurrentUserId();
 
       const { data: room, error: rErr } = await supabase
         .from("rooms")
@@ -98,9 +126,14 @@ export default function HomePage() {
         .upsert(
           {
             room_id: room.id,
-            client_id: clientId,
-            name: trimmedName,
+            client_id: guest.guestId,
+            guest_id: guest.guestId,
+            auth_user_id: userId,
+            name: guest.name,
+            avatar: guest.avatar,
+            color: guest.color,
             is_host: false,
+            last_seen_at: new Date().toISOString(),
           },
           { onConflict: "room_id,client_id" }
         );
@@ -109,6 +142,23 @@ export default function HomePage() {
       router.push(`/play/${cleanCode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      setLoading(false);
+    }
+  }
+
+  async function handleAdminLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const { error } = await getSupabase().auth.signInWithPassword({
+        email: adminEmail.trim().toLowerCase(),
+        password: adminPassword,
+      });
+      if (error) throw error;
+      router.push("/questions");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Connexion impossible.");
       setLoading(false);
     }
   }
@@ -133,24 +183,20 @@ export default function HomePage() {
             <section className="home-action-panel p-3">
               <button
                 type="button"
-                onClick={() => setMode("create")}
+                onClick={() => setMode("guest")}
                 className="home-primary-action w-full"
               >
-                <span>Créer une salle</span>
-                <span className="home-action-key">HOST</span>
+                <span>Jouer en invité</span>
+                <span className="home-action-key">INSTANT</span>
               </button>
               <button
                 type="button"
-                onClick={() => setMode("join")}
-                className="home-secondary-action mt-3 w-full"
+                onClick={() => setMode("admin")}
+                className="home-admin-action mt-3 w-full"
               >
-                <span>Rejoindre</span>
-                <span className="home-action-key">CODE</span>
-              </button>
-              <Link href="/questions" className="home-secondary-action mt-3 w-full">
-                <span>Bibliothèque</span>
+                <span>Connexion admin</span>
                 <span className="home-action-key">TRUSTED</span>
-              </Link>
+              </button>
             </section>
 
             <section className="mt-5">
@@ -175,50 +221,65 @@ export default function HomePage() {
           </div>
         )}
 
-        {mode === "create" && (
-          <HomeFormShell title="Créer une salle" subtitle="Lance Badaboum et invite la table.">
-            <form onSubmit={handleCreate} className="space-y-4">
-              <input
-                autoFocus
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ton prénom"
-                maxLength={20}
+        {mode === "guest" && (
+          <HomeFormShell title="Jouer en invité" subtitle="Pseudo, code éventuel, et c'est parti. Aucun compte requis.">
+            <div className="space-y-4">
+              <GuestIdentityPicker
+                name={name}
+                avatar={avatar}
+                color={color}
+                onNameChange={setName}
+                onAvatarChange={() => setAvatar((current) => getNextGuestAvatar(current))}
+                onColorChange={setColor}
               />
               {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
-              <button disabled={loading} className="btn-primary w-full" type="submit">
-                {loading ? "Création..." : "Créer la salle"}
-              </button>
+              <form onSubmit={handleCreate}>
+                <button disabled={loading} className="btn-primary w-full" type="submit">
+                  {loading ? "Création..." : "Créer une salle"}
+                </button>
+              </form>
+              <form onSubmit={handleJoin} className="grid gap-3">
+                <input
+                  className="input uppercase tracking-widest"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  placeholder="CODE DE SALLE"
+                  maxLength={10}
+                />
+                <button disabled={loading} className="btn-secondary w-full" type="submit">
+                  {loading ? "Connexion..." : "Rejoindre"}
+                </button>
+              </form>
               <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
                 Retour
               </button>
-            </form>
+            </div>
           </HomeFormShell>
         )}
 
-        {mode === "join" && (
-          <HomeFormShell title="Rejoindre" subtitle="Entre le code de la salle et ton prénom.">
-            <form onSubmit={handleJoin} className="space-y-4">
+        {mode === "admin" && (
+          <HomeFormShell title="Connexion admin" subtitle="Réservé aux comptes trusted/admin : bibliothèque, packs, modération.">
+            <form onSubmit={handleAdminLogin} className="space-y-4">
               <input
                 autoFocus
-                className="input uppercase tracking-widest"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="CODE"
-                maxLength={10}
+                className="input"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="Email"
+                type="email"
               />
               <input
                 className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ton prénom"
-                maxLength={20}
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Mot de passe"
+                type="password"
               />
               {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
               <button disabled={loading} className="btn-primary w-full" type="submit">
-                {loading ? "Connexion..." : "Rejoindre la salle"}
+                {loading ? "Connexion..." : "Se connecter"}
               </button>
+              <Link href="/questions" className="btn-ghost w-full">Ouvrir la bibliothèque</Link>
               <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
                 Retour
               </button>
@@ -228,6 +289,62 @@ export default function HomePage() {
       </div>
     </main>
   );
+}
+
+function GuestIdentityPicker({
+  name,
+  avatar,
+  color,
+  onNameChange,
+  onAvatarChange,
+  onColorChange,
+}: {
+  name: string;
+  avatar: string;
+  color: string;
+  onNameChange: (value: string) => void;
+  onAvatarChange: () => void;
+  onColorChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onAvatarChange}
+          className="guest-avatar-button"
+          style={{ background: `linear-gradient(135deg, ${color}, rgba(34, 211, 238, 0.72))` }}
+          aria-label="Changer d'avatar"
+        >
+          {avatar}
+        </button>
+        <input
+          className="input min-w-0 flex-1"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="Ton pseudo"
+          maxLength={24}
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {GUEST_COLORS.map((swatch) => (
+          <button
+            key={swatch}
+            type="button"
+            aria-label={`Couleur ${swatch}`}
+            onClick={() => onColorChange(swatch)}
+            className={`h-9 w-9 rounded-2xl border transition-transform active:scale-95 ${color === swatch ? "border-white scale-105" : "border-white/15"}`}
+            style={{ background: swatch }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function getCurrentUserId(): Promise<string | null> {
+  const { data } = await getSupabase().auth.getUser();
+  return (data.user as User | null)?.id ?? null;
 }
 
 function HomeFormShell({
