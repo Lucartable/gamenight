@@ -9,7 +9,7 @@ Stack : **Next.js 14 (App Router) + TypeScript + Tailwind + Supabase Realtime**.
 
 ## ✨ Fonctionnalités
 
-- 🎲 **Cinq jeux** : `Tu préfères`, `Qui de nous ?`, `Majorité`, `Minorité`, `Mime les expressions`
+- 🎲 **Six jeux** : `Tu préfères`, `Qui de nous ?`, `Majorité`, `Minorité`, `Mime les expressions`, `Jauge`
 - 🧩 **Questions et expressions embarquées** avec thèmes/filtres par jeu
 - ⏱️ **Timers configurables** côté serveur (vote + révélation)
 - 👑 **Transfert d'hôte** à un autre joueur en cours de partie
@@ -40,7 +40,7 @@ npm install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
-> Pour une base déjà installée, exécute plutôt [`supabase/mime_expressions_migration.sql`](supabase/mime_expressions_migration.sql).
+> Pour une base déjà installée, exécute plutôt [`supabase/jauge_migration.sql`](supabase/jauge_migration.sql).
 
 ### 3. Configurer les variables d'environnement
 
@@ -91,14 +91,17 @@ gamenight/
 │   ├── layout.tsx
 │   └── globals.css
 ├── components/
-│   └── endGameSummary.tsx        # Bilan de soirée animé
+│   ├── endGameSummary.tsx        # Bilan de soirée animé
+│   └── jaugeMode.tsx             # UI de vote/reveal du mode Jauge
 ├── lib/
 │   ├── supabase.ts               # Client Supabase singleton
-│   ├── useRoom.ts                # Hook de synchro temps réel (rooms, players, votes, asked_questions)
+│   ├── useRoom.ts                # Hook de synchro temps réel (rooms, players, votes, ratings, asked_questions)
 │   ├── useCountdown.ts           # Compte à rebours basé sur un timestamp serveur
 │   ├── questions.ts              # Questions du jeu Qui pourrait ?
 │   ├── whoOfUsQuestions.ts       # Questions du jeu Qui de nous ?
 │   ├── mimeExpressions.ts        # Expressions du jeu Mime les expressions
+│   ├── jaugeQuestions.ts         # Questions du jeu Jauge
+│   ├── jaugeGame.ts              # Helpers cible/questions/anonymat du mode Jauge
 │   ├── mimeGame.ts               # Helpers d'ordre/tours du mode mime
 │   ├── endGameSummary.ts         # Moteur de stats sociales universelles
 │   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
@@ -126,9 +129,10 @@ gamenight/
 
 - **Pas d'authentification** : un `client_id` est généré par navigateur et stocké dans `localStorage`. Suffisant pour un jeu de soirée éphémère.
 - **Source de vérité côté serveur** : les timers utilisent un timestamp `started_at` stocké en base. Le client recalcule juste l'affichage. Pas de désynchro entre joueurs.
-- **Realtime via Supabase** : on s'abonne aux changements des 4 tables et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
+- **Realtime via Supabase** : on s'abonne aux changements des tables de jeu et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
 - **État du mime partagé** : `rooms.mime_game_state` garde l'ordre, le mime courant, l'expression, le timer et la manche.
+- **État de Jauge partagé** : `rooms.jauge_game_state` garde l'ordre des cibles, la question active, l'anonymat, les questions joueurs et les options de manche. Les notes sont stockées dans `ratings`.
 - **Bilan modulaire** : `lib/endGameSummary.ts` calcule scoreboard, awards, moments rares et relations depuis les votes.
 - **RLS publique** : pour aller vite, les tables sont en lecture/écriture publique. À durcir pour un usage prod (par ex. exiger le code de la salle dans une RPC).
 
@@ -177,6 +181,20 @@ Les expressions viennent de [`lib/mimeExpressions.ts`](lib/mimeExpressions.ts), 
 
 L'hôte choisit l'ordre de passage au lancement : ordre d'arrivée, aléatoire ou personnalisé. Ensuite, chaque manche passe automatiquement au joueur suivant, avec retour au début de la liste.
 Le réglage **Mode hôte joueur** masque l'expression à l'hôte quand ce n'est pas lui qui mime, afin qu'il puisse deviner avec le groupe.
+
+### Jauge
+
+Les questions viennent de [`lib/jaugeQuestions.ts`](lib/jaugeQuestions.ts), importées depuis `Jauge.rtf`.
+
+Le jeu sélectionne une question et un joueur cible. Tous les autres joueurs donnent une note de 1 à 10, puis le reveal affiche les notes, la moyenne, la distribution et les commentaires automatiques.
+
+Réglages hôte :
+- cible aléatoire, ordre automatique ou ordre personnalisé ;
+- questions aléatoires, ordre fixe ou questions écrites par les joueurs ;
+- votes visibles, anonymes pendant la partie, reveal final des auteurs, ou anonymat permanent ;
+- mode auto-jauge et mode brutal.
+
+Le bilan de soirée de Jauge calcule les meilleures moyennes, le joueur le plus controversé, les juges généreux/sévères, les notes extrêmes et les relations de notes.
 
 ---
 

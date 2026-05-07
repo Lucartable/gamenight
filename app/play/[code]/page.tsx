@@ -16,10 +16,21 @@ import {
 } from "@/lib/gameQuestions";
 import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
 import {
+  addJaugePlayerQuestion,
+  getJaugeCurrentQuestion,
+  getJaugeGameState,
+  getJaugeRequiredVoters,
+  isJaugeGame,
+} from "@/lib/jaugeGame";
+import {
   PredictionRevealPanel,
   PredictionScoreboardPanel,
   PredictionVoteScreen,
 } from "@/components/predictionMode";
+import {
+  JaugeRevealPanel,
+  JaugeVoteScreen,
+} from "@/components/jaugeMode";
 import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import { isPredictionGame } from "@/lib/scoring";
 import { useCountUp } from "@/lib/useCountUp";
@@ -29,7 +40,7 @@ import {
   getOrCreateClientId,
   triggerHaptic,
 } from "@/lib/utils";
-import type { Choice, MimeGameState, Player, Vote } from "@/types/database";
+import type { Choice, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 interface LocalVote {
   qid: number;
@@ -37,17 +48,26 @@ interface LocalVote {
   selected_player_id: string | null;
 }
 
+interface LocalRating {
+  qid: number;
+  rating: number;
+}
+
 export default function PlayerPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
-  const { room, players, votes, askedQuestions, loading, error, refresh } = useRoom(code);
+  const { room, players, votes, ratings, askedQuestions, loading, error, refresh } = useRoom(code);
   const [selectedOption, setSelectedOption] = useState<Choice | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedPredictionOption, setSelectedPredictionOption] = useState<string | null>(null);
+  const [selectedRating, setSelectedRating] = useState<number | null>(null);
+  const [questionDraft, setQuestionDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [optimisticVote, setOptimisticVote] = useState<LocalVote | null>(null);
+  const [optimisticRating, setOptimisticRating] = useState<LocalRating | null>(null);
 
   const me = useMemo<Player | undefined>(() => {
     if (!players.length) return undefined;
@@ -64,21 +84,44 @@ export default function PlayerPage() {
   const gameType = room?.game_type ?? null;
   const predictionMode = isPredictionGame(gameType) ? gameType : null;
   const mimeMode = isMimeGame(gameType);
+  const jaugeMode = isJaugeGame(gameType);
   const gameDefinition = getGameDefinition(gameType);
   const currentQ = getQuestionForGame(gameType, room?.current_question_id);
   const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
+  const jaugeGameState = useMemo(() => getJaugeGameState(room?.jauge_game_state), [room?.jauge_game_state]);
   const currentMimePlayer = useMemo(
     () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
     [mimeGameState?.currentMimePlayerId, players]
+  );
+  const currentJaugeQuestion = useMemo(
+    () => getJaugeCurrentQuestion(jaugeGameState, room?.current_question_id),
+    [jaugeGameState, room?.current_question_id]
+  );
+  const currentJaugeTarget = useMemo(
+    () => players.find((player) => player.id === jaugeGameState?.currentTargetPlayerId) ?? null,
+    [jaugeGameState?.currentTargetPlayerId, players]
+  );
+  const requiredJaugeVoters = useMemo(
+    () => getJaugeRequiredVoters(players, jaugeGameState),
+    [jaugeGameState, players]
+  );
+  const currentJaugeRatings = useMemo(
+    () =>
+      jaugeGameState && room?.current_question_id
+        ? ratings.filter((rating) => rating.question_id === room.current_question_id && rating.target_player_id === jaugeGameState.currentTargetPlayerId)
+        : [],
+    [jaugeGameState, ratings, room?.current_question_id]
   );
 
   useEffect(() => {
     setSelectedOption(null);
     setSelectedPlayerId(null);
     setSelectedPredictionOption(null);
+    setSelectedRating(null);
     setSubmitting(false);
     setOptimisticVote(null);
-  }, [currentQ?.id]);
+    setOptimisticRating(null);
+  }, [currentQ?.id, currentJaugeQuestion?.id]);
 
   const currentVotes = useMemo(
     () =>
@@ -91,11 +134,19 @@ export default function PlayerPage() {
     if (!me) return undefined;
     return currentVotes.find((vote) => vote.voter_player_id === me.id);
   }, [me, currentVotes]);
+  const myRating = useMemo(() => {
+    if (!me || !currentJaugeQuestion) return undefined;
+    return currentJaugeRatings.find((rating) => rating.voter_player_id === me.id);
+  }, [currentJaugeQuestion, currentJaugeRatings, me]);
 
   const effectiveVote =
     optimisticVote && currentQ && optimisticVote.qid === currentQ.id
       ? optimisticVote
       : voteToLocalVote(myVote);
+  const effectiveRating =
+    optimisticRating && currentJaugeQuestion && optimisticRating.qid === currentJaugeQuestion.id
+      ? optimisticRating.rating
+      : myRating?.rating ?? null;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
   const mimeRoundLeft = useCountdown(
@@ -151,6 +202,71 @@ export default function PlayerPage() {
     }
   }
 
+  async function submitRating() {
+    setVoteError(null);
+    if (!room || !jaugeGameState || !currentJaugeQuestion) { setVoteError("Aucune jauge active."); return; }
+    if (!me) { setVoteError("Tu n'es pas dans la liste des joueurs."); return; }
+    if (!requiredJaugeVoters.some((player) => player.id === me.id)) return;
+    if (!selectedRating || effectiveRating || submitting) return;
+
+    setSubmitting(true);
+    setOptimisticRating({ qid: currentJaugeQuestion.id, rating: selectedRating });
+
+    try {
+      const { error } = await getSupabase().from("ratings").upsert(
+        {
+          room_id: room.id,
+          game_type: "jauge",
+          voter_player_id: me.id,
+          target_player_id: jaugeGameState.currentTargetPlayerId,
+          question_id: currentJaugeQuestion.id,
+          rating: selectedRating,
+          is_anonymous: jaugeGameState.anonymityMode !== "visible",
+        },
+        { onConflict: "room_id,question_id,voter_player_id" }
+      );
+      if (error) throw error;
+      await refresh();
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : "Erreur d'enregistrement de la note.");
+      setOptimisticRating(null);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitPlayerQuestion() {
+    setVoteError(null);
+    if (!room || !me || submittingQuestion) return;
+    const baseState = getJaugeLobbyState(room.jauge_game_state, gameType === "jauge");
+    const question = addJaugePlayerQuestion(baseState, questionDraft, me.id);
+    if (!question) {
+      setVoteError("Ta question doit faire au moins 8 caractères.");
+      return;
+    }
+    setSubmittingQuestion(true);
+    try {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          jauge_game_state: {
+            ...baseState,
+            allowPlayerQuestions: true,
+            playerQuestions: [...baseState.playerQuestions, question],
+          },
+        })
+        .eq("id", room.id)
+        .eq("status", "lobby");
+      if (error) throw error;
+      setQuestionDraft("");
+      await refresh();
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
+    } finally {
+      setSubmittingQuestion(false);
+    }
+  }
+
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
@@ -170,9 +286,11 @@ export default function PlayerPage() {
         gameType={gameType}
         players={players}
         votes={votes}
+        ratings={ratings}
         askedQuestions={askedQuestions}
         roundQuestionIds={room.round_question_ids ?? []}
         mimeGameState={mimeGameState}
+        jaugeGameState={jaugeGameState}
       />
     );
 
@@ -198,6 +316,13 @@ export default function PlayerPage() {
           players={players}
           gameLabel={gameDefinition?.label}
           preparingMime={gameType === "mime_expressions"}
+          preparingJauge={gameType === "jauge"}
+          allowJaugeQuestions={Boolean(jaugeGameState?.allowPlayerQuestions)}
+          playerQuestionCount={jaugeGameState?.playerQuestions.length ?? 0}
+          questionDraft={questionDraft}
+          submittingQuestion={submittingQuestion}
+          onQuestionDraftChange={setQuestionDraft}
+          onSubmitQuestion={submitPlayerQuestion}
         />
       )}
 
@@ -253,6 +378,25 @@ export default function PlayerPage() {
         />
       )}
 
+      {room.status === "question_active" && currentJaugeQuestion && jaugeGameState && jaugeMode && (
+        <JaugeVoteScreen
+          question={currentJaugeQuestion}
+          targetPlayer={currentJaugeTarget}
+          currentPlayer={me}
+          startedAt={room.question_started_at}
+          durationSec={voteDuration}
+          selectedRating={selectedRating}
+          validatedRating={effectiveRating}
+          submitting={submitting}
+          brutalMode={jaugeGameState.brutalMode}
+          canRate={requiredJaugeVoters.some((player) => player.id === me.id) && !effectiveRating}
+          votedCount={countSubmittedRatings(requiredJaugeVoters, currentJaugeRatings)}
+          totalVoters={requiredJaugeVoters.length}
+          onSelect={setSelectedRating}
+          onSubmit={submitRating}
+        />
+      )}
+
       {room.status === "reveal_results" && currentQ && mimeGameState && gameType === "mime_expressions" && (
         <MimeRevealScreen
           expression={currentQ as MimeExpressionQuestion}
@@ -293,6 +437,16 @@ export default function PlayerPage() {
           revealStartedAt={room.reveal_started_at}
           revealDurationSec={revealDuration}
           autoplay={room.autoplay}
+        />
+      )}
+
+      {room.status === "reveal_results" && currentJaugeQuestion && jaugeGameState && jaugeMode && (
+        <JaugeRevealPanel
+          question={currentJaugeQuestion}
+          targetPlayerId={jaugeGameState.currentTargetPlayerId}
+          players={players}
+          ratings={currentJaugeRatings}
+          anonymityMode={jaugeGameState.anonymityMode}
         />
       )}
 
@@ -340,20 +494,71 @@ function Lobby({
   players,
   gameLabel,
   preparingMime,
+  preparingJauge,
+  allowJaugeQuestions,
+  playerQuestionCount,
+  questionDraft,
+  submittingQuestion,
+  onQuestionDraftChange,
+  onSubmitQuestion,
 }: {
   players: Player[];
   gameLabel: string | undefined;
   preparingMime: boolean;
+  preparingJauge: boolean;
+  allowJaugeQuestions: boolean;
+  playerQuestionCount: number;
+  questionDraft: string;
+  submittingQuestion: boolean;
+  onQuestionDraftChange: (value: string) => void;
+  onSubmitQuestion: () => void;
 }) {
+  const title = preparingMime
+    ? "L'hôte prépare l'ordre de passage"
+    : preparingJauge
+      ? "L'hôte prépare la Jauge"
+      : gameLabel
+        ? "En attente de la question"
+        : "Choix du jeu en cours";
+  const subtitle = preparingMime
+    ? "La partie démarre dès que l'ordre est validé."
+    : preparingJauge
+      ? "La cible et les règles de notes arrivent dans un instant."
+      : gameLabel
+        ? `${gameLabel} va commencer.`
+        : "L'hôte prépare la partie.";
+
   return (
     <section className="card game-panel-enter flex flex-1 flex-col items-center justify-center p-8 text-center">
       <div className="animate-floaty text-6xl">🎉</div>
-      <h2 className="mt-4 text-2xl font-bold">
-        {preparingMime ? "L'hôte prépare l'ordre de passage" : gameLabel ? "En attente de la question" : "Choix du jeu en cours"}
-      </h2>
-      <p className="mt-2 text-white/60">
-        {preparingMime ? "La partie démarre dès que l'ordre est validé." : gameLabel ? `${gameLabel} va commencer.` : "L'hôte prépare la partie."}
-      </p>
+      <h2 className="mt-4 text-2xl font-bold">{title}</h2>
+      <p className="mt-2 text-white/60">{subtitle}</p>
+
+      {preparingJauge && allowJaugeQuestions && (
+        <div className="mt-6 w-full rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-4 text-left">
+          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Question joueur</div>
+          <textarea
+            value={questionDraft}
+            onChange={(event) => onQuestionDraftChange(event.target.value)}
+            maxLength={180}
+            rows={3}
+            className="input mt-3 min-h-24 w-full resize-none rounded-2xl p-3"
+            placeholder="À quel point cette personne..."
+          />
+          <button
+            type="button"
+            disabled={submittingQuestion || questionDraft.trim().length < 8}
+            onClick={onSubmitQuestion}
+            className="btn-secondary mt-3 w-full"
+          >
+            {submittingQuestion ? "Ajout..." : "Proposer la question"}
+          </button>
+          <p className="mt-2 text-center text-xs font-semibold text-white/45">
+            {playerQuestionCount} question{playerQuestionCount > 1 ? "s" : ""} proposée{playerQuestionCount > 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
+
       <div className="mt-6 w-full">
         <div className="text-xs uppercase tracking-wider text-white/50">Joueurs</div>
         <ul className="mt-2 flex flex-wrap justify-center gap-2">
@@ -946,6 +1151,38 @@ function voteToLocalVote(vote: Vote | undefined): LocalVote | null {
     qid: vote.question_id,
     selected_option: vote.selected_option,
     selected_player_id: vote.selected_player_id,
+  };
+}
+
+function countSubmittedRatings(requiredPlayers: Player[], ratings: Rating[]): number {
+  const requiredIds = new Set(requiredPlayers.map((player) => player.id));
+  const voterIds = new Set(
+    ratings
+      .filter((rating) => requiredIds.has(rating.voter_player_id) && rating.rating >= 1 && rating.rating <= 10)
+      .map((rating) => rating.voter_player_id)
+  );
+  return voterIds.size;
+}
+
+function getJaugeLobbyState(value: unknown, isJaugeSelected: boolean): JaugeGameState {
+  const parsed = isJaugeSelected ? getJaugeGameState(value) : null;
+  return parsed ?? {
+    targetMode: "random",
+    targetOrder: [],
+    currentTargetIndex: 0,
+    currentTargetPlayerId: "",
+    questionMode: "random",
+    questionOrder: [],
+    currentQuestionOrderIndex: 0,
+    currentQuestionText: "",
+    currentQuestionCategory: "jauge",
+    usedQuestionIds: [],
+    roundNumber: 0,
+    anonymityMode: "visible",
+    brutalMode: false,
+    autoJaugeMode: false,
+    allowPlayerQuestions: true,
+    playerQuestions: [],
   };
 }
 

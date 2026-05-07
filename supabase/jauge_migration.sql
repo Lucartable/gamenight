@@ -1,48 +1,45 @@
 -- =========================================================================
--- Migration non destructive - Modes Majorité / Minorité
+-- Migration non destructive - Mode Jauge
 -- À utiliser si la base existe déjà. Pour une réinstallation complète,
 -- exécuter plutôt supabase/schema.sql.
 -- =========================================================================
 
 alter table public.rooms
-  add column if not exists scoreboard_started_at timestamptz,
-  add column if not exists scoreboard_duration_sec integer not null default 7,
-  add column if not exists hide_scores boolean not null default false,
-  add column if not exists scoreboard_frequency text not null default 'round',
-  add column if not exists score_target integer,
-  add column if not exists round_question_ids integer[] not null default '{}',
-  add column if not exists mime_game_state jsonb,
-  add column if not exists jauge_game_state jsonb;
+  add column if not exists jauge_game_state jsonb,
+  add column if not exists round_question_ids integer[] not null default '{}';
 
-alter table public.questions
-  add column if not exists options jsonb;
+create table if not exists public.ratings (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  game_type text not null default 'jauge'
+    check (game_type = 'jauge'),
+  voter_player_id uuid not null references public.players(id) on delete cascade,
+  target_player_id uuid not null references public.players(id) on delete cascade,
+  question_id integer not null,
+  rating integer not null
+    check (rating between 1 and 10),
+  is_anonymous boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (room_id, question_id, voter_player_id)
+);
+
+create index if not exists ratings_room_q_idx on public.ratings(room_id, question_id);
+create index if not exists ratings_voter_idx on public.ratings(voter_player_id);
+create index if not exists ratings_target_idx on public.ratings(target_player_id);
 
 alter table public.rooms drop constraint if exists rooms_game_type_check;
 alter table public.rooms drop constraint if exists rooms_status_check;
-alter table public.rooms drop constraint if exists rooms_scoreboard_duration_sec_check;
-alter table public.rooms drop constraint if exists rooms_scoreboard_frequency_check;
-alter table public.rooms drop constraint if exists rooms_score_target_check;
-
 alter table public.questions drop constraint if exists questions_game_type_check;
 alter table public.questions drop constraint if exists questions_check;
-
 alter table public.votes drop constraint if exists votes_game_type_check;
-alter table public.votes drop constraint if exists votes_selected_option_check;
 alter table public.votes drop constraint if exists votes_check;
-
 alter table public.asked_questions drop constraint if exists asked_questions_game_type_check;
 
 alter table public.rooms
   add constraint rooms_game_type_check
     check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   add constraint rooms_status_check
-    check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended')),
-  add constraint rooms_scoreboard_duration_sec_check
-    check (scoreboard_duration_sec between 3 and 60),
-  add constraint rooms_scoreboard_frequency_check
-    check (scoreboard_frequency in ('round','end')),
-  add constraint rooms_score_target_check
-    check (score_target is null or score_target between 1 and 999);
+    check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended'));
 
 alter table public.questions
   add constraint questions_game_type_check
@@ -86,37 +83,14 @@ alter table public.asked_questions
   add constraint asked_questions_game_type_check
     check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge'));
 
-create table if not exists public.ratings (
-  id uuid primary key default gen_random_uuid(),
-  room_id uuid not null references public.rooms(id) on delete cascade,
-  game_type text not null default 'jauge'
-    check (game_type = 'jauge'),
-  voter_player_id uuid not null references public.players(id) on delete cascade,
-  target_player_id uuid not null references public.players(id) on delete cascade,
-  question_id integer not null,
-  rating integer not null
-    check (rating between 1 and 10),
-  is_anonymous boolean not null default false,
-  created_at timestamptz not null default now(),
-  unique (room_id, question_id, voter_player_id)
-);
-
-create index if not exists ratings_room_q_idx on public.ratings(room_id, question_id);
-create index if not exists ratings_voter_idx on public.ratings(voter_player_id);
-create index if not exists ratings_target_idx on public.ratings(target_player_id);
-
 alter table public.ratings enable row level security;
 
 drop policy if exists "ratings_all" on public.ratings;
 create policy "ratings_all" on public.ratings
   for all using (true) with check (true);
 
-alter table public.rooms           replica identity full;
-alter table public.questions       replica identity full;
-alter table public.players         replica identity full;
-alter table public.votes           replica identity full;
-alter table public.ratings         replica identity full;
-alter table public.asked_questions replica identity full;
+alter table public.rooms   replica identity full;
+alter table public.ratings replica identity full;
 
 do $$
 begin
@@ -126,27 +100,7 @@ begin
   end;
 
   begin
-    alter publication supabase_realtime add table public.questions;
-  exception when duplicate_object then null;
-  end;
-
-  begin
-    alter publication supabase_realtime add table public.players;
-  exception when duplicate_object then null;
-  end;
-
-  begin
-    alter publication supabase_realtime add table public.votes;
-  exception when duplicate_object then null;
-  end;
-
-  begin
     alter publication supabase_realtime add table public.ratings;
-  exception when duplicate_object then null;
-  end;
-
-  begin
-    alter publication supabase_realtime add table public.asked_questions;
   exception when duplicate_object then null;
   end;
 end $$;

@@ -22,9 +22,15 @@ import {
   type MimeExpressionCategory,
   type MimeExpressionCategoryMeta,
 } from "./mimeExpressions";
+import {
+  JAUGE_CATEGORIES,
+  JAUGE_QUESTIONS,
+  type JaugeCategory,
+  type JaugeCategoryMeta,
+} from "./jaugeQuestions";
 import type { GameType } from "@/types/database";
 
-export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory | MimeExpressionCategory;
+export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory | MimeExpressionCategory | JaugeCategory;
 
 export interface GameDefinition {
   id: GameType;
@@ -63,8 +69,15 @@ export interface MimeExpressionQuestion {
   text: string;
 }
 
-export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion | MimeExpressionQuestion;
-export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta | MimeExpressionCategoryMeta) & { id: GameCategory };
+export interface JaugeGameQuestion {
+  id: number;
+  gameType: "jauge";
+  category: JaugeCategory;
+  text: string;
+}
+
+export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion | MimeExpressionQuestion | JaugeGameQuestion;
+export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta | MimeExpressionCategoryMeta | JaugeCategoryMeta) & { id: GameCategory };
 
 export const GAME_DEFINITIONS: GameDefinition[] = [
   {
@@ -97,6 +110,12 @@ export const GAME_DEFINITIONS: GameDefinition[] = [
     shortLabel: "Mime",
     description: "Un joueur mime une expression, les autres devinent avant la fin du timer.",
   },
+  {
+    id: "jauge",
+    label: "Jauge",
+    shortLabel: "Jauge",
+    description: "Évalue un joueur de 1 à 10 et découvre la moyenne du groupe.",
+  },
 ];
 
 export const WHO_WOULD_QUESTIONS: WhoWouldQuestion[] = RAW_WHO_WOULD_QUESTIONS.map((q) => ({
@@ -113,6 +132,7 @@ export function getGameCategories(gameType: GameType | null | undefined): GameCa
   if (gameType === "who_of_us") return WHO_OF_US_CATEGORIES as GameCategoryMeta[];
   if (gameType === "majority" || gameType === "minority") return MAJORITY_CATEGORIES as GameCategoryMeta[];
   if (gameType === "mime_expressions") return MIME_EXPRESSION_CATEGORIES as GameCategoryMeta[];
+  if (gameType === "jauge") return JAUGE_CATEGORIES as GameCategoryMeta[];
   if (gameType === "who_would") return WHO_WOULD_CATEGORIES as GameCategoryMeta[];
   return [];
 }
@@ -121,6 +141,7 @@ export function getDefaultCategories(gameType: GameType | null | undefined): Gam
   if (gameType === "who_of_us") return ["classique"];
   if (gameType === "majority" || gameType === "minority") return ["food", "internet", "party"];
   if (gameType === "mime_expressions") return ["classique"];
+  if (gameType === "jauge") return ["survie", "relations", "chaos", "soiree"];
   if (gameType === "who_would") return ["soft"];
   return [];
 }
@@ -143,6 +164,7 @@ export function getQuestionsForGame(gameType: GameType | null | undefined): Game
   if (gameType === "mime_expressions") {
     return MIME_EXPRESSIONS.map((q) => ({ ...q, gameType: "mime_expressions" as const }));
   }
+  if (gameType === "jauge") return JAUGE_QUESTIONS;
   if (gameType === "who_would") return WHO_WOULD_QUESTIONS;
   return [];
 }

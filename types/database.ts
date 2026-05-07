@@ -1,8 +1,11 @@
 export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "end_game_summary" | "ended";
-export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions";
+export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions" | "jauge";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
 export type MimeRoundStatus = "waiting" | "playing" | "ended" | "revealed";
+export type JaugeTargetMode = "random" | "arrival" | "custom";
+export type JaugeQuestionMode = "random" | "fixed" | "players";
+export type JaugeAnonymityMode = "visible" | "round_anonymous" | "final_reveal" | "anonymous";
 
 export interface MimeGameState {
   playerOrder: string[];
@@ -21,6 +24,32 @@ export interface MimeRoundRecord {
   roundNumber: number;
   mimePlayerId: string;
   expressionId: number;
+}
+
+export interface JaugeGameState {
+  targetMode: JaugeTargetMode;
+  targetOrder: string[];
+  currentTargetIndex: number;
+  currentTargetPlayerId: string;
+  questionMode: JaugeQuestionMode;
+  questionOrder: number[];
+  currentQuestionOrderIndex: number;
+  currentQuestionText: string;
+  currentQuestionCategory: string;
+  usedQuestionIds: number[];
+  roundNumber: number;
+  anonymityMode: JaugeAnonymityMode;
+  brutalMode: boolean;
+  autoJaugeMode: boolean;
+  allowPlayerQuestions: boolean;
+  playerQuestions: JaugePlayerQuestion[];
+}
+
+export interface JaugePlayerQuestion {
+  id: number;
+  text: string;
+  authorPlayerId: string;
+  category: string;
 }
 
 export interface Room {
@@ -44,6 +73,7 @@ export interface Room {
   selected_categories: string[];
   round_question_ids: number[];
   mime_game_state: MimeGameState | null;
+  jauge_game_state: JaugeGameState | null;
   created_at: string;
 }
 
@@ -64,6 +94,18 @@ export interface Vote {
   question_id: number;
   selected_option: Choice | null;
   selected_player_id: string | null;
+  created_at: string;
+}
+
+export interface Rating {
+  id: string;
+  room_id: string;
+  game_type: "jauge";
+  voter_player_id: string;
+  target_player_id: string;
+  question_id: number;
+  rating: number;
+  is_anonymous: boolean;
   created_at: string;
 }
 

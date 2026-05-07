@@ -11,7 +11,7 @@ import {
 } from "@/lib/endGameSummary";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
-import type { AskedQuestion, GameType, MimeGameState, Player, Vote } from "@/types/database";
+import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 const TONE_STYLES: Record<SummaryTone, { border: string; bg: string; text: string; glow: string; bar: string }> = {
   gold: {
@@ -69,9 +69,11 @@ export function EndGameSummaryPanel({
   gameType,
   players,
   votes,
+  ratings,
   askedQuestions,
   roundQuestionIds,
   mimeGameState,
+  jaugeGameState,
   isHost = false,
   busy = false,
   onReplay,
@@ -81,9 +83,11 @@ export function EndGameSummaryPanel({
   gameType: GameType | null | undefined;
   players: Player[];
   votes: Vote[];
+  ratings?: Rating[];
   askedQuestions: AskedQuestion[];
   roundQuestionIds?: number[];
   mimeGameState: MimeGameState | null;
+  jaugeGameState?: JaugeGameState | null;
   isHost?: boolean;
   busy?: boolean;
   onReplay?: () => void;
@@ -91,8 +95,8 @@ export function EndGameSummaryPanel({
   onEnd?: () => void;
 }) {
   const summary = useMemo(
-    () => buildEndGameSummary({ gameType, players, votes, askedQuestions, roundQuestionIds, mimeGameState }),
-    [askedQuestions, gameType, mimeGameState, players, roundQuestionIds, votes]
+    () => buildEndGameSummary({ gameType, players, votes, ratings: ratings ?? [], askedQuestions, roundQuestionIds, mimeGameState, jaugeGameState }),
+    [askedQuestions, gameType, jaugeGameState, mimeGameState, players, ratings, roundQuestionIds, votes]
   );
   const [stage, setStage] = useState(0);
 

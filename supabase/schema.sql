@@ -6,6 +6,7 @@
 -- recréer. Les salles, joueurs, votes et historiques existants seront perdus.
 -- =========================================================================
 
+drop table if exists public.ratings cascade;
 drop table if exists public.votes cascade;
 drop table if exists public.asked_questions cascade;
 drop table if exists public.questions cascade;
@@ -20,6 +21,7 @@ drop table if exists public.rooms cascade;
 --   'majority' = prédire la réponse majoritaire
 --   'minority' = viser une minorité valide
 --   'mime_expressions' = ordre de passage automatique + expression à mimer
+--   'jauge' = noter un joueur cible de 1 à 10
 
 -- ----- ROOMS ---------------------------------------------------------------
 create table public.rooms (
@@ -27,7 +29,7 @@ create table public.rooms (
   code text unique not null,
   host_client_id text not null,
   game_type text
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   status text not null default 'lobby'
     check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended')),
   current_question_id integer,
@@ -51,6 +53,7 @@ create table public.rooms (
   selected_categories text[] not null default '{}',
   round_question_ids integer[] not null default '{}',
   mime_game_state jsonb,
+  jauge_game_state jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -63,7 +66,7 @@ create index rooms_game_type_idx on public.rooms(game_type);
 create table public.questions (
   id integer primary key,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   text text,
   option_a text,
   option_b text,
@@ -77,6 +80,8 @@ create table public.questions (
     (game_type = 'who_of_us' and text is not null and option_a is null and option_b is null)
     or
     (game_type = 'mime_expressions' and text is not null and option_a is null and option_b is null)
+    or
+    (game_type = 'jauge' and text is not null and option_a is null and option_b is null)
     or
     (
       game_type in ('majority','minority')
@@ -108,7 +113,7 @@ create table public.votes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   voter_player_id uuid not null references public.players(id) on delete cascade,
   question_id integer not null,
   selected_option text,
@@ -123,6 +128,8 @@ create table public.votes (
     (game_type in ('majority','minority') and selected_option is not null and selected_player_id is null)
     or
     (game_type = 'mime_expressions' and selected_option is null and selected_player_id is null)
+    or
+    (game_type = 'jauge' and selected_option is null and selected_player_id is null)
   )
 );
 
@@ -130,12 +137,32 @@ create index votes_room_game_q_idx on public.votes(room_id, game_type, question_
 create index votes_voter_idx on public.votes(voter_player_id);
 create index votes_selected_player_idx on public.votes(selected_player_id);
 
+-- ----- RATINGS -------------------------------------------------------------
+create table public.ratings (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  game_type text not null default 'jauge'
+    check (game_type = 'jauge'),
+  voter_player_id uuid not null references public.players(id) on delete cascade,
+  target_player_id uuid not null references public.players(id) on delete cascade,
+  question_id integer not null,
+  rating integer not null
+    check (rating between 1 and 10),
+  is_anonymous boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (room_id, question_id, voter_player_id)
+);
+
+create index ratings_room_q_idx on public.ratings(room_id, question_id);
+create index ratings_voter_idx on public.ratings(voter_player_id);
+create index ratings_target_idx on public.ratings(target_player_id);
+
 -- ----- ASKED QUESTIONS -----------------------------------------------------
 create table public.asked_questions (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
   question_id integer not null,
   asked_at timestamptz not null default now(),
   unique (room_id, game_type, question_id)
@@ -152,6 +179,7 @@ alter table public.rooms enable row level security;
 alter table public.questions enable row level security;
 alter table public.players enable row level security;
 alter table public.votes enable row level security;
+alter table public.ratings enable row level security;
 alter table public.asked_questions enable row level security;
 
 create policy "rooms_all" on public.rooms
@@ -166,6 +194,9 @@ create policy "players_all" on public.players
 create policy "votes_all" on public.votes
   for all using (true) with check (true);
 
+create policy "ratings_all" on public.ratings
+  for all using (true) with check (true);
+
 create policy "asked_questions_all" on public.asked_questions
   for all using (true) with check (true);
 
@@ -178,6 +209,7 @@ alter table public.rooms           replica identity full;
 alter table public.questions       replica identity full;
 alter table public.players         replica identity full;
 alter table public.votes           replica identity full;
+alter table public.ratings         replica identity full;
 alter table public.asked_questions replica identity full;
 
 do $$
@@ -199,6 +231,11 @@ begin
 
   begin
     alter publication supabase_realtime add table public.votes;
+  exception when duplicate_object then null;
+  end;
+
+  begin
+    alter publication supabase_realtime add table public.ratings;
   exception when duplicate_object then null;
   end;
 
