@@ -6,6 +6,7 @@ import { getSupabase } from "./supabase";
 
 interface UseProfileState {
   userId: string | null;
+  userEmail: string | null;
   profile: Profile | null;
   role: UserRole;
   canManageQuestions: boolean;
@@ -18,6 +19,7 @@ interface UseProfileState {
 
 export function useProfile(): UseProfileState {
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,7 +27,9 @@ export function useProfile(): UseProfileState {
     const supabase = getSupabase();
     const { data: userData } = await supabase.auth.getUser();
     const nextUserId = userData.user?.id ?? null;
+    const nextEmail = userData.user?.email ?? null;
     setUserId(nextUserId);
+    setUserEmail(nextEmail);
     if (!nextUserId) {
       setProfile(null);
       return;
@@ -74,11 +78,12 @@ export function useProfile(): UseProfileState {
   const signOut = useCallback(async () => {
     await getSupabase().auth.signOut();
     setUserId(null);
+    setUserEmail(null);
     setProfile(null);
   }, []);
 
   return useMemo(
-    () => ({ userId, profile, role, canManageQuestions, loading, signInWithEmail, signInWithPassword, signOut, refresh }),
-    [canManageQuestions, loading, profile, refresh, role, signInWithEmail, signInWithPassword, signOut, userId]
+    () => ({ userId, userEmail, profile, role, canManageQuestions, loading, signInWithEmail, signInWithPassword, signOut, refresh }),
+    [canManageQuestions, loading, profile, refresh, role, signInWithEmail, signInWithPassword, signOut, userEmail, userId]
   );
 }

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { AdminStatusBar } from "@/components/adminStatus";
 import { getSupabase } from "@/lib/supabase";
+import { useProfile } from "@/lib/useProfile";
 import {
   GUEST_COLORS,
   getNextGuestAvatar,
@@ -29,6 +31,7 @@ const GAME_TEASERS = [
 
 export default function HomePage() {
   const router = useRouter();
+  const profile = useProfile();
   const [mode, setMode] = useState<Mode>("menu");
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("B");
@@ -38,6 +41,7 @@ export default function HomePage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const guest = getOrCreateGuestSession();
@@ -149,16 +153,17 @@ export default function HomePage() {
   async function handleAdminLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setAuthMessage(null);
     setLoading(true);
     try {
-      const { error } = await getSupabase().auth.signInWithPassword({
-        email: adminEmail.trim().toLowerCase(),
-        password: adminPassword,
-      });
-      if (error) throw error;
-      router.push("/questions");
+      const result = await profile.signInWithPassword(adminEmail, adminPassword);
+      if (result) throw new Error(result);
+      await profile.refresh();
+      setAuthMessage("Connecté en admin. Tu peux jouer normalement ou ouvrir la bibliothèque.");
+      setMode("menu");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connexion impossible.");
+    } finally {
       setLoading(false);
     }
   }
@@ -167,6 +172,19 @@ export default function HomePage() {
     <main className="home-stage min-h-dvh px-5 py-6 text-white">
       <div className="home-grid" aria-hidden="true" />
       <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] max-w-md flex-col">
+        <AdminStatusBar
+          userEmail={profile.userEmail}
+          role={profile.role}
+          canManageQuestions={profile.canManageQuestions}
+          loading={profile.loading || loading}
+          onSignOut={() => void profile.signOut()}
+          onAdminClick={() => {
+            setError(null);
+            setAuthMessage(null);
+            setMode("admin");
+          }}
+        />
+
         <header className="home-hero pt-6 text-center">
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] border border-neon-yellow/40 bg-neon-yellow/10 shadow-glow">
             <span className="home-burst-mark">B</span>
@@ -181,6 +199,11 @@ export default function HomePage() {
         {mode === "menu" && (
           <div className="mt-8 flex flex-1 flex-col">
             <section className="home-action-panel p-3">
+              {authMessage && (
+                <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
+                  {authMessage}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => setMode("guest")}
@@ -189,14 +212,21 @@ export default function HomePage() {
                 <span>Jouer en invité</span>
                 <span className="home-action-key">INSTANT</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setMode("admin")}
-                className="home-admin-action mt-3 w-full"
-              >
-                <span>Connexion admin</span>
-                <span className="home-action-key">TRUSTED</span>
-              </button>
+              {!profile.userEmail && (
+                <button
+                  type="button"
+                  onClick={() => setMode("admin")}
+                  className="home-admin-action mt-3 w-full"
+                >
+                  <span>Connexion admin</span>
+                  <span className="home-action-key">TRUSTED</span>
+                </button>
+              )}
+              {profile.canManageQuestions && (
+                <Link href="/questions" className="btn-secondary mt-3 w-full">
+                  Ouvrir la bibliothèque
+                </Link>
+              )}
             </section>
 
             <section className="mt-5">

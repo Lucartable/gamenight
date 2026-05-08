@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AdminStatusBar } from "@/components/adminStatus";
+import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
+import { useProfile } from "@/lib/useProfile";
 import { useCountdown } from "@/lib/useCountdown";
 import {
   type MimeExpressionQuestion,
@@ -26,6 +29,7 @@ import {
   getQuestionSourceSettings,
   questionFromSnapshot,
 } from "@/lib/questionPoolEngine";
+import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import {
   PredictionRevealPanel,
   PredictionScoreboardPanel,
@@ -62,6 +66,7 @@ export default function PlayerPage() {
   const code = params.code?.toUpperCase() ?? "";
   const router = useRouter();
   const { room, players, votes, ratings, customQuestions, askedQuestions, loading, error, refresh } = useRoom(code);
+  const profileState = useProfile();
   const [selectedOption, setSelectedOption] = useState<Choice | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedPredictionOption, setSelectedPredictionOption] = useState<string | null>(null);
@@ -72,7 +77,9 @@ export default function PlayerPage() {
   const [questionOptions, setQuestionOptions] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
+  const [savingQuestion, setSavingQuestion] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [optimisticVote, setOptimisticVote] = useState<LocalVote | null>(null);
   const [optimisticRating, setOptimisticRating] = useState<LocalRating | null>(null);
 
@@ -146,6 +153,7 @@ export default function PlayerPage() {
     setSubmitting(false);
     setOptimisticVote(null);
     setOptimisticRating(null);
+    setSaveNotice(null);
   }, [currentQ?.id, currentJaugeQuestion?.id]);
 
   const currentVotes = useMemo(
@@ -302,6 +310,27 @@ export default function PlayerPage() {
     }
   }
 
+  async function saveCurrentQuestion() {
+    if (!room || !gameType || !currentQ || !profileState.userId || !profileState.canManageQuestions || savingQuestion) return;
+    setSavingQuestion(true);
+    setSaveNotice(null);
+    setVoteError(null);
+    try {
+      const result = await saveQuestionToLibrary({
+        userId: profileState.userId,
+        roomId: room.id,
+        gameType,
+        question: currentQ,
+        snapshot: room.current_question_snapshot ?? undefined,
+      });
+      setSaveNotice(result === "already" ? "Déjà dans la bibliothèque." : "Question sauvegardée.");
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : "Impossible de sauvegarder cette question.");
+    } finally {
+      setSavingQuestion(false);
+    }
+  }
+
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
@@ -340,10 +369,23 @@ export default function PlayerPage() {
         gameLabel={gameDefinition?.shortLabel}
       />
 
+      <AdminStatusBar
+        userEmail={profileState.userEmail}
+        role={profileState.role}
+        canManageQuestions={profileState.canManageQuestions}
+        loading={profileState.loading}
+        compact
+        onSignOut={() => void profileState.signOut()}
+      />
+
       {voteError && (
         <div className="card mb-3 border-neon-pink/60 bg-neon-pink/10 p-3 text-center text-neon-pink">
           {voteError}
         </div>
+      )}
+
+      {(room.status === "question_active" || room.status === "reveal_results") && currentQ && profileState.canManageQuestions && (
+        <SaveQuestionButton saving={savingQuestion} notice={saveNotice} onSave={saveCurrentQuestion} />
       )}
 
       {room.status === "lobby" && (

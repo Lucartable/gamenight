@@ -519,7 +519,7 @@ create policy "packs_write_trusted" on public.question_packs
   for all using (
     public.is_trusted_or_admin() and (owner_user_id = auth.uid() or public.current_user_role() = 'admin')
   ) with check (
-    public.is_trusted_or_admin() and owner_user_id = auth.uid()
+    public.is_trusted_or_admin() and (owner_user_id = auth.uid() or public.current_user_role() = 'admin')
   );
 
 create policy "pack_items_select" on public.question_pack_items
@@ -544,7 +544,7 @@ create policy "pack_items_write_trusted" on public.question_pack_items
       select 1 from public.question_packs p
       where p.id = pack_id
       and public.is_trusted_or_admin()
-      and p.owner_user_id = auth.uid()
+      and (p.owner_user_id = auth.uid() or public.current_user_role() = 'admin')
     )
   );
 

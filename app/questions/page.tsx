@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { AdminStatusBar } from "@/components/adminStatus";
 import { getSupabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import { useSavedQuestions } from "@/lib/useSavedQuestions";
@@ -30,6 +31,7 @@ export default function SavedQuestionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const [editPayloadOptions, setEditPayloadOptions] = useState("");
   const [packs, setPacks] = useState<QuestionPack[]>([]);
   const [packItems, setPackItems] = useState<QuestionPackItem[]>([]);
   const [packName, setPackName] = useState("");
@@ -48,6 +50,15 @@ export default function SavedQuestionsPage() {
       return matchesGame && matchesQuery;
     });
   }, [gameFilter, query, savedQuestions]);
+  const activePack = useMemo(() => packs.find((pack) => pack.id === activePackId) ?? null, [activePackId, packs]);
+  const activePackQuestionIds = useMemo(
+    () => new Set(packItems.filter((item) => item.pack_id === activePackId).map((item) => item.saved_question_id)),
+    [activePackId, packItems]
+  );
+  const activePackQuestions = useMemo(
+    () => savedQuestions.filter((question) => activePackQuestionIds.has(question.id)),
+    [activePackQuestionIds, savedQuestions]
+  );
 
   const refreshPacks = useCallback(async () => {
     const supabase = getSupabase();
@@ -102,18 +113,24 @@ export default function SavedQuestionsPage() {
     setEditingId(question.id);
     setEditText(question.question_text);
     setEditCategory(question.category);
+    setEditPayloadOptions(payloadOptionsToText(question));
   }
 
-  async function saveEdit(questionId: string) {
+  async function saveEdit(question: SavedCustomQuestion) {
     const text = editText.trim();
     const category = editCategory.trim() || "sauvegardees";
     if (!text) return;
-    setBusyId(questionId);
+    const payload = buildEditedPayload(question, editPayloadOptions);
+    if (!payload) {
+      setError("Options invalides pour ce jeu.");
+      return;
+    }
+    setBusyId(question.id);
     setError(null);
     const { error: updateError } = await getSupabase()
       .from("saved_custom_questions")
-      .update({ question_text: text, category, updated_at: new Date().toISOString() })
-      .eq("id", questionId);
+      .update({ question_text: text, category, payload, updated_at: new Date().toISOString() })
+      .eq("id", question.id);
     setBusyId(null);
     if (updateError) {
       setError(updateError.message);
@@ -151,6 +168,23 @@ export default function SavedQuestionsPage() {
     await refreshPacks();
   }
 
+  async function removeFromPack(questionId: string) {
+    if (!activePackId) return;
+    setBusyId(questionId);
+    setError(null);
+    const { error: deleteError } = await getSupabase()
+      .from("question_pack_items")
+      .delete()
+      .eq("pack_id", activePackId)
+      .eq("saved_question_id", questionId);
+    setBusyId(null);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    await refreshPacks();
+  }
+
   async function deletePack(packId: string) {
     setBusyId(packId);
     setError(null);
@@ -167,6 +201,14 @@ export default function SavedQuestionsPage() {
   return (
     <main className="game-stage min-h-dvh px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
+        <AdminStatusBar
+          userEmail={profile.userEmail}
+          role={profile.role}
+          canManageQuestions={profile.canManageQuestions}
+          loading={profile.loading}
+          onSignOut={() => void profile.signOut()}
+        />
+
         <header className="game-topbar mb-5 rounded-[24px] border p-4 shadow-glow">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -242,6 +284,14 @@ export default function SavedQuestionsPage() {
                           <div className="mt-3 space-y-3">
                             <textarea className="input min-h-28 resize-none" value={editText} onChange={(event) => setEditText(event.target.value)} />
                             <input className="input" value={editCategory} onChange={(event) => setEditCategory(event.target.value)} placeholder="Catégorie" />
+                            {questionHasEditablePayload(question) && (
+                              <textarea
+                                className="input min-h-24 resize-none"
+                                value={editPayloadOptions}
+                                onChange={(event) => setEditPayloadOptions(event.target.value)}
+                                placeholder={question.game_type === "who_would" ? "Option A\nOption B" : "Options, une par ligne"}
+                              />
+                            )}
                           </div>
                         ) : (
                           <>
@@ -258,13 +308,17 @@ export default function SavedQuestionsPage() {
                     <div className="mt-4 grid gap-2 sm:grid-cols-4">
                       {editingId === question.id ? (
                         <>
-                          <button disabled={busyId === question.id} onClick={() => void saveEdit(question.id)} className="btn-primary sm:col-span-2" type="button">Valider</button>
+                          <button disabled={busyId === question.id} onClick={() => void saveEdit(question)} className="btn-primary sm:col-span-2" type="button">Valider</button>
                           <button onClick={() => setEditingId(null)} className="btn-ghost sm:col-span-2" type="button">Annuler</button>
                         </>
                       ) : (
                         <>
                           <button onClick={() => void startEdit(question)} className="btn-ghost" type="button">Modifier</button>
-                          <button disabled={!activePackId || busyId === question.id} onClick={() => void addToPack(question.id)} className="btn-ghost" type="button">Ajouter pack</button>
+                          {activePackQuestionIds.has(question.id) ? (
+                            <button disabled={!activePackId || busyId === question.id} onClick={() => void removeFromPack(question.id)} className="btn-ghost" type="button">Retirer pack</button>
+                          ) : (
+                            <button disabled={!activePackId || busyId === question.id} onClick={() => void addToPack(question.id)} className="btn-ghost" type="button">Ajouter au pack actif</button>
+                          )}
                           <button disabled={busyId === question.id} onClick={() => void deleteQuestion(question.id)} className="btn-danger sm:col-span-2" type="button">Supprimer</button>
                         </>
                       )}
@@ -309,6 +363,25 @@ export default function SavedQuestionsPage() {
                     </option>
                   ))}
                 </select>
+                {activePack && (
+                  <div className="mt-3 rounded-2xl border border-neon-cyan/20 bg-neon-cyan/10 p-3">
+                    <div className="text-sm font-black">{activePack.name}</div>
+                    <div className="mt-1 text-xs font-bold text-white/50">
+                      {activePackQuestions.length} question{activePackQuestions.length > 1 ? "s" : ""} dans ce pack.
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {activePackQuestions.slice(0, 6).map((question) => (
+                        <div key={question.id} className="flex items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2 text-xs font-bold">
+                          <span className="truncate">{question.question_text}</span>
+                          <button type="button" onClick={() => void removeFromPack(question.id)} className="text-neon-pink">
+                            Retirer
+                          </button>
+                        </div>
+                      ))}
+                      {activePackQuestions.length === 0 && <p className="text-xs font-semibold text-white/45">Clique sur “Ajouter au pack actif” sur une question.</p>}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4 grid gap-2">
                   {packs.map((pack) => (
                     <div key={pack.id} className="rounded-2xl border border-white/10 bg-white/6 p-3">
@@ -346,4 +419,36 @@ export default function SavedQuestionsPage() {
 
 function countPackItems(items: QuestionPackItem[], packId: string) {
   return items.filter((item) => item.pack_id === packId).length;
+}
+
+function questionHasEditablePayload(question: SavedCustomQuestion): boolean {
+  return question.game_type === "who_would" || question.game_type === "majority" || question.game_type === "minority";
+}
+
+function payloadOptionsToText(question: SavedCustomQuestion): string {
+  if (question.game_type === "who_would") {
+    const optionA = typeof question.payload.optionA === "string" ? question.payload.optionA : "";
+    const optionB = typeof question.payload.optionB === "string" ? question.payload.optionB : "";
+    return [optionA, optionB].filter(Boolean).join("\n");
+  }
+  if (question.game_type === "majority" || question.game_type === "minority") {
+    return Array.isArray(question.payload.options)
+      ? question.payload.options.filter((option): option is string => typeof option === "string").join("\n")
+      : "";
+  }
+  return "";
+}
+
+function buildEditedPayload(question: SavedCustomQuestion, payloadText: string): Record<string, unknown> | null {
+  if (question.game_type === "who_would") {
+    const [optionA, optionB] = payloadText.split(/\n/).map((option) => option.trim()).filter(Boolean);
+    if (!optionA || !optionB) return null;
+    return { ...question.payload, optionA, optionB };
+  }
+  if (question.game_type === "majority" || question.game_type === "minority") {
+    const options = payloadText.split(/\n|,/).map((option) => option.trim()).filter(Boolean).slice(0, 8);
+    if (options.length < 2) return null;
+    return { ...question.payload, options };
+  }
+  return question.payload;
 }

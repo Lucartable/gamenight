@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AdminStatusBar } from "@/components/adminStatus";
+import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown } from "@/lib/useCountdown";
@@ -25,16 +27,14 @@ import { useSavedQuestions } from "@/lib/useSavedQuestions";
 import {
   buildQuestionPlan,
   buildQuestionPlanWithDiagnostics,
-  generateLocalQuestionId,
   getQuestionSourceSettings,
-  getQuestionTextForSave,
   makeQuestionSnapshot,
   pickNextQuestionFromPlan,
   questionFromSnapshot,
-  questionToSavedPayload,
   type QuestionPoolDiagnostics,
   type QuestionPoolItem,
 } from "@/lib/questionPoolEngine";
+import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import {
   buildMimeGameState,
   findNextMimeIndex,
@@ -167,11 +167,16 @@ export default function HostPage() {
   const [jaugeAutoJaugeMode, setJaugeAutoJaugeMode] = useState(false);
   const [jaugeAllowPlayerQuestions, setJaugeAllowPlayerQuestions] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const transitionRef = useRef(false);
 
   useEffect(() => {
     if (room?.total_questions) setCustomQuestionCount(String(room.total_questions));
   }, [room?.total_questions]);
+
+  useEffect(() => {
+    setSaveNotice(null);
+  }, [room?.current_question_id]);
 
   useEffect(() => {
     if (!room) return;
@@ -1206,22 +1211,17 @@ export default function HostPage() {
   async function saveCurrentQuestion() {
     if (!room || !gameType || !currentQ || !profileState.userId || !profileState.canManageQuestions || savingQuestion) return;
     setSavingQuestion(true);
+    setSaveNotice(null);
     setActionError(null);
     try {
-      const { error } = await getSupabase()
-        .from("saved_custom_questions")
-        .insert({
-          host_user_id: profileState.userId,
-          game_type: gameType,
-          local_question_id: generateLocalQuestionId("saved"),
-          question_text: getQuestionTextForSave(currentQ),
-          category: currentQ.category,
-          payload: questionToSavedPayload(currentQ),
-          source_game: gameType,
-          original_author_id: currentSnapshotQuestion?.authorPlayerId ?? null,
-          original_room_id: room.id,
-        });
-      if (error) throw error;
+      const result = await saveQuestionToLibrary({
+        userId: profileState.userId,
+        roomId: room.id,
+        gameType,
+        question: currentQ,
+        snapshot: room.current_question_snapshot ?? undefined,
+      });
+      setSaveNotice(result === "already" ? "Déjà dans la bibliothèque." : "Question sauvegardée.");
       await refreshSavedQuestions();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible de sauvegarder cette question.");
@@ -1301,6 +1301,15 @@ export default function HostPage() {
         canTransfer={otherPlayers.length > 0}
       />
 
+      <AdminStatusBar
+        userEmail={profileState.userEmail}
+        role={profileState.role}
+        canManageQuestions={profileState.canManageQuestions}
+        loading={profileState.loading}
+        compact
+        onSignOut={() => void profileState.signOut()}
+      />
+
       {showTransfer && (
         <TransferPanel
           players={otherPlayers}
@@ -1314,6 +1323,10 @@ export default function HostPage() {
         <div className="card mb-3 border-neon-pink/60 bg-neon-pink/10 p-3 text-center text-neon-pink">
           {actionError}
         </div>
+      )}
+
+      {(room.status === "question_active" || room.status === "reveal_results") && currentQ && profileState.canManageQuestions && (
+        <SaveQuestionButton saving={savingQuestion} notice={saveNotice} onSave={saveCurrentQuestion} />
       )}
 
       {room.status === "lobby" && !gameType && (
@@ -1648,20 +1661,6 @@ export default function HostPage() {
             </div>
           }
         />
-      )}
-
-      {room.status === "reveal_results" && currentQ && profileState.canManageQuestions && (
-        <section className="card mt-4 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Bibliothèque</div>
-              <div className="text-sm font-semibold text-white/60">Sauvegarde cette question pour la rejouer plus tard.</div>
-            </div>
-            <button type="button" disabled={savingQuestion} onClick={saveCurrentQuestion} className="btn-secondary">
-              {savingQuestion ? "Sauvegarde..." : "Sauvegarder cette question"}
-            </button>
-          </div>
-        </section>
       )}
 
       {room.status === "scoreboard" && predictionMode && (
