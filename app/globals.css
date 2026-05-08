@@ -82,9 +82,21 @@ body {
   to { transform: scaleX(1); }
 }
 
-@keyframes summarySheen {
-  from { transform: translateX(-120%); }
-  to { transform: translateX(120%); }
+@keyframes containedSheen {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) skewX(-14deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(360%, 0, 0) skewX(-14deg);
+  }
 }
 
 @keyframes summaryShake {
@@ -199,6 +211,7 @@ body {
 
 .prediction-card {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   transform: translateZ(0);
   will-change: transform;
@@ -208,16 +221,20 @@ body {
   content: "";
   pointer-events: none;
   position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 10%, rgba(255, 255, 255, 0.18), transparent 90%);
+  inset-block: -1px;
+  left: -36%;
+  width: 34%;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 10%, rgba(255, 255, 255, 0.16), transparent 90%);
   opacity: 0;
-  transform: translateX(-120%);
+  transform: translate3d(0, 0, 0) skewX(-14deg);
+  will-change: transform, opacity;
 }
 
 .prediction-card:hover::after,
 .prediction-card:focus-visible::after {
   opacity: 1;
-  animation: summarySheen 820ms ease;
+  animation: containedSheen 620ms ease-out;
 }
 
 .game-stage {
@@ -376,6 +393,7 @@ body {
   min-height: 68px;
   align-items: center;
   justify-content: space-between;
+  isolation: isolate;
   overflow: hidden;
   border-radius: 18px;
   padding: 0 18px;
@@ -387,7 +405,7 @@ body {
 .home-primary-action {
   border: 1px solid rgba(255, 62, 165, 0.55);
   background: linear-gradient(135deg, rgba(255, 62, 165, 0.95), rgba(168, 85, 247, 0.88), rgba(34, 211, 238, 0.78));
-  box-shadow: 0 0 30px rgba(255, 62, 165, 0.36);
+  box-shadow: 0 0 18px rgba(255, 62, 165, 0.24), 0 12px 28px rgba(0, 0, 0, 0.22);
 }
 
 .home-secondary-action {
@@ -407,23 +425,29 @@ body {
 .home-secondary-action::after,
 .home-admin-action::after {
   content: "";
+  pointer-events: none;
   position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
-  transform: translateX(-120%);
+  inset-block: -1px;
+  left: -34%;
+  width: 32%;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 10%, rgba(255, 255, 255, 0.18), transparent 90%);
+  opacity: 0;
+  transform: translate3d(0, 0, 0) skewX(-14deg);
+  will-change: transform, opacity;
 }
 
 .home-primary-action:hover,
 .home-secondary-action:hover,
 .home-admin-action:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px) scale(1.005);
   filter: brightness(1.08);
 }
 
 .home-primary-action:hover::after,
 .home-secondary-action:hover::after,
 .home-admin-action:hover::after {
-  animation: summarySheen 760ms ease;
+  animation: containedSheen 560ms ease-out;
 }
 
 .home-action-key,
@@ -715,6 +739,7 @@ body {
 .btn-primary,
 .btn-secondary {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   transform: translateZ(0);
 }
@@ -723,12 +748,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background:
     linear-gradient(135deg, rgba(255, 62, 165, 0.98), rgba(168, 85, 247, 0.92) 52%, rgba(34, 211, 238, 0.82)) !important;
+  box-shadow: 0 0 18px rgba(255, 62, 165, 0.22), 0 12px 28px rgba(0, 0, 0, 0.24) !important;
 }
 
 .btn-secondary {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(34, 211, 238, 0.06)),
     rgba(29, 17, 48, 0.82) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18) !important;
 }
 
 .btn-primary::after,
@@ -736,16 +763,21 @@ body {
   content: "";
   pointer-events: none;
   position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 18%, rgba(255, 255, 255, 0.24), transparent 78%);
-  transform: translateX(-120%);
+  inset-block: -1px;
+  left: -34%;
+  width: 30%;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 10%, rgba(255, 255, 255, 0.18), transparent 90%);
+  opacity: 0;
+  transform: translate3d(0, 0, 0) skewX(-14deg);
+  will-change: transform, opacity;
 }
 
 .btn-primary:hover::after,
 .btn-primary:focus-visible::after,
 .btn-secondary:hover::after,
 .btn-secondary:focus-visible::after {
-  animation: summarySheen 740ms ease;
+  animation: containedSheen 560ms ease-out;
 }
 
 .card {
@@ -813,16 +845,20 @@ body {
   content: "";
   pointer-events: none;
   position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 14%, rgba(255, 255, 255, 0.12), transparent 74%);
+  inset-block: -1px;
+  left: -32%;
+  width: 28%;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 12%, rgba(255, 255, 255, 0.1), transparent 88%);
   opacity: 0;
-  transform: translateX(-120%);
+  transform: translate3d(0, 0, 0) skewX(-14deg);
+  will-change: transform, opacity;
 }
 
 .library-card:hover::after,
 .library-card:focus-within::after {
   opacity: 1;
-  animation: summarySheen 820ms ease;
+  animation: containedSheen 640ms ease-out;
 }
 
 /* Évite que le clavier mobile ne fasse zoomer iOS sur les inputs. */
