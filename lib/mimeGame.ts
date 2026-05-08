@@ -22,7 +22,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
     typeof raw.currentMimePlayerId === "string" ? raw.currentMimePlayerId : playerOrder[currentMimeIndex] ?? "";
   const currentExpressionId = toInt(raw.currentExpressionId, 0);
   const usedExpressionIds = Array.isArray(raw.usedExpressionIds)
-    ? raw.usedExpressionIds.map((id) => toInt(id, 0)).filter((id) => id > 0)
+    ? raw.usedExpressionIds.map((id) => toInt(id, 0)).filter((id) => id !== 0)
     : [];
   const mimeHistory = Array.isArray(raw.mimeHistory)
     ? raw.mimeHistory
@@ -36,7 +36,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
           };
         })
         .filter((entry): entry is NonNullable<typeof entry> =>
-          Boolean(entry && entry.roundNumber > 0 && entry.mimePlayerId && entry.expressionId > 0)
+          Boolean(entry && entry.roundNumber > 0 && entry.mimePlayerId && entry.expressionId !== 0)
         )
     : [];
   const roundNumber = toInt(raw.roundNumber, 0);

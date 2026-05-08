@@ -30,6 +30,7 @@ import {
   questionFromSnapshot,
 } from "@/lib/questionPoolEngine";
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
+import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
 import {
   PredictionRevealPanel,
   PredictionScoreboardPanel,
@@ -284,6 +285,10 @@ export default function PlayerPage() {
     });
     if (!submission) {
       setVoteError("Question incomplète pour ce mode.");
+      return;
+    }
+    if (hasDuplicateCustomQuestion(customQuestions, gameType, submission)) {
+      setVoteError("Cette question existe déjà dans la room.");
       return;
     }
     setSubmittingQuestion(true);
@@ -1293,41 +1298,6 @@ function countSubmittedRatings(requiredPlayers: Player[], ratings: Rating[]): nu
       .map((rating) => rating.voter_player_id)
   );
   return voterIds.size;
-}
-
-function buildCustomQuestionSubmission({
-  gameType,
-  text,
-  optionA,
-  optionB,
-  options,
-}: {
-  gameType: GameType;
-  text: string;
-  optionA: string;
-  optionB: string;
-  options: string;
-}): { questionText: string; category: string; payload: Record<string, unknown> } | null {
-  if (gameType === "who_would") {
-    const cleanText = text.trim().replace(/\s+/g, " ");
-    const a = optionA.trim();
-    const b = optionB.trim();
-    if (a.length < 2 || b.length < 2) return null;
-    return { questionText: cleanText || `Tu préfères : ${a} ou ${b} ?`, category: "joueurs", payload: { optionA: a, optionB: b } };
-  }
-  if (gameType === "majority" || gameType === "minority") {
-    const cleanText = text.trim().replace(/\s+/g, " ");
-    const parsedOptions = options
-      .split(/\n|,/)
-      .map((option) => option.trim())
-      .filter(Boolean)
-      .slice(0, 8);
-    if (cleanText.length < 8 || parsedOptions.length < 2) return null;
-    return { questionText: cleanText, category: "joueurs", payload: { options: parsedOptions } };
-  }
-  const cleanText = text.trim().replace(/\s+/g, " ");
-  if (cleanText.length < 8) return null;
-  return { questionText: cleanText, category: "joueurs", payload: {} };
 }
 
 function getWhoWouldStats(players: Player[], votes: Vote[]): WhoWouldStats {

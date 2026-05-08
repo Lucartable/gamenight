@@ -27,6 +27,7 @@ import { useSavedQuestions } from "@/lib/useSavedQuestions";
 import {
   buildQuestionPlan,
   buildQuestionPlanWithDiagnostics,
+  generateLocalQuestionId,
   getQuestionSourceSettings,
   makeQuestionSnapshot,
   pickNextQuestionFromPlan,
@@ -35,6 +36,7 @@ import {
   type QuestionPoolItem,
 } from "@/lib/questionPoolEngine";
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
+import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
 import {
   buildMimeGameState,
   findNextMimeIndex,
@@ -45,7 +47,6 @@ import {
   isMimeGame,
   mergePlayerOrder,
   moveId,
-  pickMimeExpression,
   prunePlayerOrder,
   shuffleIds,
   type MimeOrderMode,
@@ -166,6 +167,11 @@ export default function HostPage() {
   const [jaugeBrutalMode, setJaugeBrutalMode] = useState(false);
   const [jaugeAutoJaugeMode, setJaugeAutoJaugeMode] = useState(false);
   const [jaugeAllowPlayerQuestions, setJaugeAllowPlayerQuestions] = useState(false);
+  const [hostQuestionDraft, setHostQuestionDraft] = useState("");
+  const [hostQuestionOptionA, setHostQuestionOptionA] = useState("");
+  const [hostQuestionOptionB, setHostQuestionOptionB] = useState("");
+  const [hostQuestionOptions, setHostQuestionOptions] = useState("");
+  const [hostSubmittingQuestion, setHostSubmittingQuestion] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const transitionRef = useRef(false);
@@ -194,6 +200,14 @@ export default function HostPage() {
     () => getSelectedCategories(room),
     [room]
   );
+
+  useEffect(() => {
+    setHostQuestionDraft("");
+    setHostQuestionOptionA("");
+    setHostQuestionOptionB("");
+    setHostQuestionOptions("");
+  }, [gameType]);
+
   const gameDefinition = getGameDefinition(gameType);
   const questionSourceSettings = useMemo(
     () => getQuestionSourceSettings(room?.question_source_settings),
@@ -207,6 +221,17 @@ export default function HostPage() {
     [gameType, room?.current_question_id, room?.current_question_snapshot]
   );
   const currentQ = currentSnapshotQuestion ?? getQuestionForGame(gameType, room?.current_question_id);
+  const hostSubmittedQuestionCount = useMemo(
+    () =>
+      me && gameType
+        ? customQuestions.filter((question) => question.game_type === gameType && question.author_player_id === me.id).length
+        : 0,
+    [customQuestions, gameType, me]
+  );
+  const liveQuestionCountForGame = useMemo(
+    () => (gameType ? customQuestions.filter((question) => question.game_type === gameType).length : 0),
+    [customQuestions, gameType]
+  );
   const totalQuestions = room?.total_questions ?? DEFAULT_TOTAL_QUESTIONS;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
@@ -347,7 +372,7 @@ export default function HostPage() {
   );
 
   const questionPlanResult = useMemo(() => {
-    if (!gameType || gameType === "mime_expressions") return null;
+    if (!gameType) return null;
     return buildQuestionPlanWithDiagnostics({
       gameType,
       selectedCategories,
@@ -360,15 +385,8 @@ export default function HostPage() {
   }, [blockedQuestionIds, customQuestions, gameType, questionSourceSettings, savedQuestions, selectedCategories, totalQuestions]);
   const filteredAvailable = useMemo(() => {
     if (!gameType) return [];
-    if (gameType === "mime_expressions") {
-      return getQuestionsForGame(gameType).filter(
-        (question) =>
-          selectedCategories.includes(question.category) &&
-          !blockedQuestionIds.includes(question.id)
-      );
-    }
     return questionPlanResult?.plan ?? [];
-  }, [blockedQuestionIds, gameType, questionPlanResult, selectedCategories]);
+  }, [gameType, questionPlanResult]);
   const questionPoolDiagnostics = questionPlanResult?.diagnostics ?? null;
 
   const submittedVotesCount = useMemo(
@@ -781,7 +799,17 @@ export default function HostPage() {
       setActionError("Ajoute au moins un joueur dans l'ordre de passage.");
       return;
     }
-    const expression = pickMimeExpression(selectedCategories, blockedQuestionIds);
+    const expression = pickNextQuestionFromPlan(
+      buildQuestionPlan({
+        gameType: "mime_expressions",
+        selectedCategories,
+        totalQuestions,
+        excludeIds: blockedQuestionIds,
+        liveQuestions: customQuestions,
+        savedQuestions,
+        settings: questionSourceSettings,
+      })
+    ) as (MimeExpressionQuestion & QuestionPoolItem) | undefined;
     if (!expression) {
       setActionError("Aucune expression disponible avec ces thèmes.");
       return;
@@ -843,10 +871,17 @@ export default function HostPage() {
       await finishGame(false);
       return;
     }
-    const expression = pickMimeExpression(
-      selectedCategories,
-      uniqueIds([...blockedQuestionIds, ...mimeGameState.usedExpressionIds])
-    );
+    const expression = pickNextQuestionFromPlan(
+      buildQuestionPlan({
+        gameType: "mime_expressions",
+        selectedCategories,
+        totalQuestions,
+        excludeIds: uniqueIds([...blockedQuestionIds, ...mimeGameState.usedExpressionIds]),
+        liveQuestions: customQuestions,
+        savedQuestions,
+        settings: questionSourceSettings,
+      })
+    ) as (MimeExpressionQuestion & QuestionPoolItem) | undefined;
     if (!expression) {
       await finishGame(false);
       return;
@@ -1230,6 +1265,52 @@ export default function HostPage() {
     }
   }
 
+  async function submitHostPlayerQuestion() {
+    setActionError(null);
+    if (!room || !gameType || !me || hostSubmittingQuestion) return;
+    if (hostSubmittedQuestionCount >= questionSourceSettings.maxQuestionsPerPlayer) {
+      setActionError("Tu as déjà proposé le maximum de questions pour ce jeu.");
+      return;
+    }
+    const submission = buildCustomQuestionSubmission({
+      gameType,
+      text: hostQuestionDraft,
+      optionA: hostQuestionOptionA,
+      optionB: hostQuestionOptionB,
+      options: hostQuestionOptions,
+    });
+    if (!submission) {
+      setActionError("Question incomplète pour ce mode.");
+      return;
+    }
+    if (hasDuplicateCustomQuestion(customQuestions, gameType, submission)) {
+      setActionError("Cette question existe déjà dans la room.");
+      return;
+    }
+    setHostSubmittingQuestion(true);
+    try {
+      const { error } = await getSupabase().from("custom_questions").insert({
+        room_id: room.id,
+        author_player_id: me.id,
+        game_type: gameType,
+        local_question_id: generateLocalQuestionId("live"),
+        question_text: submission.questionText,
+        category: submission.category,
+        payload: submission.payload,
+      });
+      if (error) throw error;
+      setHostQuestionDraft("");
+      setHostQuestionOptionA("");
+      setHostQuestionOptionB("");
+      setHostQuestionOptions("");
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
+    } finally {
+      setHostSubmittingQuestion(false);
+    }
+  }
+
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
@@ -1325,6 +1406,27 @@ export default function HostPage() {
         </div>
       )}
 
+      {room.status === "lobby" && gameType && questionSourceSettings.useLiveQuestions && me && (
+        <HostCustomQuestionPanel
+          gameType={gameType}
+          playerName={me.name}
+          draft={hostQuestionDraft}
+          optionA={hostQuestionOptionA}
+          optionB={hostQuestionOptionB}
+          options={hostQuestionOptions}
+          submitting={hostSubmittingQuestion}
+          myQuestionCount={hostSubmittedQuestionCount}
+          liveQuestionCount={liveQuestionCountForGame}
+          maxQuestionsPerPlayer={questionSourceSettings.maxQuestionsPerPlayer}
+          expectedQuestionCount={players.length * questionSourceSettings.maxQuestionsPerPlayer}
+          onDraftChange={setHostQuestionDraft}
+          onOptionAChange={setHostQuestionOptionA}
+          onOptionBChange={setHostQuestionOptionB}
+          onOptionsChange={setHostQuestionOptions}
+          onSubmit={submitHostPlayerQuestion}
+        />
+      )}
+
       {(room.status === "question_active" || room.status === "reveal_results") && currentQ && profileState.canManageQuestions && (
         <SaveQuestionButton saving={savingQuestion} notice={saveNotice} onSave={saveCurrentQuestion} />
       )}
@@ -1360,6 +1462,12 @@ export default function HostPage() {
           onCommitCustomQuestionCount={commitCustomQuestionCount}
           onToggleCategory={toggleCategory}
           onUpdateConfig={updateConfig}
+          questionSourceSettings={questionSourceSettings}
+          canUseSavedQuestions={profileState.canManageQuestions}
+          savedQuestionCount={savedQuestions.length}
+          liveQuestionCount={liveQuestionCountForGame}
+          questionPoolDiagnostics={questionPoolDiagnostics}
+          onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
           onStart={() => void startMimeGame(mimeLobbyOrder, mimeHostPlayMode)}
           onChangeGame={changeGame}
         />
@@ -1434,7 +1542,7 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
-          liveQuestionCount={customQuestions.filter((question) => question.game_type === gameType).length}
+          liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => {
             const nextMode = getEffectiveJaugeQuestionMode(next, jaugeQuestionMode);
@@ -1465,7 +1573,7 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
-          liveQuestionCount={customQuestions.filter((question) => question.game_type === gameType).length}
+          liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
           onStart={goToNextQuestion}
@@ -2078,6 +2186,99 @@ function LobbyView({
   );
 }
 
+function HostCustomQuestionPanel({
+  gameType,
+  playerName,
+  draft,
+  optionA,
+  optionB,
+  options,
+  submitting,
+  myQuestionCount,
+  liveQuestionCount,
+  maxQuestionsPerPlayer,
+  expectedQuestionCount,
+  onDraftChange,
+  onOptionAChange,
+  onOptionBChange,
+  onOptionsChange,
+  onSubmit,
+}: {
+  gameType: GameType;
+  playerName: string;
+  draft: string;
+  optionA: string;
+  optionB: string;
+  options: string;
+  submitting: boolean;
+  myQuestionCount: number;
+  liveQuestionCount: number;
+  maxQuestionsPerPlayer: number;
+  expectedQuestionCount: number;
+  onDraftChange: (value: string) => void;
+  onOptionAChange: (value: string) => void;
+  onOptionBChange: (value: string) => void;
+  onOptionsChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="card mb-4 border-neon-cyan/30 bg-neon-cyan/10 p-5 animate-reveal-in">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Questions joueurs</div>
+          <h2 className="mt-1 text-xl font-black">Ajouter mes questions</h2>
+          <p className="mt-1 text-sm font-semibold text-white/60">
+            Tu contribues comme joueur avec le profil de partie “{playerName}”.
+          </p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-black text-white/60">
+          toi {myQuestionCount}/{maxQuestionsPerPlayer}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {gameType === "who_would" ? (
+          <>
+            <input className="input rounded-2xl p-3" value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder="Question / contexte (optionnel)" />
+            <input className="input rounded-2xl p-3" value={optionA} onChange={(event) => onOptionAChange(event.target.value)} placeholder="Option A" />
+            <input className="input rounded-2xl p-3" value={optionB} onChange={(event) => onOptionBChange(event.target.value)} placeholder="Option B" />
+          </>
+        ) : (
+          <textarea
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            maxLength={220}
+            rows={3}
+            className="input min-h-24 w-full resize-none rounded-2xl p-3"
+            placeholder={gameType === "mime_expressions" ? "Expression à mimer..." : gameType === "jauge" ? "À quel point cette personne..." : "Écris ta question..."}
+          />
+        )}
+        {(gameType === "majority" || gameType === "minority") && (
+          <textarea
+            value={options}
+            onChange={(event) => onOptionsChange(event.target.value)}
+            rows={3}
+            className="input min-h-20 w-full resize-none rounded-2xl p-3"
+            placeholder="Options, une par ligne"
+          />
+        )}
+      </div>
+
+      <button
+        type="button"
+        disabled={submitting || myQuestionCount >= maxQuestionsPerPlayer}
+        onClick={onSubmit}
+        className="btn-secondary mt-3 w-full"
+      >
+        {submitting ? "Ajout..." : myQuestionCount >= maxQuestionsPerPlayer ? "Limite atteinte" : "Ajouter ma question"}
+      </button>
+      <p className="mt-2 text-center text-xs font-semibold text-white/45">
+        {liveQuestionCount}/{expectedQuestionCount} question{expectedQuestionCount > 1 ? "s" : ""} attendue{expectedQuestionCount > 1 ? "s" : ""} si tout le monde contribue.
+      </p>
+    </section>
+  );
+}
+
 function JaugeLobbyView({
   players,
   availableCount,
@@ -2488,6 +2689,12 @@ function MimeLobbyView({
   onCommitCustomQuestionCount,
   onToggleCategory,
   onUpdateConfig,
+  questionSourceSettings,
+  canUseSavedQuestions,
+  savedQuestionCount,
+  liveQuestionCount,
+  questionPoolDiagnostics,
+  onQuestionSourceSettingsChange,
   onStart,
   onChangeGame,
 }: {
@@ -2510,6 +2717,12 @@ function MimeLobbyView({
   onCommitCustomQuestionCount: () => void;
   onToggleCategory: (category: GameCategory) => void;
   onUpdateConfig: (patch: RoomConfigPatch) => void;
+  questionSourceSettings: QuestionSourceSettings;
+  canUseSavedQuestions: boolean;
+  savedQuestionCount: number;
+  liveQuestionCount: number;
+  questionPoolDiagnostics: QuestionPoolDiagnostics | null;
+  onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
   onStart: () => void;
   onChangeGame: () => void;
 }) {
@@ -2532,6 +2745,19 @@ function MimeLobbyView({
           </button>
         </div>
       </section>
+
+      <QuestionSourcePanel
+        settings={questionSourceSettings}
+        canUseSavedQuestions={canUseSavedQuestions}
+        savedQuestionCount={savedQuestionCount}
+        liveQuestionCount={liveQuestionCount}
+        onChange={onQuestionSourceSettingsChange}
+      />
+      {questionPoolDiagnostics?.issue && (
+        <p className="mb-4 rounded-2xl border border-neon-yellow/30 bg-neon-yellow/10 p-3 text-sm font-bold text-neon-yellow">
+          {questionPoolDiagnostics.issue}
+        </p>
+      )}
 
       <section className="card mb-4 p-5">
         <h2 className="mb-3 text-lg font-bold">Joueurs présents</h2>
