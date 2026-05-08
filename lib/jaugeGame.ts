@@ -353,13 +353,15 @@ function pickJaugeQuestion({
 }): JaugeRoundQuestion | null {
   const pool = getJaugeQuestionPool(selectedCategories, questionMode, playerQuestions, usedQuestionIds);
   if (!pool.length) return null;
-  if (questionMode === "random") return pool[Math.floor(Math.random() * pool.length)];
   const poolById = new Map(pool.map((question) => [question.id, question]));
-  for (let offset = 0; offset < Math.max(questionOrder.length, pool.length); offset += 1) {
-    const id = questionOrder[(currentQuestionOrderIndex + offset) % Math.max(1, questionOrder.length)];
-    const question = poolById.get(id);
-    if (question) return question;
+  if (questionOrder.length) {
+    for (let offset = 0; offset < Math.max(questionOrder.length, pool.length); offset += 1) {
+      const id = questionOrder[(currentQuestionOrderIndex + offset) % Math.max(1, questionOrder.length)];
+      const question = poolById.get(id);
+      if (question) return question;
+    }
   }
+  if (questionMode === "random") return pool[Math.floor(Math.random() * pool.length)];
   return pool[0] ?? null;
 }
 

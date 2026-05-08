@@ -7,7 +7,7 @@ export type JaugeTargetMode = "random" | "arrival" | "custom";
 export type JaugeQuestionMode = "random" | "fixed" | "players";
 export type JaugeAnonymityMode = "visible" | "round_anonymous" | "final_reveal" | "anonymous";
 export type UserRole = "player" | "trusted" | "admin";
-export type QuestionSourceMode = "system_only" | "players_only" | "smart_mix";
+export type QuestionSourceMode = "system_only" | "players_only" | "saved_only" | "smart_mix" | "all_mix";
 export type QuestionAuthorVisibility = "hidden" | "final_reveal" | "visible";
 
 export interface QuestionSourceSettings {

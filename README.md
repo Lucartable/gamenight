@@ -46,7 +46,28 @@ npm install
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
 > Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql) et [`supabase/guest_auth_refactor_migration.sql`](supabase/guest_auth_refactor_migration.sql).
 
-Pour autoriser un compte à gérer la bibliothèque, connecte-toi une première fois dans l'app, récupère l'UUID dans `auth.users`, puis exécute :
+### Compte admin principal
+
+Le mot de passe admin ne doit jamais être écrit dans le frontend. Pour créer le compte principal, utilise Supabase Auth puis applique le rôle `admin`.
+
+Méthode recommandée, via le script serveur :
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL="https://xxxxx.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
+ADMIN_EMAIL="verde.luca21@gmail.com" \
+ADMIN_PASSWORD="admin123" \
+npm run seed:admin
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` se trouve dans **Project Settings → API** et doit rester secret : serveur/local uniquement, jamais dans une variable `NEXT_PUBLIC_*`.
+
+Méthode manuelle :
+
+1. Dans **Authentication → Users**, crée `verde.luca21@gmail.com` avec le mot de passe `admin123`.
+2. Dans **SQL Editor**, exécute [`supabase/set_admin_role.sql`](supabase/set_admin_role.sql).
+
+Pour autoriser un autre compte à gérer la bibliothèque, connecte-toi une première fois dans l'app, récupère l'UUID dans `auth.users`, puis exécute :
 
 ```sql
 update public.profiles set role = 'trusted' where id = '<USER_UUID>';
@@ -245,3 +266,4 @@ Exemple : pour une partie de 25 questions avec 15 questions joueurs disponibles,
 | `npm run build`  | Build de production            |
 | `npm run start`  | Démarre le build de prod       |
 | `npm run lint`   | Lint le code                   |
+| `npm run seed:admin` | Crée/met à jour un compte Supabase Auth admin via service-role |

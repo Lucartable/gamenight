@@ -43,6 +43,7 @@ export interface WhoWouldQuestion {
   id: number;
   gameType: "who_would";
   category: WhoWouldCategory;
+  text?: string;
   optionA: string;
   optionB: string;
 }

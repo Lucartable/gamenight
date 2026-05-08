@@ -601,6 +601,7 @@ function Lobby({
           <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Question joueur</div>
           {gameType === "who_would" ? (
             <div className="mt-3 grid gap-2">
+              <input className="input rounded-2xl p-3" value={questionDraft} onChange={(event) => onQuestionDraftChange(event.target.value)} placeholder="Question / contexte (optionnel)" />
               <input className="input rounded-2xl p-3" value={questionOptionA} onChange={(event) => onQuestionOptionAChange(event.target.value)} placeholder="Option A" />
               <input className="input rounded-2xl p-3" value={questionOptionB} onChange={(event) => onQuestionOptionBChange(event.target.value)} placeholder="Option B" />
             </div>
@@ -802,6 +803,7 @@ function WhoWouldVoteScreen({
 
   return (
     <VoteShell category={category} startedAt={startedAt} durationSec={durationSec}>
+      {question.text && <h2 className="mb-3 text-center text-2xl font-black leading-tight">{question.text}</h2>}
       <div className="grid flex-1 gap-3">
         <ChoiceButton
           accent="pink"
@@ -1016,6 +1018,7 @@ function WhoWouldReveal({
 
   return (
     <RevealShell category={category} totalVotes={stats.total} revealLeft={revealLeft} autoplay={autoplay}>
+      {question.text && <h2 className="mb-3 text-center text-2xl font-black leading-tight">{question.text}</h2>}
       <div className="grid flex-1 gap-3">
         <ResultCard
           accent="pink"
@@ -1264,10 +1267,11 @@ function buildCustomQuestionSubmission({
   options: string;
 }): { questionText: string; category: string; payload: Record<string, unknown> } | null {
   if (gameType === "who_would") {
+    const cleanText = text.trim().replace(/\s+/g, " ");
     const a = optionA.trim();
     const b = optionB.trim();
     if (a.length < 2 || b.length < 2) return null;
-    return { questionText: `${a} / ${b}`, category: "joueurs", payload: { optionA: a, optionB: b } };
+    return { questionText: cleanText || `Tu préfères : ${a} ou ${b} ?`, category: "joueurs", payload: { optionA: a, optionB: b } };
   }
   if (gameType === "majority" || gameType === "minority") {
     const cleanText = text.trim().replace(/\s+/g, " ");
