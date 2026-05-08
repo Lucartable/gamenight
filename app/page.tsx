@@ -198,56 +198,93 @@ export default function HomePage() {
 
         {mode === "menu" && (
           <div className="mt-8 flex flex-1 flex-col">
-            <section className="home-action-panel p-3">
-              {authMessage && (
-                <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
-                  {authMessage}
+            {profile.loading && (
+              <section className="home-action-panel mb-4 p-5">
+                <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Session</div>
+                <h2 className="mt-2 text-2xl font-black">Vérification admin...</h2>
+                <p className="mt-2 text-sm font-semibold text-white/55">
+                  Badaboum vérifie si un compte admin/trusted est déjà connecté.
                 </p>
-              )}
-              <button
-                type="button"
-                onClick={() => setMode("guest")}
-                className="home-primary-action w-full"
-              >
-                <span>Jouer en invité</span>
-                <span className="home-action-key">INSTANT</span>
-              </button>
-              {!profile.userEmail && (
-                <button
-                  type="button"
-                  onClick={() => setMode("admin")}
-                  className="home-admin-action mt-3 w-full"
-                >
-                  <span>Connexion admin</span>
-                  <span className="home-action-key">TRUSTED</span>
-                </button>
-              )}
-              {profile.canManageQuestions && (
-                <Link href="/questions" className="btn-secondary mt-3 w-full">
-                  Ouvrir la bibliothèque
-                </Link>
-              )}
-            </section>
+              </section>
+            )}
 
-            <section className="mt-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
-                  mobile first
-                </span>
-              </div>
-              <div className="grid gap-2">
-                {GAME_TEASERS.map((game, index) => (
-                  <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
-                    <div className="min-w-0">
-                      <div className="truncate text-base font-black">{game.title}</div>
-                      <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
-                    </div>
-                    <span className="home-game-tag">{game.tag}</span>
-                  </article>
-                ))}
-              </div>
-            </section>
+            {!profile.loading && profile.canManageQuestions && (
+              <section className="home-action-panel mb-4 p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-neon-green/40 bg-neon-green/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-neon-green">
+                    {profile.isAdmin ? "Admin" : "Trusted"}
+                  </span>
+                  <span className="text-sm font-black">Connecté en tant qu&apos;{profile.isAdmin ? "admin" : "trusted"}</span>
+                </div>
+                {profile.userEmail && <p className="mt-2 truncate text-sm font-semibold text-white/55">{profile.userEmail}</p>}
+                <div className="mt-4 grid gap-3">
+                  <Link href="/questions" className="btn-primary w-full">
+                    Bibliothèque
+                  </Link>
+                  <button type="button" onClick={() => setMode("guest")} className="btn-secondary w-full">
+                    Jouer / Créer une salle
+                  </button>
+                  <button type="button" onClick={() => void profile.signOut()} className="btn-ghost w-full">
+                    Se déconnecter
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {!profile.loading && (
+              <>
+                <section className="home-action-panel p-3">
+                  {authMessage && (
+                    <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
+                      {authMessage}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMode("guest")}
+                    className="home-primary-action w-full"
+                  >
+                    <span>Jouer en invité</span>
+                    <span className="home-action-key">INSTANT</span>
+                  </button>
+                  {!profile.userEmail && (
+                    <button
+                      type="button"
+                      onClick={() => setMode("admin")}
+                      className="home-admin-action mt-3 w-full"
+                    >
+                      <span>Connexion admin</span>
+                      <span className="home-action-key">TRUSTED</span>
+                    </button>
+                  )}
+                  {profile.canManageQuestions && (
+                    <Link href="/questions" className="btn-secondary mt-3 w-full">
+                      Ouvrir la bibliothèque
+                    </Link>
+                  )}
+                </section>
+
+                <section className="mt-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
+                      mobile first
+                    </span>
+                  </div>
+                  <div className="grid gap-2">
+                    {GAME_TEASERS.map((game, index) => (
+                      <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
+                        <div className="min-w-0">
+                          <div className="truncate text-base font-black">{game.title}</div>
+                          <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
+                        </div>
+                        <span className="home-game-tag">{game.tag}</span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         )}
 

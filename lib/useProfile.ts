@@ -9,6 +9,8 @@ interface UseProfileState {
   userEmail: string | null;
   profile: Profile | null;
   role: UserRole;
+  isAdmin: boolean;
+  isTrusted: boolean;
   canManageQuestions: boolean;
   loading: boolean;
   signInWithEmail: (email: string) => Promise<string | null>;
@@ -54,7 +56,9 @@ export function useProfile(): UseProfileState {
   }, [refresh]);
 
   const role = profile?.role ?? "player";
-  const canManageQuestions = role === "trusted" || role === "admin";
+  const isAdmin = role === "admin";
+  const isTrusted = role === "trusted";
+  const canManageQuestions = isTrusted || isAdmin;
 
   const signInWithEmail = useCallback(async (email: string) => {
     const clean = email.trim().toLowerCase();
@@ -83,7 +87,7 @@ export function useProfile(): UseProfileState {
   }, []);
 
   return useMemo(
-    () => ({ userId, userEmail, profile, role, canManageQuestions, loading, signInWithEmail, signInWithPassword, signOut, refresh }),
-    [canManageQuestions, loading, profile, refresh, role, signInWithEmail, signInWithPassword, signOut, userEmail, userId]
+    () => ({ userId, userEmail, profile, role, isAdmin, isTrusted, canManageQuestions, loading, signInWithEmail, signInWithPassword, signOut, refresh }),
+    [canManageQuestions, isAdmin, isTrusted, loading, profile, refresh, role, signInWithEmail, signInWithPassword, signOut, userEmail, userId]
   );
 }
