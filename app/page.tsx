@@ -34,7 +34,7 @@ export default function HomePage() {
   const profile = useProfile();
   const [mode, setMode] = useState<Mode>("menu");
   const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("B");
+  const [avatar, setAvatar] = useState("");
   const [color, setColor] = useState("#ff3ea5");
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => createRandomAvatarConfig("badaboum"));
   const [code, setCode] = useState("");

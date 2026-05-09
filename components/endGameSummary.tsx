@@ -11,7 +11,7 @@ import {
 } from "@/lib/endGameSummary";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
-import { PlayerAvatar } from "@/components/playerAvatar";
+import { AnonymousAvatar, PlayerAvatar } from "@/components/playerAvatar";
 import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 const TONE_STYLES: Record<SummaryTone, { border: string; bg: string; text: string; glow: string; bar: string }> = {
@@ -244,7 +244,7 @@ function SpotlightCard({ spotlight, index }: { spotlight: SummarySpotlight; inde
       style={{ animationDelay: `${index * 70}ms` }}
     >
       <div className="flex items-start gap-3">
-        {spotlight.player ? <PlayerAvatar player={spotlight.player} size="lg" /> : <div className="h-14 w-14 rounded-2xl bg-white/10" />}
+        {spotlight.player ? <PlayerAvatar player={spotlight.player} size="lg" /> : <AnonymousAvatar size="lg" />}
         <div className="min-w-0 flex-1">
           <div className={`text-xs font-black uppercase tracking-wider ${tone.text}`}>{spotlight.label}</div>
           <h3 className="mt-1 text-xl font-black leading-tight">{spotlight.title}</h3>

@@ -65,6 +65,21 @@ export function buildJaugeSummary({
     ? buildJaugeRelationInsights(heatmap, generous, severe)
     : ["Anonymat permanent activé : les relations de notes restent enterrées."];
   const rareMoments = buildJaugeRareMoments(players, visibleRatings, rankedTargets, mostControversial);
+  const buildVoterSpotlight = (
+    base: Omit<SummarySpotlight, "player" | "detail"> & { detail: string },
+    voter: JaugePlayerStats | null,
+    fallbackDetail: string
+  ): SummarySpotlight => {
+    if (!voter) return { ...base, player: null };
+    if (!canRevealAuthors) {
+      return {
+        ...base,
+        player: null,
+        detail: fallbackDetail,
+      };
+    }
+    return { ...base, player: voter.player };
+  };
   const spotlights: SummarySpotlight[] = [
     {
       id: "best-average",
@@ -88,39 +103,48 @@ export function buildJaugeSummary({
         : "Pas assez d'écarts pour créer un vrai débat.",
       tone: mostControversial && mostControversial.spreadReceived >= 6 ? "danger" : "pink",
     },
-    {
-      id: "generous",
-      label: "Juge généreux",
-      title: generous ? "Distribue les 10" : "Personne ne valide",
-      player: generous?.player ?? null,
-      value: generous ? `${formatRating(generous.averageGiven)}` : "0",
-      detail: generous
-        ? `${generous.player.name} donne en moyenne ${formatRating(generous.averageGiven)}/10.`
-        : "Aucune note donnée.",
-      tone: "green",
-    },
-    {
-      id: "severe",
-      label: "Juge sévère",
-      title: severe ? "Correcteur impitoyable" : "Aucune sévérité",
-      player: severe?.player ?? null,
-      value: severe ? `${formatRating(severe.averageGiven)}` : "0",
-      detail: severe
-        ? `${severe.player.name} note en moyenne ${formatRating(severe.averageGiven)}/10.`
-        : "Aucune note donnée.",
-      tone: "cyan",
-    },
-    {
-      id: "extreme",
-      label: "Notes extrêmes",
-      title: extreme ? "Zéro nuance" : "Tout est tiède",
-      player: extreme?.player ?? null,
-      value: extreme ? `${formatRating(extreme.extremeGiven)}` : "0",
-      detail: extreme
-        ? `${extreme.player.name} s'éloigne le plus du centre de la jauge.`
-        : "Pas assez de notes pour mesurer les extrêmes.",
-      tone: "purple",
-    },
+    buildVoterSpotlight(
+      {
+        id: "generous",
+        label: "Juge généreux",
+        title: generous ? "Distribue les 10" : "Personne ne valide",
+        value: generous ? `${formatRating(generous.averageGiven)}` : "0",
+        detail: generous
+          ? `${generous.player.name} donne en moyenne ${formatRating(generous.averageGiven)}/10.`
+          : "Aucune note donnée.",
+        tone: "green",
+      },
+      generous,
+      generous ? `Un juge anonyme distribue ${formatRating(generous.averageGiven)}/10 en moyenne.` : "Aucune note donnée."
+    ),
+    buildVoterSpotlight(
+      {
+        id: "severe",
+        label: "Juge sévère",
+        title: severe ? "Correcteur impitoyable" : "Aucune sévérité",
+        value: severe ? `${formatRating(severe.averageGiven)}` : "0",
+        detail: severe
+          ? `${severe.player.name} note en moyenne ${formatRating(severe.averageGiven)}/10.`
+          : "Aucune note donnée.",
+        tone: "cyan",
+      },
+      severe,
+      severe ? `Un juge anonyme garde la moyenne la plus froide à ${formatRating(severe.averageGiven)}/10.` : "Aucune note donnée."
+    ),
+    buildVoterSpotlight(
+      {
+        id: "extreme",
+        label: "Notes extrêmes",
+        title: extreme ? "Zéro nuance" : "Tout est tiède",
+        value: extreme ? `${formatRating(extreme.extremeGiven)}` : "0",
+        detail: extreme
+          ? `${extreme.player.name} s'éloigne le plus du centre de la jauge.`
+          : "Pas assez de notes pour mesurer les extrêmes.",
+        tone: "purple",
+      },
+      extreme,
+      "Quelqu'un d'anonyme tire les notes loin du centre."
+    ),
     {
       id: "low-average",
       label: "Le plus détruit",
@@ -160,7 +184,7 @@ export function buildJaugeSummary({
     heatmap: canRevealAuthors ? heatmap : [],
     relationInsights,
     rareMoments,
-    recapLines: buildJaugeRecapLines(leaderStats, mostControversial, generous, severe, relationInsights, rareMoments),
+    recapLines: buildJaugeRecapLines(leaderStats, mostControversial, generous, severe, relationInsights, rareMoments, canRevealAuthors),
   };
 }
 
@@ -288,14 +312,18 @@ function buildJaugeRecapLines(
   generous: JaugePlayerStats | null,
   severe: JaugePlayerStats | null,
   relationInsights: string[],
-  rareMoments: SummaryRareMoment[]
+  rareMoments: SummaryRareMoment[],
+  canRevealAuthors: boolean
 ): string[] {
+  const stylesLine = canRevealAuthors
+    ? generous && severe && generous.player.id !== severe.player.id
+      ? `${generous.player.name} donne haut, ${severe.player.name} note froid.`
+      : "Les styles de notation restent assez proches."
+    : "Les styles de notation restent anonymes : pas de juge identifié.";
   return [
     leader ? `${leader.player.name} finit avec la meilleure moyenne : ${formatRating(leader.averageReceived)}/10.` : "Pas assez de notes pour désigner une meilleure moyenne.",
     controversial ? `${controversial.player.name} a le plus divisé la table.` : "La table a noté sans énorme fracture.",
-    generous && severe && generous.player.id !== severe.player.id
-      ? `${generous.player.name} donne haut, ${severe.player.name} note froid.`
-      : "Les styles de notation restent assez proches.",
+    stylesLine,
     relationInsights[0] ?? "Aucune relation de notes assez nette.",
     rareMoments[0]?.detail ?? "Aucun moment rare, mais la réputation de chacun a bougé.",
   ];

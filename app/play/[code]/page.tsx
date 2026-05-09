@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { PlayerAvatar } from "@/components/playerAvatar";
+import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
+import { ValidationParticles } from "@/components/validationParticles";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
+import { useValidationEvents } from "@/lib/useValidationEvents";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useProfile } from "@/lib/useProfile";
@@ -188,6 +191,31 @@ export default function PlayerPage() {
     mimeMode && room?.status === "question_active" ? room.question_started_at : null,
     mimeGameState?.timerDuration ?? voteDuration
   );
+
+  const isQuestionActive = room?.status === "question_active";
+  const jaugeAnonymous = jaugeMode && jaugeGameState ? jaugeGameState.anonymityMode !== "visible" : false;
+  const validationVoterIds = useMemo(() => {
+    if (!isQuestionActive) return [];
+    if (jaugeMode) {
+      return currentJaugeRatings
+        .filter((rating) => rating.rating >= 1 && rating.rating <= 10)
+        .map((rating) => rating.voter_player_id);
+    }
+    return currentVotes.map((vote) => vote.voter_player_id);
+  }, [isQuestionActive, jaugeMode, currentJaugeRatings, currentVotes]);
+  const validationQuestionKey = useMemo(() => {
+    if (!isQuestionActive) return null;
+    if (jaugeMode && currentJaugeQuestion) return `jauge-${currentJaugeQuestion.id}`;
+    if (currentQ) return `${gameType ?? "game"}-${currentQ.id}`;
+    return null;
+  }, [isQuestionActive, jaugeMode, currentJaugeQuestion, currentQ, gameType]);
+  const validationEvents = useValidationEvents({
+    voterIds: validationVoterIds,
+    players,
+    questionKey: validationQuestionKey,
+    anonymous: jaugeAnonymous,
+    hideOwnId: me?.id ?? null,
+  });
 
   async function submitVote() {
     setVoteError(null);
@@ -397,6 +425,8 @@ export default function PlayerPage() {
       {room.status === "lobby" && (
         <Lobby
           players={players}
+          me={me}
+          hostClientId={room.host_client_id}
           gameLabel={gameDefinition?.label}
           preparingMime={gameType === "mime_expressions"}
           preparingJauge={gameType === "jauge"}
@@ -551,6 +581,10 @@ export default function PlayerPage() {
           scoreTarget={room.score_target}
         />
       )}
+
+      {isQuestionActive && validationEvents.length > 0 && (
+        <ValidationParticles events={validationEvents} />
+      )}
     </main>
   );
 }
@@ -584,6 +618,8 @@ function PlayerHeader({
 
 function Lobby({
   players,
+  me,
+  hostClientId,
   gameLabel,
   preparingMime,
   preparingJauge,
@@ -604,6 +640,8 @@ function Lobby({
   onSubmitQuestion,
 }: {
   players: Player[];
+  me: Player | undefined;
+  hostClientId: string;
   gameLabel: string | undefined;
   preparingMime: boolean;
   preparingJauge: boolean;
@@ -639,10 +677,26 @@ function Lobby({
         : "L'hôte prépare la partie.";
 
   return (
-    <section className="card game-panel-enter flex flex-1 flex-col items-center justify-center p-8 text-center">
-      <div className="animate-floaty text-6xl">🎉</div>
-      <h2 className="mt-4 text-2xl font-bold">{title}</h2>
+    <section className="card game-panel-enter flex flex-1 flex-col p-6 text-center">
+      <div className="self-center text-5xl" aria-hidden="true">🎉</div>
+      <h2 className="mt-3 text-2xl font-bold">{title}</h2>
       <p className="mt-2 text-white/60">{subtitle}</p>
+
+      <div className="mt-5 text-left">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-wider text-white/55">Joueurs en attente</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/55">
+            {players.length} / {Math.max(players.length, 2)}
+          </span>
+        </div>
+        <PlayersLobbyGrid
+          players={players}
+          currentPlayerId={me?.id ?? null}
+          hostClientId={hostClientId}
+          emptyHint="Pas encore d'autres joueurs. Partage le code !"
+          layout="compact"
+        />
+      </div>
 
       {gameType && allowQuestions && (
         <div className="mt-6 w-full rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-4 text-left">
@@ -686,16 +740,6 @@ function Lobby({
         </div>
       )}
 
-      <div className="mt-6 w-full">
-        <div className="text-xs uppercase tracking-wider text-white/50">Joueurs</div>
-        <ul className="mt-2 flex flex-wrap justify-center gap-2">
-          {players.map((p) => (
-            <li key={p.id} className="chip animate-pop-in">
-              {p.is_host ? "👑 " : ""}{p.name}
-            </li>
-          ))}
-        </ul>
-      </div>
     </section>
   );
 }

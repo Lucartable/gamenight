@@ -6,11 +6,15 @@ import {
   AVATAR_BACKGROUNDS,
   AVATAR_COLORS,
   AVATAR_STYLES,
+  buildStableAvatarKey,
   createRandomAvatarConfig,
-  makeAvatarSeed,
+  deriveAvatarSeed,
   type AvatarConfig,
+  type AvatarStyle,
 } from "@/lib/avatar";
 import { AvatarImage } from "./playerAvatar";
+
+const QUICK_GRID_LENGTH = 16;
 
 export function AvatarCustomizer({
   name,
@@ -25,21 +29,46 @@ export function AvatarCustomizer({
 }) {
   const [open, setOpen] = useState(false);
   const [quickNonce, setQuickNonce] = useState(0);
-  const quickChoices = useMemo(
-    () => Array.from({ length: 16 }, (_, index) => ({
-      avatarStyle: AVATAR_STYLES[(index + quickNonce) % AVATAR_STYLES.length]?.id ?? "adventurer",
-      avatarSeed: `${slugify(name)}-quick-${quickNonce}-${index}`,
-      avatarColor: AVATAR_COLORS[(index + quickNonce) % AVATAR_COLORS.length] ?? "#ff3ea5",
-      avatarOptions: {
-        backgroundColor: AVATAR_BACKGROUNDS[(index * 2 + quickNonce) % AVATAR_BACKGROUNDS.length] ?? "#18091f",
-        radius: 18,
-        scale: 96,
-        rotate: (index % 5) - 2,
-        flip: index % 2 === 0,
-      },
-    })),
+
+  const quickChoices = useMemo<AvatarConfig[]>(
+    () =>
+      Array.from({ length: QUICK_GRID_LENGTH }, (_, index): AvatarConfig => {
+        const style = AVATAR_STYLES[(index + quickNonce) % AVATAR_STYLES.length]?.id ?? "adventurer";
+        const color = AVATAR_COLORS[(index + quickNonce) % AVATAR_COLORS.length] ?? "#ff3ea5";
+        const backgroundColor = AVATAR_BACKGROUNDS[(index * 2 + quickNonce) % AVATAR_BACKGROUNDS.length] ?? "#18091f";
+        return {
+          avatarStyle: style,
+          avatarSeed: deriveAvatarSeed(name, `quick-${quickNonce}-${index}`),
+          avatarColor: color,
+          avatarOptions: {
+            backgroundColor,
+            radius: 18,
+            scale: 96,
+            rotate: 0,
+            flip: index % 2 === 0,
+          },
+        };
+      }),
     [name, quickNonce]
   );
+
+  const styleSamples = useMemo(
+    () =>
+      AVATAR_STYLES.map((style): { id: AvatarStyle; label: string; vibe: string; sample: AvatarConfig } => ({
+        id: style.id,
+        label: style.label,
+        vibe: style.vibe,
+        sample: {
+          avatarStyle: style.id,
+          avatarSeed: deriveAvatarSeed(name, `preview-${style.id}`),
+          avatarColor: config.avatarColor,
+          avatarOptions: { ...config.avatarOptions },
+        },
+      })),
+    [config.avatarColor, config.avatarOptions, name]
+  );
+
+  const selectedKey = buildStableAvatarKey(config);
 
   function update(next: AvatarConfig) {
     onChange(next);
@@ -50,19 +79,19 @@ export function AvatarCustomizer({
     <div className="avatar-customizer">
       <div className="avatar-preview-row">
         <button type="button" className="avatar-preview-button" onClick={() => setOpen(true)} aria-label="Personnaliser mon avatar">
-          <AvatarImage config={config} name={name} size="lg" />
+          <AvatarImage config={config} name={name || "Joueur"} size="lg" />
         </button>
         <div className="min-w-0 flex-1">
           <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Avatar</div>
           <button type="button" onClick={() => setOpen(true)} className="mt-1 text-left text-lg font-black text-white">
             Personnaliser mon avatar
           </button>
-          <p className="mt-1 text-xs font-semibold text-white/45">SVG DiceBear, sauvegarde auto dans ta session invite.</p>
+          <p className="mt-1 text-xs font-semibold text-white/45">SVG vectoriel, sauvegarde auto dans ta session.</p>
         </div>
         <button
           type="button"
           className="avatar-random-button"
-          onClick={() => update(createRandomAvatarConfig(name))}
+          onClick={() => update(createRandomAvatarConfig(name || "badaboum"))}
         >
           Aleatoire
         </button>
@@ -77,16 +106,18 @@ export function AvatarCustomizer({
         </div>
         <div className="avatar-quick-grid">
           {quickChoices.map((choice) => {
-            const selected = choice.avatarSeed === config.avatarSeed;
+            const key = buildStableAvatarKey(choice);
+            const selected = key === selectedKey;
             return (
               <button
-                key={choice.avatarSeed}
+                key={key}
                 type="button"
                 className={`avatar-choice ${selected ? "is-selected" : ""}`}
                 onClick={() => update(choice)}
                 aria-label="Choisir cet avatar"
+                aria-pressed={selected}
               >
-                <AvatarImage config={choice} name={name} size="sm" />
+                <AvatarImage config={choice} name={name || "Joueur"} size="sm" />
               </button>
             );
           })}
@@ -95,7 +126,13 @@ export function AvatarCustomizer({
 
       {open && (
         <div className="avatar-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
-          <section className="avatar-modal" role="dialog" aria-modal="true" aria-label="Personnalisation avatar" onMouseDown={(event) => event.stopPropagation()}>
+          <section
+            className="avatar-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Personnalisation avatar"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Badaboum ID</div>
@@ -107,28 +144,43 @@ export function AvatarCustomizer({
             </div>
 
             <div className="avatar-modal-preview">
-              <AvatarImage config={config} name={name} size="xl" />
-              <button type="button" className="btn-primary mt-4 w-full" onClick={() => update(createRandomAvatarConfig(name))}>
+              <AvatarImage config={config} name={name || "Joueur"} size="xl" />
+              <button
+                type="button"
+                className="btn-primary mt-4 w-full"
+                onClick={() => update(createRandomAvatarConfig(name || "badaboum"))}
+              >
                 Surprends-moi
               </button>
             </div>
 
             <AvatarOptionSection title="Style">
               <div className="avatar-style-grid">
-                {AVATAR_STYLES.map((style) => (
-                  <button
-                    key={style.id}
-                    type="button"
-                    className={`avatar-style-card ${config.avatarStyle === style.id ? "is-selected" : ""}`}
-                    onClick={() => update({ ...config, avatarStyle: style.id, avatarSeed: makeAvatarSeed(`${name}-${style.id}`) })}
-                  >
-                    <AvatarImage config={{ ...config, avatarStyle: style.id, avatarSeed: `${config.avatarSeed}-${style.id}` }} name={name} size="sm" />
-                    <span>
-                      <strong>{style.label}</strong>
-                      <small>{style.vibe}</small>
-                    </span>
-                  </button>
-                ))}
+                {styleSamples.map((style) => {
+                  const sampleKey = buildStableAvatarKey(style.sample);
+                  const isSelected = config.avatarStyle === style.id;
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      className={`avatar-style-card ${isSelected ? "is-selected" : ""}`}
+                      onClick={() =>
+                        update({
+                          ...config,
+                          avatarStyle: style.id,
+                          avatarSeed: deriveAvatarSeed(name, `${style.id}-${Date.now().toString(36).slice(-4)}`),
+                        })
+                      }
+                      aria-pressed={isSelected}
+                    >
+                      <AvatarImage key={sampleKey} config={style.sample} name={name || "Joueur"} size="sm" />
+                      <span>
+                        <strong>{style.label}</strong>
+                        <small>{style.vibe}</small>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </AvatarOptionSection>
 
@@ -142,6 +194,7 @@ export function AvatarCustomizer({
                     style={{ background: color }}
                     onClick={() => update({ ...config, avatarColor: color })}
                     aria-label={`Couleur ${color}`}
+                    aria-pressed={config.avatarColor === color}
                   />
                 ))}
               </div>
@@ -155,8 +208,14 @@ export function AvatarCustomizer({
                     type="button"
                     className={`avatar-swatch ${config.avatarOptions.backgroundColor === backgroundColor ? "is-selected" : ""}`}
                     style={{ background: backgroundColor }}
-                    onClick={() => update({ ...config, avatarOptions: { ...config.avatarOptions, backgroundColor } })}
+                    onClick={() =>
+                      update({
+                        ...config,
+                        avatarOptions: { ...config.avatarOptions, backgroundColor },
+                      })
+                    }
                     aria-label={`Fond ${backgroundColor}`}
+                    aria-pressed={config.avatarOptions.backgroundColor === backgroundColor}
                   />
                 ))}
               </div>
@@ -171,7 +230,9 @@ export function AvatarCustomizer({
                     min="82"
                     max="110"
                     value={config.avatarOptions.scale ?? 96}
-                    onChange={(event) => update({ ...config, avatarOptions: { ...config.avatarOptions, scale: Number(event.target.value) } })}
+                    onChange={(event) =>
+                      update({ ...config, avatarOptions: { ...config.avatarOptions, scale: Number(event.target.value) } })
+                    }
                   />
                 </label>
                 <label>
@@ -181,18 +242,27 @@ export function AvatarCustomizer({
                     min="-12"
                     max="12"
                     value={config.avatarOptions.rotate ?? 0}
-                    onChange={(event) => update({ ...config, avatarOptions: { ...config.avatarOptions, rotate: Number(event.target.value) } })}
+                    onChange={(event) =>
+                      update({ ...config, avatarOptions: { ...config.avatarOptions, rotate: Number(event.target.value) } })
+                    }
                   />
                 </label>
                 <button
                   type="button"
                   className={`avatar-toggle ${config.avatarOptions.flip ? "is-selected" : ""}`}
-                  onClick={() => update({ ...config, avatarOptions: { ...config.avatarOptions, flip: !config.avatarOptions.flip } })}
+                  onClick={() =>
+                    update({ ...config, avatarOptions: { ...config.avatarOptions, flip: !config.avatarOptions.flip } })
+                  }
+                  aria-pressed={Boolean(config.avatarOptions.flip)}
                 >
                   Miroir
                 </button>
               </div>
             </AvatarOptionSection>
+
+            <button type="button" className="btn-secondary mt-5 w-full" onClick={() => setOpen(false)}>
+              Garder cet avatar
+            </button>
           </section>
         </div>
       )}
@@ -207,8 +277,4 @@ function AvatarOptionSection({ title, children }: { title: string; children: Rea
       {children}
     </section>
   );
-}
-
-function slugify(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "badaboum";
 }

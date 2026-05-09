@@ -5,9 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AdminDebugPanel } from "@/components/adminDebugPanel";
 import { PlayerAvatar } from "@/components/playerAvatar";
+import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
+import { ValidationParticles } from "@/components/validationParticles";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
+import { useValidationEvents } from "@/lib/useValidationEvents";
 import { useCountdown } from "@/lib/useCountdown";
 import {
   GAME_DEFINITIONS,
@@ -396,6 +399,31 @@ export default function HostPage() {
     [gameType, players, currentVotes]
   );
   const allVotesSubmitted = players.length > 0 && submittedVotesCount >= players.length;
+
+  const isHostQuestionActive = room?.status === "question_active";
+  const hostJaugeAnonymous = jaugeMode && jaugeGameState ? jaugeGameState.anonymityMode !== "visible" : false;
+  const validationVoterIds = useMemo(() => {
+    if (!isHostQuestionActive) return [];
+    if (jaugeMode) {
+      return currentJaugeRatings
+        .filter((rating) => rating.rating >= 1 && rating.rating <= 10)
+        .map((rating) => rating.voter_player_id);
+    }
+    return currentVotes.map((vote) => vote.voter_player_id);
+  }, [isHostQuestionActive, jaugeMode, currentJaugeRatings, currentVotes]);
+  const validationQuestionKey = useMemo(() => {
+    if (!isHostQuestionActive) return null;
+    if (jaugeMode && currentJaugeQuestion) return `jauge-${currentJaugeQuestion.id}`;
+    if (currentQ) return `${gameType ?? "game"}-${currentQ.id}`;
+    return null;
+  }, [isHostQuestionActive, jaugeMode, currentJaugeQuestion, currentQ, gameType]);
+  const validationEvents = useValidationEvents({
+    voterIds: validationVoterIds,
+    players,
+    questionKey: validationQuestionKey,
+    anonymous: hostJaugeAnonymous,
+    hideOwnId: me?.id ?? null,
+  });
 
   const predictionScores = useMemo(
     () => (predictionMode ? computePredictionScores(predictionMode, players, votes, currentQ?.id ?? null) : []),
@@ -1800,6 +1828,10 @@ export default function HostPage() {
           onBackToLobby={resetToLobby}
         />
       )}
+
+      {isHostQuestionActive && validationEvents.length > 0 && (
+        <ValidationParticles events={validationEvents} />
+      )}
     </main>
   );
 }
@@ -1995,18 +2027,13 @@ function LobbyView({
       />
 
       <section className="card mb-4 p-5">
-        <h2 className="mb-3 text-lg font-bold">Joueurs connectés</h2>
-        {players.length === 0 ? (
-          <p className="text-white/60">En attente des joueurs...</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {players.map((p) => (
-              <li key={p.id} className="chip animate-pop-in">
-                {p.is_host ? "👑 " : ""}{p.name}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Joueurs connectés</h2>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/55">
+            {players.length}
+          </span>
+        </div>
+        <PlayersLobbyGrid players={players} hostClientId={room.host_client_id} />
       </section>
 
       <section className="card mb-4 p-5">
@@ -2395,18 +2422,13 @@ function JaugeLobbyView({
       </section>
 
       <section className="card mb-4 p-5">
-        <h2 className="mb-3 text-lg font-bold">Joueurs présents</h2>
-        {players.length === 0 ? (
-          <p className="text-white/60">En attente des joueurs...</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {players.map((player) => (
-              <li key={player.id} className="chip animate-pop-in">
-                {player.is_host ? "Hôte · " : ""}{player.name}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Joueurs présents</h2>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/55">
+            {players.length}
+          </span>
+        </div>
+        <PlayersLobbyGrid players={players} hostClientId={room.host_client_id} />
       </section>
 
       <section className="card mb-4 p-5">
@@ -2773,18 +2795,13 @@ function MimeLobbyView({
       )}
 
       <section className="card mb-4 p-5">
-        <h2 className="mb-3 text-lg font-bold">Joueurs présents</h2>
-        {players.length === 0 ? (
-          <p className="text-white/60">En attente des joueurs...</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {players.map((player) => (
-              <li key={player.id} className="chip animate-pop-in">
-                {player.is_host ? "👑 " : ""}{player.name}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Joueurs présents</h2>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/55">
+            {players.length}
+          </span>
+        </div>
+        <PlayersLobbyGrid players={players} hostClientId={room.host_client_id} />
       </section>
 
       <section className="card mb-4 p-5">

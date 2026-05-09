@@ -127,10 +127,11 @@ function readStoredGuestSession(): GuestSession | null {
 
 function createGuestSession(guestId = makeId()): GuestSession {
   const avatarConfig = createRandomAvatarConfig(guestId);
+  const name = createRandomGuestName();
   return {
     guestId,
-    name: createRandomGuestName(),
-    avatar: "B",
+    name,
+    avatar: getPlayerInitials(name),
     color: avatarConfig.avatarColor,
     avatarStyle: avatarConfig.avatarStyle,
     avatarSeed: avatarConfig.avatarSeed,
@@ -146,9 +147,16 @@ function writeGuestSession(session: GuestSession): void {
 }
 
 function sanitizeAvatar(value: unknown, fallbackName?: unknown): string {
-  if (typeof value === "string" && value.trim().length > 0) return value.trim().slice(0, 8);
-  return getPlayerInitials(typeof fallbackName === "string" ? fallbackName : "Badaboum").slice(0, 2);
+  const name = typeof fallbackName === "string" ? fallbackName : "Badaboum";
+  const fallback = getPlayerInitials(name).slice(0, 2);
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (LEGACY_TEXT_AVATARS.has(trimmed.toUpperCase())) return fallback;
+  return trimmed.slice(0, 8);
 }
+
+const LEGACY_TEXT_AVATARS = new Set(["B", "BOOM", "WOW", "HEY", "GO", "YO", "POW"]);
 
 function sanitizeColor(value: unknown): string {
   return sanitizeHex(value, "#ff3ea5");

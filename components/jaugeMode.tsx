@@ -242,7 +242,10 @@ export function JaugeRevealPanel({
                 className="jauge-reveal-row flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3"
                 style={{ animationDelay: `${index * 120}ms` }}
               >
-                <PlayerAvatar player={row.visible ? row.voter : null} />
+                <PlayerAvatar
+                  player={row.visible ? row.voter : null}
+                  variant={row.visible ? "default" : "anonymous"}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-lg font-black">{row.visible ? row.voter?.name ?? "Joueur" : row.anonymousLabel}</div>
                   <div className="text-xs font-bold uppercase tracking-wider text-white/40">{row.visible ? "Auteur révélé" : "Auteur masqué"}</div>
