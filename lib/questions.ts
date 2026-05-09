@@ -450,25 +450,3 @@ export const QUESTIONS: Question[] = [
   { id: 399, category: "pop", optionA: "Échanger une vie avec ton acteur préféré", optionB: "Avec ton chanteur préféré" },
   { id: 400, category: "pop", optionA: "Visiter le métavers de Ready Player One", optionB: "La Matrice de Matrix" },
 ];
-
-export function getQuestion(id: number | null | undefined): Question | undefined {
-  if (id == null) return undefined;
-  return QUESTIONS.find((q) => q.id === id);
-}
-
-export function getCategory(id: Category | null | undefined): CategoryMeta | undefined {
-  if (!id) return undefined;
-  return CATEGORIES.find((c) => c.id === id);
-}
-
-export function pickRandomQuestion(
-  selectedCategories: Category[],
-  excludeIds: number[]
-): Question | undefined {
-  const cats = selectedCategories.length ? selectedCategories : CATEGORIES.map((c) => c.id);
-  const pool = QUESTIONS.filter(
-    (q) => cats.includes(q.category) && !excludeIds.includes(q.id)
-  );
-  if (!pool.length) return undefined;
-  return pool[Math.floor(Math.random() * pool.length)];
-}

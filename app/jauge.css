@@ -1,0 +1,101 @@
+.jauge-config-hero,
+.jauge-shell,
+.jauge-target-card,
+.jauge-reveal-hero {
+  transform: translateZ(0);
+}
+
+.jauge-config-hero {
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.14), transparent 38%),
+    linear-gradient(315deg, rgba(255, 62, 165, 0.15), rgba(250, 204, 21, 0.08)),
+    rgba(10, 8, 18, 0.86);
+}
+
+.jauge-target-card {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.18), transparent 36%),
+    linear-gradient(145deg, rgba(255, 62, 165, 0.13), transparent 44%),
+    rgba(16, 12, 27, 0.84);
+}
+
+.jauge-orbit {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  height: 280px;
+  width: 280px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  background:
+    conic-gradient(from 120deg, rgba(255, 62, 165, 0.32), rgba(34, 211, 238, 0.16), rgba(250, 204, 21, 0.26), rgba(255, 62, 165, 0.32));
+  filter: blur(1px);
+  opacity: 0.55;
+  animation: jaugePulse 5.2s ease-in-out infinite;
+}
+
+.jauge-range {
+  height: 34px;
+  cursor: pointer;
+  appearance: none;
+  background: transparent;
+}
+
+.jauge-range::-webkit-slider-runnable-track {
+  height: 34px;
+  background: transparent;
+}
+
+.jauge-range::-webkit-slider-thumb {
+  appearance: none;
+  height: 42px;
+  width: 42px;
+  margin-top: -4px;
+  border: 3px solid rgba(255, 255, 255, 0.86);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #facc15, #22d3ee);
+  box-shadow: 0 0 28px rgba(250, 204, 21, 0.48);
+}
+
+.jauge-range::-moz-range-track {
+  height: 34px;
+  background: transparent;
+}
+
+.jauge-range::-moz-range-thumb {
+  height: 38px;
+  width: 38px;
+  border: 3px solid rgba(255, 255, 255, 0.86);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #facc15, #22d3ee);
+  box-shadow: 0 0 28px rgba(250, 204, 21, 0.48);
+}
+
+.jauge-number {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.jauge-number:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.jauge-reveal-hero {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.16), transparent 35%),
+    linear-gradient(140deg, rgba(34, 211, 238, 0.12), transparent 42%),
+    rgba(12, 9, 20, 0.9);
+}
+
+.jauge-reveal-wave {
+  position: absolute;
+  inset: -30% -45%;
+  opacity: 0.24;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: jaugeWave 2.6s ease-in-out infinite alternate;
+}
+
+.jauge-reveal-row {
+  opacity: 0;
+  animation: jaugeRowPop 440ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}

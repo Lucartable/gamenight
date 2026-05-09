@@ -26,9 +26,9 @@ import {
 } from "@/lib/jaugeGame";
 import {
   generateLocalQuestionId,
-  getQuestionSourceSettings,
   questionFromSnapshot,
-} from "@/lib/questionPoolEngine";
+} from "@/lib/questionPoolTransform";
+import { getQuestionSourceSettings } from "@/lib/questionPoolTypes";
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
 import {

@@ -4,8 +4,8 @@ import {
   generateLocalQuestionId,
   getQuestionTextForSave,
   questionToSavedPayload,
-  type QuestionPoolItem,
-} from "./questionPoolEngine";
+} from "./questionPoolTransform";
+import type { QuestionPoolItem } from "./questionPoolTypes";
 import type { GameType, QuestionSnapshot } from "@/types/database";
 
 export type SaveQuestionResult = "saved" | "already";
@@ -54,4 +54,3 @@ export async function saveQuestionToLibrary({
   if (error) throw error;
   return "saved";
 }
-

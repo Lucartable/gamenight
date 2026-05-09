@@ -1,0 +1,188 @@
+@keyframes revealIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.75); opacity: 0; }
+  70% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes barSweep {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes confettiBurst {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--x), var(--y), 0) rotate(var(--r)) scale(1);
+  }
+}
+
+@keyframes summaryRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes summaryScoreEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes summaryFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes containedSheen {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) skewX(-14deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(360%, 0, 0) skewX(-14deg);
+  }
+}
+
+@keyframes summaryShake {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  25% { transform: translate3d(1px, -1px, 0) rotate(-0.4deg); }
+  75% { transform: translate3d(-1px, 1px, 0) rotate(0.4deg); }
+}
+
+@keyframes homeGridDrift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 48px 32px, -38px 46px; }
+}
+
+@keyframes homeBrandPulse {
+  0%, 100% { filter: drop-shadow(0 0 18px rgba(255, 62, 165, 0.35)); }
+  50% { filter: drop-shadow(0 0 30px rgba(34, 211, 238, 0.35)); }
+}
+
+@keyframes homeRowIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes scanMove {
+  from { transform: translateY(-24px); }
+  to { transform: translateY(24px); }
+}
+
+@keyframes gameAuraDrift {
+  0%, 100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+    opacity: 0.62;
+  }
+  50% {
+    transform: translate3d(4%, 3%, 0) scale(1.06);
+    opacity: 0.88;
+  }
+}
+
+@keyframes gameCardIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes gamePressGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(34, 211, 238, 0); }
+  50% { box-shadow: 0 0 24px rgba(34, 211, 238, 0.22); }
+}
+
+@keyframes gameTimerHot {
+  0%, 100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 rgba(255, 62, 165, 0);
+  }
+  50% {
+    transform: scale(1.045);
+    text-shadow: 0 0 28px rgba(255, 62, 165, 0.75);
+  }
+}
+
+@keyframes jaugePulse {
+  0%, 100% {
+    opacity: 0.56;
+    transform: translate3d(-50%, -50%, 0) scale(0.92) rotate(0deg);
+  }
+  50% {
+    opacity: 0.92;
+    transform: translate3d(-50%, -50%, 0) scale(1.08) rotate(16deg);
+  }
+}
+
+@keyframes jaugeRowPop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes jaugeWave {
+  from { transform: translateX(-30%) skewX(-12deg); }
+  to { transform: translateX(30%) skewX(-12deg); }
+}
+
+.animate-reveal-in {
+  animation: revealIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.animate-pop-in {
+  animation: popIn 360ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.result-fill {
+  transform-origin: left center;
+  animation: barSweep 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}

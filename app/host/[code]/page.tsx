@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
+import { AdminDebugPanel } from "@/components/adminDebugPanel";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
@@ -27,14 +28,14 @@ import { useSavedQuestions } from "@/lib/useSavedQuestions";
 import {
   buildQuestionPlan,
   buildQuestionPlanWithDiagnostics,
-  generateLocalQuestionId,
-  getQuestionSourceSettings,
-  makeQuestionSnapshot,
   pickNextQuestionFromPlan,
-  questionFromSnapshot,
-  type QuestionPoolDiagnostics,
-  type QuestionPoolItem,
 } from "@/lib/questionPoolEngine";
+import {
+  generateLocalQuestionId,
+  makeQuestionSnapshot,
+  questionFromSnapshot,
+} from "@/lib/questionPoolTransform";
+import { getQuestionSourceSettings, type QuestionPoolDiagnostics, type QuestionPoolItem } from "@/lib/questionPoolTypes";
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
 import {
@@ -1405,6 +1406,17 @@ export default function HostPage() {
           {actionError}
         </div>
       )}
+
+      <AdminDebugPanel
+        enabled={profileState.canManageQuestions}
+        room={room}
+        players={players}
+        votes={votes}
+        ratings={ratings}
+        currentQuestion={currentQ ?? currentJaugeQuestion ?? null}
+        availableCount={filteredAvailable.length}
+        diagnostics={questionPoolDiagnostics}
+      />
 
       {room.status === "lobby" && gameType && questionSourceSettings.useLiveQuestions && me && (
         <HostCustomQuestionPanel

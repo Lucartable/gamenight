@@ -177,17 +177,3 @@ export function getQuestionForGame(
   if (id == null) return undefined;
   return getQuestionsForGame(gameType).find((question) => question.id === id);
 }
-
-export function pickRandomQuestionForGame(
-  gameType: GameType,
-  selectedCategories: string[],
-  excludeIds: number[]
-): GameQuestion | undefined {
-  const defaultCategories = getDefaultCategories(gameType);
-  const categories = selectedCategories.length ? selectedCategories : defaultCategories;
-  const pool = getQuestionsForGame(gameType).filter(
-    (question) => categories.includes(question.category) && !excludeIds.includes(question.id)
-  );
-  if (!pool.length) return undefined;
-  return pool[Math.floor(Math.random() * pool.length)];
-}

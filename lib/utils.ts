@@ -1,9 +1,10 @@
+import { getOrCreateGuestId } from "./guestSession";
+
 // Configuration par défaut d'une partie.
 export const DEFAULT_TOTAL_QUESTIONS = 10;
 export const DEFAULT_VOTE_DURATION_SEC = 30;
 export const DEFAULT_REVEAL_DURATION_SEC = 15;
 export const DEFAULT_SCOREBOARD_DURATION_SEC = 7;
-export const END_GAME_RETURN_DELAY_SEC = 7;
 
 export const QUESTION_COUNT_PRESETS = [5, 10, 20] as const;
 export const VOTE_DURATION_OPTIONS = [8, 15, 30, 45, 60] as const;
@@ -51,24 +52,3 @@ export function triggerHaptic(pattern: number | number[] = 12): void {
     window.navigator.vibrate(pattern);
   }
 }
-
-// Persistance des catégories sélectionnées par l'hôte (par salle).
-const CATEGORIES_KEY_PREFIX = "gn_cats_";
-
-export function loadCategories(roomCode: string): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(CATEGORIES_KEY_PREFIX + roomCode);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveCategories(roomCode: string, categories: string[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(CATEGORIES_KEY_PREFIX + roomCode, JSON.stringify(categories));
-}
-import { getOrCreateGuestId } from "./guestSession";

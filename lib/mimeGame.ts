@@ -1,9 +1,4 @@
 import type { GameType, MimeGameState, MimeRoundStatus, Player, Room } from "@/types/database";
-import {
-  getDefaultCategories,
-  getQuestionsForGame,
-  type MimeExpressionQuestion,
-} from "./gameQuestions";
 
 export type MimeOrderMode = "arrival" | "random" | "custom";
 
@@ -105,24 +100,6 @@ export function shuffleIds(ids: string[]): string[] {
     [next[i], next[j]] = [next[j], next[i]];
   }
   return next;
-}
-
-export function pickMimeExpression(
-  selectedCategories: string[],
-  usedExpressionIds: number[]
-): MimeExpressionQuestion | undefined {
-  const categories = selectedCategories.length
-    ? selectedCategories
-    : getDefaultCategories("mime_expressions");
-  const used = new Set(usedExpressionIds);
-  const pool = getQuestionsForGame("mime_expressions").filter(
-    (question): question is MimeExpressionQuestion =>
-      question.gameType === "mime_expressions" &&
-      categories.includes(question.category) &&
-      !used.has(question.id)
-  );
-  if (!pool.length) return undefined;
-  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export function buildMimeGameState({

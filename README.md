@@ -94,6 +94,16 @@ Puis ouvre [http://localhost:3000](http://localhost:3000).
 
 Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'IP de ta machine (ex : `http://192.168.1.42:3000`) sur les téléphones.
 
+### Tests
+
+```bash
+npm run test
+npm run lint
+npm run build
+```
+
+Les tests unitaires couvrent en priorité [`lib/questionPoolEngine.ts`](lib/questionPoolEngine.ts), notamment les modes système/live/sauvegardées et la garantie d'injection des questions joueurs.
+
 ---
 
 ## 🎮 Comment jouer
@@ -117,6 +127,12 @@ Pour tester en multi-appareils sur le même Wi-Fi : remplace `localhost` par l'I
 gamenight/
 ├── app/
 │   ├── page.tsx                  # Accueil (créer / rejoindre)
+│   ├── animations.css            # Keyframes et classes d'animation partagées
+│   ├── game.css                  # Styles communs des écrans de jeu
+│   ├── home.css                  # Styles de l'accueil
+│   ├── jauge.css                 # Styles du mode Jauge
+│   ├── summary.css               # Styles du bilan de soirée
+│   ├── ui.css                    # Boutons, cards, inputs, bibliothèque
 │   ├── host/[code]/page.tsx      # Vue hôte (lobby + contrôle + révélation)
 │   ├── play/[code]/page.tsx      # Vue joueur (vote + résultats)
 │   ├── questions/page.tsx        # Bibliothèque trusted/admin
@@ -138,10 +154,21 @@ gamenight/
 │   ├── jaugeQuestions.ts         # Questions du jeu Jauge
 │   ├── jaugeGame.ts              # Helpers cible/questions/anonymat du mode Jauge
 │   ├── mimeGame.ts               # Helpers d'ordre/tours du mode mime
+│   ├── gameEngine.ts             # Contrats communs par jeu
 │   ├── endGameSummary.ts         # Moteur de stats sociales universelles
+│   ├── endGameSummaryJauge.ts    # Bilan specifique Jauge
+│   ├── endGameSummaryMime.ts     # Bilan specifique Mime
+│   ├── endGameSummaryOptions.ts  # Stats d'options et moments rares
+│   ├── endGameSummaryRelations.ts # Heatmap et insights sociaux
+│   ├── endGameSummaryTypes.ts    # Types du bilan de soirée
 │   ├── gameQuestions.ts          # Définitions multi-jeux + helpers
 │   ├── questionPoolEngine.ts     # Mix système/live/sauvegardées
+│   ├── questionPoolTypes.ts      # Types et settings du moteur de questions
+│   ├── questionPoolTransform.ts  # Snapshots, payloads, conversion live/saved
 │   └── utils.ts                  # Code de salle, client_id, durées
+├── docs/
+│   ├── architecture.md           # Contrats de jeu et refactors en cours
+│   └── qa-checklist.md           # Checklist manuelle par mode
 ├── types/
 │   └── database.ts               # Types Supabase
 ├── supabase/
@@ -169,6 +196,7 @@ gamenight/
 - **Realtime via Supabase** : on s'abonne aux changements des tables de jeu et on recharge l'état. Volume minuscule (~10 joueurs), donc pas besoin de patcher finement.
 - **Configuration en base** : le type de jeu, les thèmes, les durées et la lecture automatique sont stockés dans `rooms`.
 - **Moteur global de questions** : `questionPoolEngine` construit le plan de partie depuis les questions système, live et sauvegardées, avec déduplication et garantie d'insertion des questions joueurs en mix intelligent.
+- **Contrats de jeu partagés** : `gameEngine` décrit les formats de questions/réponses, flows de round/reveal et profils de bilan. `questionPoolEngine` s'appuie dessus pour valider les questions compatibles.
 - **État du mime partagé** : `rooms.mime_game_state` garde l'ordre, le mime courant, l'expression, le timer et la manche.
 - **État de Jauge partagé** : `rooms.jauge_game_state` garde l'ordre des cibles, la question active, l'anonymat, les questions joueurs et les options de manche. Les notes sont stockées dans `ratings`.
 - **Bilan modulaire** : `lib/endGameSummary.ts` calcule scoreboard, awards, moments rares et relations depuis les votes.
@@ -252,7 +280,6 @@ Exemple : pour une partie de 25 questions avec 15 questions joueurs disponibles,
 - [ ] **Persister la session joueur** : retrouver sa salle automatiquement après fermeture du navigateur.
 - [ ] **Ajouter d'autres jeux** : *Action ou Vérité*, *Loup-Garou*, *Mots impossibles*, etc.
 - [ ] **Nettoyage auto** des salles inactives (cron Supabase ou Edge Function).
-- [ ] **Custom questions** : laisser l'hôte ajouter ses propres questions à la volée.
 - [ ] **Score / leaderboard** sur l'ensemble de la soirée (qui vote comme la majorité, etc.).
 - [ ] **Détection d'hôte déconnecté** : transfert auto si l'hôte ne répond plus depuis X secondes.
 

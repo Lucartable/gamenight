@@ -1,0 +1,122 @@
+.prediction-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.prediction-card::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset-block: -1px;
+  left: -36%;
+  width: 34%;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 10%, rgba(255, 255, 255, 0.16), transparent 90%);
+  opacity: 0;
+  transform: translate3d(0, 0, 0) skewX(-14deg);
+  will-change: transform, opacity;
+}
+
+.prediction-card:hover::after,
+.prediction-card:focus-visible::after {
+  opacity: 1;
+  animation: containedSheen 620ms ease-out;
+}
+
+.game-stage {
+  position: relative;
+  overflow-x: clip;
+}
+
+.game-stage::before,
+.game-stage::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  z-index: 0;
+  border-radius: 999px;
+  filter: blur(44px);
+  transform: translateZ(0);
+  animation: gameAuraDrift 9s ease-in-out infinite;
+}
+
+.game-stage::before {
+  left: -92px;
+  top: 12%;
+  height: 240px;
+  width: 240px;
+  background: radial-gradient(circle, rgba(255, 62, 165, 0.28), transparent 68%);
+}
+
+.game-stage::after {
+  right: -108px;
+  bottom: 10%;
+  height: 280px;
+  width: 280px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 70%);
+  animation-delay: -4s;
+}
+
+.game-stage .card {
+  animation: gameCardIn 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.game-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+.game-topbar {
+  border-color: rgba(34, 211, 238, 0.22) !important;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.09), transparent 42%),
+    rgba(18, 14, 28, 0.82) !important;
+}
+
+.game-panel-enter {
+  animation: gameCardIn 460ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.timer-hot {
+  animation: gameTimerHot 650ms ease-in-out infinite;
+}
+
+.confetti-field {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.confetti-field span {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #4ade80;
+  animation: confettiBurst 900ms ease-out both;
+}
+
+.confetti-field span:nth-child(2n) { background: #22d3ee; }
+.confetti-field span:nth-child(3n) { background: #ff3ea5; }
+.confetti-field span:nth-child(4n) { background: #facc15; }
+.confetti-field span:nth-child(1) { --x: -120px; --y: 88px; --r: 210deg; animation-delay: 20ms; }
+.confetti-field span:nth-child(2) { --x: -80px; --y: -40px; --r: 120deg; animation-delay: 80ms; }
+.confetti-field span:nth-child(3) { --x: -32px; --y: 112px; --r: 320deg; animation-delay: 40ms; }
+.confetti-field span:nth-child(4) { --x: 38px; --y: -54px; --r: 170deg; animation-delay: 100ms; }
+.confetti-field span:nth-child(5) { --x: 96px; --y: 70px; --r: 260deg; animation-delay: 30ms; }
+.confetti-field span:nth-child(6) { --x: 132px; --y: -12px; --r: 90deg; animation-delay: 120ms; }
+.confetti-field span:nth-child(7) { --x: -148px; --y: 16px; --r: 240deg; animation-delay: 70ms; }
+.confetti-field span:nth-child(8) { --x: 18px; --y: 134px; --r: 360deg; animation-delay: 55ms; }
+.confetti-field span:nth-child(9) { --x: -18px; --y: -74px; --r: 180deg; animation-delay: 90ms; }
+.confetti-field span:nth-child(10) { --x: 152px; --y: 104px; --r: 300deg; animation-delay: 10ms; }
+.confetti-field span:nth-child(11) { --x: -104px; --y: 138px; --r: 260deg; animation-delay: 110ms; }
+.confetti-field span:nth-child(12) { --x: 76px; --y: 154px; --r: 140deg; animation-delay: 65ms; }
+.confetti-field span:nth-child(13) { --x: -156px; --y: 96px; --r: 340deg; animation-delay: 105ms; }
+.confetti-field span:nth-child(14) { --x: 118px; --y: 18px; --r: 190deg; animation-delay: 35ms; }

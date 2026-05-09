@@ -281,18 +281,6 @@ export function computeJaugeRoundResult({
   };
 }
 
-export function addJaugePlayerQuestion(state: JaugeGameState | null, text: string, authorPlayerId: string): JaugePlayerQuestion | null {
-  const clean = text.trim().replace(/\s+/g, " ");
-  if (!state || clean.length < 8) return null;
-  return {
-    id: -Math.max(1, Date.now() % 1000000000),
-    text: clean,
-    authorPlayerId,
-    category: "joueurs",
-    source: "live",
-  };
-}
-
 function buildTargetOrder(
   players: Player[],
   targetMode: JaugeTargetMode,

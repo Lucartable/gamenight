@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./animations.css";
+import "./game.css";
+import "./home.css";
+import "./jauge.css";
+import "./summary.css";
+import "./ui.css";
 
 export const metadata: Metadata = {
   title: "Badaboum — Jeux de soirée",

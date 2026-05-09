@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCategoryForGame, type PredictionGameQuestion } from "@/lib/gameQuestions";
 import {
-  buildFunStats,
   computePredictionRound,
   computePredictionScores,
   type PredictionGameType,
@@ -492,100 +491,6 @@ function ScoreRowCard({ row, rank, leader }: { row: PredictionScoreRow; rank: nu
       <div className="w-16 text-right">
         <div className="text-3xl font-black tabular-nums">{row.points}</div>
         <div className="text-[10px] font-bold uppercase tracking-wider text-white/45">pts</div>
-      </div>
-    </div>
-  );
-}
-
-export function PredictionEndGamePanel({
-  mode,
-  players,
-  votes,
-  returnLeft = 0,
-  isHost = false,
-  busy = false,
-  onRestart,
-}: {
-  mode: PredictionGameType;
-  players: Player[];
-  votes: Vote[];
-  returnLeft?: number;
-  isHost?: boolean;
-  busy?: boolean;
-  onRestart?: () => void;
-}) {
-  const rows = useMemo(() => computePredictionScores(mode, players, votes, null), [mode, players, votes]);
-  const stats = useMemo(() => buildFunStats(mode, rows), [mode, rows]);
-  const podium = rows.slice(0, 3);
-
-  return (
-    <main className="game-stage mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
-      <section className="card game-panel-enter flex flex-1 flex-col p-5 text-center">
-        <div className="text-xs font-bold uppercase tracking-wider text-white/50">Fin de partie</div>
-        <h1 className="mt-2 bg-gradient-to-r from-neon-yellow via-neon-pink to-neon-cyan bg-clip-text text-5xl font-black text-transparent">
-          {podium[0]?.player.name ?? "Partie terminée"}
-        </h1>
-        <p className="mt-2 text-white/60">
-          {podium[0] ? `${podium[0].points} point${podium[0].points > 1 ? "s" : ""} et une victoire bien propre.` : "Aucun vote enregistré."}
-        </p>
-
-        {podium.length > 0 && (
-          <div className="mt-6 grid grid-cols-3 items-end gap-2">
-            <PodiumBlock row={podium[1]} rank={2} height="h-28" />
-            <PodiumBlock row={podium[0]} rank={1} height="h-36" leader />
-            <PodiumBlock row={podium[2]} rank={3} height="h-24" />
-          </div>
-        )}
-
-        <div className="mt-6 grid gap-3 text-left">
-          {stats.map((stat) => (
-            <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">{stat.label}</div>
-              <div className="mt-1 text-2xl font-black">{stat.value}</div>
-              <div className="mt-1 text-sm text-white/60">{stat.detail}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mx-auto mt-6 w-fit rounded-2xl border border-white/10 bg-white/5 px-5 py-3">
-          <div className="text-4xl font-black tabular-nums">{returnLeft}</div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-white/45">retour lobby</div>
-        </div>
-
-        {isHost && onRestart && (
-          <button type="button" disabled={busy} onClick={onRestart} className="btn-primary mt-4 w-full">
-            Relancer une partie
-          </button>
-        )}
-      </section>
-    </main>
-  );
-}
-
-function PodiumBlock({
-  row,
-  rank,
-  height,
-  leader = false,
-}: {
-  row: PredictionScoreRow | undefined;
-  rank: number;
-  height: string;
-  leader?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-end gap-2">
-      {row ? <AvatarBubble player={row.player} /> : <div className="h-12 w-12 rounded-full bg-white/10" />}
-      <div className="min-h-10 text-center">
-        <div className="truncate text-sm font-black">{row?.player.name ?? "-"}</div>
-        <div className="text-xs text-white/50">{row ? `${row.points} pts` : ""}</div>
-      </div>
-      <div
-        className={`flex w-full items-center justify-center rounded-t-2xl border border-white/10 ${
-          leader ? "bg-neon-yellow/20 text-neon-yellow" : "bg-white/10 text-white/70"
-        } ${height}`}
-      >
-        <span className="text-3xl font-black">#{rank}</span>
       </div>
     </div>
   );
