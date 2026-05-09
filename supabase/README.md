@@ -20,6 +20,7 @@ Ordre conseille pour une base existante ancienne :
 4. `question_library_migration.sql`
 5. `guest_auth_refactor_migration.sql`
 6. `admin_library_flow_migration.sql`
+7. `avatar_system_migration.sql`
 
 ## Convention pour les prochaines migrations
 

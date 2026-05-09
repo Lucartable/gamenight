@@ -6,6 +6,7 @@ import { computeJaugeRoundResult, type JaugeRoundQuestion } from "@/lib/jaugeGam
 import { useCountdown } from "@/lib/useCountdown";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/playerAvatar";
 import type { JaugeAnonymityMode, Player, Rating } from "@/types/database";
 
 const RATING_COLORS = [
@@ -292,19 +293,6 @@ function MiniStat({ label, value, hot = false }: { label: string; value: number 
     <div className={`rounded-2xl border p-3 ${hot ? "border-neon-pink/40 bg-neon-pink/10 text-neon-pink" : "border-white/10 bg-white/5"}`}>
       <div className="text-2xl font-black">{value}</div>
       <div className="text-[10px] font-bold uppercase tracking-wider text-white/45">{label}</div>
-    </div>
-  );
-}
-
-function PlayerAvatar({ player, size = "md" }: { player: Player | null; size?: "md" | "xl" }) {
-  const label = player?.avatar || player?.name?.trim()?.[0]?.toUpperCase() || "?";
-  const sizeClass = size === "xl" ? "h-24 w-24 text-5xl" : "h-11 w-11 text-xl";
-  return (
-    <div
-      className={`mx-auto flex shrink-0 items-center justify-center rounded-[1.4rem] border border-white/15 font-black text-white shadow-glow-cyan ${sizeClass}`}
-      style={{ background: player?.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.68))` : undefined }}
-    >
-      {label}
     </div>
   );
 }

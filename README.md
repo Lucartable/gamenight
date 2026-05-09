@@ -44,7 +44,7 @@ npm install
    - `anon public key` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 > **Important** : `schema.sql` repart de zéro et supprime les anciennes tables de jeu avant de les recréer. Les salles, joueurs et votes existants seront perdus.
-> Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql) et [`supabase/guest_auth_refactor_migration.sql`](supabase/guest_auth_refactor_migration.sql).
+> Pour une base déjà installée, exécute les migrations non destructives nécessaires, puis [`supabase/question_library_migration.sql`](supabase/question_library_migration.sql), [`supabase/guest_auth_refactor_migration.sql`](supabase/guest_auth_refactor_migration.sql) et [`supabase/avatar_system_migration.sql`](supabase/avatar_system_migration.sql).
 
 ### Compte admin principal
 
@@ -140,9 +140,12 @@ gamenight/
 │   └── globals.css
 ├── components/
 │   ├── endGameSummary.tsx        # Bilan de soirée animé
+│   ├── avatarCustomizer.tsx      # Création/personnalisation avatar invité
+│   ├── playerAvatar.tsx          # Affichage avatar visuel partout
 │   └── jaugeMode.tsx             # UI de vote/reveal du mode Jauge
 ├── lib/
 │   ├── supabase.ts               # Client Supabase singleton
+│   ├── avatar.ts                 # Config DiceBear + normalisation
 │   ├── guestSession.ts           # Session invité locale : guest_id, pseudo, avatar/couleur
 │   ├── useRoom.ts                # Hook de synchro temps réel
 │   ├── useProfile.ts             # Supabase Auth + rôle

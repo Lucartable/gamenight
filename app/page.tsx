@@ -5,11 +5,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { AdminStatusBar } from "@/components/adminStatus";
+import { AvatarCustomizer } from "@/components/avatarCustomizer";
+import { createRandomAvatarConfig, normalizeAvatarConfig, type AvatarConfig } from "@/lib/avatar";
 import { getSupabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import {
-  GUEST_COLORS,
-  getNextGuestAvatar,
   getOrCreateGuestSession,
   saveGuestSession,
 } from "@/lib/guestSession";
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("B");
   const [color, setColor] = useState("#ff3ea5");
+  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => createRandomAvatarConfig("badaboum"));
   const [code, setCode] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -48,15 +49,35 @@ export default function HomePage() {
     setName(guest.name);
     setAvatar(guest.avatar);
     setColor(guest.color);
+    setAvatarConfig(normalizeAvatarConfig({
+      avatarStyle: guest.avatarStyle,
+      avatarSeed: guest.avatarSeed,
+      avatarOptions: guest.avatarOptions,
+      avatarColor: guest.avatarColor,
+    }, guest.name));
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const guest = saveGuestSession({ name, avatar, color });
+    const guest = saveGuestSession({
+      name,
+      avatar,
+      color,
+      avatarStyle: avatarConfig.avatarStyle,
+      avatarSeed: avatarConfig.avatarSeed,
+      avatarOptions: avatarConfig.avatarOptions,
+      avatarColor: avatarConfig.avatarColor,
+    });
     setName(guest.name);
     setAvatar(guest.avatar);
     setColor(guest.color);
+    setAvatarConfig(normalizeAvatarConfig({
+      avatarStyle: guest.avatarStyle,
+      avatarSeed: guest.avatarSeed,
+      avatarOptions: guest.avatarOptions,
+      avatarColor: guest.avatarColor,
+    }, guest.name));
     setLoading(true);
     try {
       const supabase = getSupabase();
@@ -90,6 +111,10 @@ export default function HomePage() {
         name: guest.name,
         avatar: guest.avatar,
         color: guest.color,
+        avatar_style: guest.avatarStyle,
+        avatar_seed: guest.avatarSeed,
+        avatar_options: guest.avatarOptions,
+        avatar_color: guest.avatarColor,
         is_host: true,
       });
       if (pErr) throw pErr;
@@ -104,10 +129,24 @@ export default function HomePage() {
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const guest = saveGuestSession({ name, avatar, color });
+    const guest = saveGuestSession({
+      name,
+      avatar,
+      color,
+      avatarStyle: avatarConfig.avatarStyle,
+      avatarSeed: avatarConfig.avatarSeed,
+      avatarOptions: avatarConfig.avatarOptions,
+      avatarColor: avatarConfig.avatarColor,
+    });
     setName(guest.name);
     setAvatar(guest.avatar);
     setColor(guest.color);
+    setAvatarConfig(normalizeAvatarConfig({
+      avatarStyle: guest.avatarStyle,
+      avatarSeed: guest.avatarSeed,
+      avatarOptions: guest.avatarOptions,
+      avatarColor: guest.avatarColor,
+    }, guest.name));
     const cleanCode = normalizeRoomCode(code);
     if (!cleanCode) return setError("Entre un code de salle.");
 
@@ -136,6 +175,10 @@ export default function HomePage() {
             name: guest.name,
             avatar: guest.avatar,
             color: guest.color,
+            avatar_style: guest.avatarStyle,
+            avatar_seed: guest.avatarSeed,
+            avatar_options: guest.avatarOptions,
+            avatar_color: guest.avatarColor,
             is_host: false,
             last_seen_at: new Date().toISOString(),
           },
@@ -293,11 +336,26 @@ export default function HomePage() {
             <div className="space-y-4">
               <GuestIdentityPicker
                 name={name}
-                avatar={avatar}
-                color={color}
+                avatarConfig={avatarConfig}
                 onNameChange={setName}
-                onAvatarChange={() => setAvatar((current) => getNextGuestAvatar(current))}
-                onColorChange={setColor}
+                onAvatarChange={(next) => {
+                  setAvatarConfig(next);
+                  setColor(next.avatarColor);
+                  const saved = saveGuestSession({
+                    name,
+                    color: next.avatarColor,
+                    avatarStyle: next.avatarStyle,
+                    avatarSeed: next.avatarSeed,
+                    avatarOptions: next.avatarOptions,
+                    avatarColor: next.avatarColor,
+                  });
+                  setAvatar(saved.avatar);
+                }}
+                onColorChange={(nextColor) => {
+                  setColor(nextColor);
+                  setAvatarConfig((current) => ({ ...current, avatarColor: nextColor }));
+                  saveGuestSession({ name, color: nextColor, avatarColor: nextColor });
+                }}
               />
               {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
               <form onSubmit={handleCreate}>
@@ -360,50 +418,38 @@ export default function HomePage() {
 
 function GuestIdentityPicker({
   name,
-  avatar,
-  color,
+  avatarConfig,
   onNameChange,
   onAvatarChange,
   onColorChange,
 }: {
   name: string;
-  avatar: string;
-  color: string;
+  avatarConfig: AvatarConfig;
   onNameChange: (value: string) => void;
-  onAvatarChange: () => void;
+  onAvatarChange: (value: AvatarConfig) => void;
   onColorChange: (value: string) => void;
 }) {
   return (
     <div className="rounded-[24px] border border-white/10 bg-white/5 p-3">
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onAvatarChange}
-          className="guest-avatar-button"
-          style={{ background: `linear-gradient(135deg, ${color}, rgba(34, 211, 238, 0.72))` }}
-          aria-label="Changer d'avatar"
-        >
-          {avatar}
-        </button>
         <input
           className="input min-w-0 flex-1"
           value={name}
-          onChange={(e) => onNameChange(e.target.value)}
+          onChange={(e) => {
+            onNameChange(e.target.value);
+            saveGuestSession({ name: e.target.value });
+          }}
           placeholder="Ton pseudo"
           maxLength={24}
         />
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {GUEST_COLORS.map((swatch) => (
-          <button
-            key={swatch}
-            type="button"
-            aria-label={`Couleur ${swatch}`}
-            onClick={() => onColorChange(swatch)}
-            className={`h-9 w-9 rounded-2xl border transition-transform active:scale-95 ${color === swatch ? "border-white scale-105" : "border-white/15"}`}
-            style={{ background: swatch }}
-          />
-        ))}
+      <div className="mt-3">
+        <AvatarCustomizer
+          name={name}
+          config={avatarConfig}
+          onChange={onAvatarChange}
+          onColorChange={onColorChange}
+        />
       </div>
     </div>
   );

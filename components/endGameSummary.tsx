@@ -11,6 +11,7 @@ import {
 } from "@/lib/endGameSummary";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/playerAvatar";
 import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 const TONE_STYLES: Record<SummaryTone, { border: string; bg: string; text: string; glow: string; bar: string }> = {
@@ -390,24 +391,6 @@ function FinalRecap({
   );
 }
 
-function PlayerAvatar({ player, size = "md" }: { player: Player; size?: "sm" | "md" | "lg" }) {
-  const dimension =
-    size === "sm"
-      ? "h-7 w-7 text-xs"
-      : size === "lg"
-        ? "h-14 w-14 text-2xl"
-        : "h-11 w-11 text-lg";
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-2xl font-black text-white shadow-lg ${dimension}`}
-      style={{ background: player.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.72))` : getPlayerGradient(player.id) }}
-      aria-hidden="true"
-    >
-      {player.avatar || player.name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-
 function SummaryConfetti() {
   return (
     <div className="confetti-field" aria-hidden="true">
@@ -416,19 +399,4 @@ function SummaryConfetti() {
       ))}
     </div>
   );
-}
-
-function getPlayerGradient(id: string): string {
-  const palettes = [
-    "linear-gradient(135deg, #ff3ea5, #a855f7)",
-    "linear-gradient(135deg, #22d3ee, #4ade80)",
-    "linear-gradient(135deg, #facc15, #ff3ea5)",
-    "linear-gradient(135deg, #a855f7, #22d3ee)",
-    "linear-gradient(135deg, #4ade80, #facc15)",
-    "linear-gradient(135deg, #fb7185, #38bdf8)",
-    "linear-gradient(135deg, #f97316, #a855f7)",
-  ];
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return palettes[hash % palettes.length];
 }

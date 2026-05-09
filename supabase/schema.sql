@@ -156,13 +156,21 @@ create table public.players (
   name text not null,
   avatar text,
   color text,
+  avatar_style text,
+  avatar_seed text,
+  avatar_options jsonb not null default '{}',
+  avatar_color text,
   is_host boolean not null default false,
   last_seen_at timestamptz not null default now(),
   joined_at timestamptz not null default now(),
   unique (room_id, client_id),
   check (char_length(trim(name)) between 1 and 24),
   check (avatar is null or char_length(avatar) between 1 and 8),
-  check (color is null or color ~ '^#[0-9A-Fa-f]{6}$')
+  check (color is null or color ~ '^#[0-9A-Fa-f]{6}$'),
+  check (avatar_style is null or avatar_style in ('adventurer','bottts-neutral','lorelei','micah','fun-emoji','personas')),
+  check (avatar_seed is null or char_length(trim(avatar_seed)) between 1 and 96),
+  check (jsonb_typeof(avatar_options) = 'object'),
+  check (avatar_color is null or avatar_color ~ '^#[0-9A-Fa-f]{6}$')
 );
 
 create index players_room_id_idx on public.players(room_id);

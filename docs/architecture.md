@@ -35,6 +35,9 @@ Les premiers fichiers extraits :
 
 - `app/animations.css` : keyframes et classes d'animation partagees;
 - `app/game.css`, `app/home.css`, `app/jauge.css`, `app/summary.css`, `app/ui.css` : styles decoupes par domaine;
+- `lib/avatar.ts` : generation d'avatars DiceBear, normalisation et fallback;
+- `components/playerAvatar.tsx` : rendu unique des avatars joueur;
+- `components/avatarCustomizer.tsx` : personnalisation invite sur l'accueil;
 - `lib/endGameSummaryTypes.ts` : types du bilan;
 - `lib/endGameSummaryLabels.ts` : profils, titres et libelles du bilan;
 - `lib/endGameSummaryUtils.ts` : helpers purs de stats;

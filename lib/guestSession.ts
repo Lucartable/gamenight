@@ -1,16 +1,28 @@
+import {
+  AVATAR_COLORS,
+  createRandomAvatarConfig,
+  getPlayerInitials,
+  normalizeAvatarConfig,
+  sanitizeHex,
+  type AvatarConfig,
+} from "./avatar";
+
 export interface GuestSession {
   guestId: string;
   name: string;
   avatar: string;
   color: string;
+  avatarStyle: AvatarConfig["avatarStyle"];
+  avatarSeed: string;
+  avatarOptions: AvatarConfig["avatarOptions"];
+  avatarColor: string;
   createdAt: string;
 }
 
 const GUEST_SESSION_KEY = "badaboum_guest_session";
 const LEGACY_CLIENT_ID_KEY = "gn_client_id";
 
-export const GUEST_AVATARS = ["B", "BOOM", "WOW", "HEY", "GO", "10", "GG", "??"] as const;
-export const GUEST_COLORS = ["#ff3ea5", "#22d3ee", "#facc15", "#4ade80", "#a855f7", "#fb7185", "#38bdf8", "#f97316"] as const;
+export const GUEST_COLORS = AVATAR_COLORS;
 
 const RANDOM_NAMES = [
   "Badaboom",
@@ -28,7 +40,10 @@ export function getOrCreateGuestSession(): GuestSession {
     return createGuestSession();
   }
   const stored = readStoredGuestSession();
-  if (stored) return stored;
+  if (stored) {
+    writeGuestSession(stored);
+    return stored;
+  }
 
   const legacyId = window.localStorage.getItem(LEGACY_CLIENT_ID_KEY);
   const session = createGuestSession(legacyId || undefined);
@@ -39,11 +54,24 @@ export function getOrCreateGuestSession(): GuestSession {
 
 export function saveGuestSession(patch: Partial<Omit<GuestSession, "guestId" | "createdAt">>): GuestSession {
   const current = getOrCreateGuestSession();
+  const avatarConfig = normalizeAvatarConfig(
+    {
+      avatarStyle: patch.avatarStyle ?? current.avatarStyle,
+      avatarSeed: patch.avatarSeed ?? current.avatarSeed,
+      avatarOptions: patch.avatarOptions ?? current.avatarOptions,
+      avatarColor: patch.avatarColor ?? patch.color ?? current.avatarColor,
+    },
+    patch.name ?? current.name
+  );
   const next: GuestSession = {
     ...current,
     name: sanitizeGuestName(patch.name ?? current.name),
-    avatar: sanitizeAvatar(patch.avatar ?? current.avatar),
-    color: sanitizeColor(patch.color ?? current.color),
+    avatar: sanitizeAvatar(patch.avatar ?? current.avatar, patch.name ?? current.name),
+    color: sanitizeColor(patch.color ?? avatarConfig.avatarColor),
+    avatarStyle: avatarConfig.avatarStyle,
+    avatarSeed: avatarConfig.avatarSeed,
+    avatarOptions: avatarConfig.avatarOptions,
+    avatarColor: avatarConfig.avatarColor,
   };
   writeGuestSession(next);
   if (typeof window !== "undefined") window.localStorage.setItem(LEGACY_CLIENT_ID_KEY, next.guestId);
@@ -58,11 +86,6 @@ export function createRandomGuestName(): string {
   const base = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
   const suffix = Math.floor(10 + Math.random() * 90);
   return `${base}${suffix}`;
-}
-
-export function getNextGuestAvatar(current: string): string {
-  const index = GUEST_AVATARS.findIndex((avatar) => avatar === current);
-  return GUEST_AVATARS[(index + 1) % GUEST_AVATARS.length];
 }
 
 export function getNextGuestColor(current: string): string {
@@ -84,8 +107,17 @@ function readStoredGuestSession(): GuestSession | null {
     return {
       guestId: parsed.guestId,
       name: sanitizeGuestName(parsed.name ?? ""),
-      avatar: sanitizeAvatar(parsed.avatar),
+      avatar: sanitizeAvatar(parsed.avatar, parsed.name),
       color: sanitizeColor(parsed.color),
+      ...normalizeAvatarConfig(
+        {
+          avatarStyle: parsed.avatarStyle,
+          avatarSeed: parsed.avatarSeed,
+          avatarOptions: parsed.avatarOptions,
+          avatarColor: parsed.avatarColor ?? parsed.color,
+        },
+        parsed.name ?? "badaboum"
+      ),
       createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : new Date().toISOString(),
     };
   } catch {
@@ -94,11 +126,16 @@ function readStoredGuestSession(): GuestSession | null {
 }
 
 function createGuestSession(guestId = makeId()): GuestSession {
+  const avatarConfig = createRandomAvatarConfig(guestId);
   return {
     guestId,
     name: createRandomGuestName(),
-    avatar: GUEST_AVATARS[Math.floor(Math.random() * GUEST_AVATARS.length)],
-    color: GUEST_COLORS[Math.floor(Math.random() * GUEST_COLORS.length)],
+    avatar: "B",
+    color: avatarConfig.avatarColor,
+    avatarStyle: avatarConfig.avatarStyle,
+    avatarSeed: avatarConfig.avatarSeed,
+    avatarOptions: avatarConfig.avatarOptions,
+    avatarColor: avatarConfig.avatarColor,
     createdAt: new Date().toISOString(),
   };
 }
@@ -108,12 +145,13 @@ function writeGuestSession(session: GuestSession): void {
   window.localStorage.setItem(GUEST_SESSION_KEY, JSON.stringify(session));
 }
 
-function sanitizeAvatar(value: unknown): string {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim().slice(0, 8) : "B";
+function sanitizeAvatar(value: unknown, fallbackName?: unknown): string {
+  if (typeof value === "string" && value.trim().length > 0) return value.trim().slice(0, 8);
+  return getPlayerInitials(typeof fallbackName === "string" ? fallbackName : "Badaboum").slice(0, 2);
 }
 
 function sanitizeColor(value: unknown): string {
-  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#ff3ea5";
+  return sanitizeHex(value, "#ff3ea5");
 }
 
 function makeId(): string {

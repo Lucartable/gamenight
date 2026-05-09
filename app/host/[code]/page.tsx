@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AdminDebugPanel } from "@/components/adminDebugPanel";
+import { PlayerAvatar } from "@/components/playerAvatar";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
@@ -3615,12 +3616,7 @@ function PlayerTargetButton({
       }`}
     >
       <span className="flex min-w-0 items-center gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black text-white"
-          style={{ background: player.color ? `linear-gradient(135deg, ${player.color}, rgba(34, 211, 238, 0.72))` : "rgba(255,255,255,0.12)" }}
-        >
-          {player.avatar || player.name.slice(0, 1).toUpperCase()}
-        </span>
+        <PlayerAvatar player={player} size="md" />
         <span className="truncate text-xl font-black">{player.name}</span>
       </span>
       {selected && <span className="text-sm font-bold text-neon-cyan">Sélectionné</span>}

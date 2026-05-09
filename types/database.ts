@@ -170,6 +170,10 @@ export interface Player {
   name: string;
   avatar: string | null;
   color: string | null;
+  avatar_style: string | null;
+  avatar_seed: string | null;
+  avatar_options: Record<string, unknown> | null;
+  avatar_color: string | null;
   is_host: boolean;
   last_seen_at: string;
   joined_at: string;
