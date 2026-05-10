@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AudioToggle } from "@/components/audioToggle";
+import { JoinPrompt } from "@/components/joinPrompt";
 import { PlayerAvatar } from "@/components/playerAvatar";
 import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import { ValidationParticles } from "@/components/validationParticles";
@@ -406,7 +407,7 @@ export default function PlayerPage() {
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} action={{ label: "Retour", href: "/" }} />;
   if (!me)
-    return <CenteredMessage title="Tu n'as pas encore rejoint cette salle" action={{ label: "Rejoindre", href: "/" }} />;
+    return <JoinPrompt roomId={room.id} code={room.code} onJoined={refresh} />;
   if (room.status === "ended")
     return (
       <CenteredMessage

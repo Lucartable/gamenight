@@ -4309,7 +4309,7 @@ function TvHostStage({
         <div className="tv-lobby-hero">
           <div className="tv-code-card">
             <div className="tv-code-card-header">
-              <span className="tv-code-eyebrow">Rejoindre</span>
+              <span className="tv-code-eyebrow">Rejoins la partie</span>
               <span className="tv-code-host">{joinHost}</span>
             </div>
             <div className="tv-code-value-wrap">
@@ -4326,14 +4326,18 @@ function TvHostStage({
                   width={240}
                   height={240}
                 />
-                <figcaption>Scan rapide depuis le téléphone</figcaption>
+                <figcaption>Scanne pour rejoindre direct</figcaption>
               </figure>
             )}
-            <ol className="tv-code-steps">
-              <li><span>1</span> Ouvre <strong>{joinHost}</strong> sur ton tel.</li>
-              <li><span>2</span> Choisis <strong>Jouer en invité</strong>.</li>
-              <li><span>3</span> Entre le code <strong>{room.code}</strong> ou scanne le QR.</li>
-            </ol>
+            <div className="tv-code-instructions">
+              <p className="tv-code-instructions-primary">
+                <span aria-hidden="true">📱</span>
+                <span><strong>Scanne le QR code</strong> pour rejoindre directement la salle.</span>
+              </p>
+              <p className="tv-code-instructions-secondary">
+                Pas de QR ? Ouvre <strong>{joinHost}</strong> et entre <span className="tv-code-inline">{room.code}</span>.
+              </p>
+            </div>
           </div>
 
           <div className="tv-players-panel">
