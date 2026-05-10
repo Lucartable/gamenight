@@ -1,4 +1,5 @@
 export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "end_game_summary" | "ended";
+export type HostMode = "classic" | "tv";
 export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions" | "jauge";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
@@ -86,6 +87,7 @@ export interface Room {
   created_by_user_id: string | null;
   game_type: GameType | null;
   status: RoomStatus;
+  host_mode: HostMode;
   current_question_id: number | null;
   question_started_at: string | null;
   reveal_started_at: string | null;

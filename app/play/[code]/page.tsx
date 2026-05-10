@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
+import { AudioToggle } from "@/components/audioToggle";
 import { PlayerAvatar } from "@/components/playerAvatar";
 import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import { ValidationParticles } from "@/components/validationParticles";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
+import { playSfx, primeAudio } from "@/lib/audio";
 import { useValidationEvents } from "@/lib/useValidationEvents";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
@@ -192,6 +194,39 @@ export default function PlayerPage() {
     mimeGameState?.timerDuration ?? voteDuration
   );
 
+  useEffect(() => {
+    primeAudio();
+  }, []);
+
+  const lastStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!room) return;
+    const previous = lastStatusRef.current;
+    if (previous === room.status) return;
+    lastStatusRef.current = room.status;
+    if (!previous) return;
+    if (room.status === "question_active") playSfx("roundStart");
+    else if (room.status === "reveal_results") playSfx("reveal");
+    else if (room.status === "scoreboard") playSfx("leaderboard");
+    else if (room.status === "end_game_summary") playSfx("leaderboard");
+  }, [room?.status, room]);
+
+  const lastTickRef = useRef<number>(-1);
+  const voteLeftSec = useCountdown(
+    room?.status === "question_active" ? room.question_started_at : null,
+    room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC
+  );
+  useEffect(() => {
+    if (room?.status !== "question_active") {
+      lastTickRef.current = -1;
+      return;
+    }
+    if (voteLeftSec > 5 || voteLeftSec === 0) return;
+    if (voteLeftSec === lastTickRef.current) return;
+    lastTickRef.current = voteLeftSec;
+    playSfx("urgent");
+  }, [voteLeftSec, room?.status]);
+
   const isQuestionActive = room?.status === "question_active";
   const jaugeAnonymous = jaugeMode && jaugeGameState ? jaugeGameState.anonymityMode !== "visible" : false;
   const validationVoterIds = useMemo(() => {
@@ -242,6 +277,7 @@ export default function PlayerPage() {
 
     setSubmitting(true);
     setOptimisticVote({ qid: currentQ.id, selected_option, selected_player_id });
+    playSfx("validate");
 
     try {
       const { error } = await getSupabase().from("votes").upsert(
@@ -274,6 +310,7 @@ export default function PlayerPage() {
 
     setSubmitting(true);
     setOptimisticRating({ qid: currentJaugeQuestion.id, rating: selectedRating });
+    playSfx("validate");
 
     try {
       const { error } = await getSupabase().from("ratings").upsert(
@@ -601,16 +638,19 @@ function PlayerHeader({
   gameLabel: string | undefined;
 }) {
   return (
-    <header className="card game-topbar mb-4 flex items-center justify-between p-4">
+    <header className="card game-topbar mb-4 flex items-center justify-between gap-3 p-4">
       <div>
         <div className="text-xs uppercase tracking-wider text-white/50">Salle</div>
         <div className="text-xl font-black tracking-widest">{code}</div>
         {gameLabel && <div className="mt-1 text-xs text-neon-cyan">{gameLabel}</div>}
       </div>
-      <div className="text-right">
-        <div className="text-xs uppercase tracking-wider text-white/50">Toi</div>
-        <div className="text-lg font-bold">{me.name}</div>
-        <div className="text-xs text-white/50">{totalPlayers} joueurs</div>
+      <div className="flex items-center gap-2">
+        <AudioToggle compact />
+        <div className="text-right">
+          <div className="text-xs uppercase tracking-wider text-white/50">Toi</div>
+          <div className="text-lg font-bold">{me.name}</div>
+          <div className="text-xs text-white/50">{totalPlayers} joueurs</div>
+        </div>
       </div>
     </header>
   );

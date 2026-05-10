@@ -1,4 +1,5 @@
 import { getOrCreateGuestId } from "./guestSession";
+import type { HostMode, Player, Room } from "@/types/database";
 
 // Configuration par défaut d'une partie.
 export const DEFAULT_TOTAL_QUESTIONS = 10;
@@ -51,4 +52,27 @@ export function triggerHaptic(pattern: number | number[] = 12): void {
   if ("vibrate" in window.navigator) {
     window.navigator.vibrate(pattern);
   }
+}
+
+export function getRoomHostMode(room: Pick<Room, "host_mode"> | null | undefined): HostMode {
+  return room?.host_mode === "tv" ? "tv" : "classic";
+}
+
+export function isTvRoom(room: Pick<Room, "host_mode"> | null | undefined): boolean {
+  return getRoomHostMode(room) === "tv";
+}
+
+/**
+ * En mode TV, l'écran principal est techniquement le host mais ne joue pas.
+ * Cette fonction retourne uniquement les joueurs qui participent réellement.
+ * En mode classique, retourne tous les joueurs.
+ */
+export function getParticipants(players: Player[], room: Pick<Room, "host_mode" | "host_client_id"> | null | undefined): Player[] {
+  if (!room || !isTvRoom(room)) return players;
+  return players.filter((player) => player.client_id !== room.host_client_id);
+}
+
+export function isTvHostPlayer(player: Player, room: Pick<Room, "host_mode" | "host_client_id"> | null | undefined): boolean {
+  if (!isTvRoom(room)) return false;
+  return Boolean(room && player.client_id === room.host_client_id);
 }

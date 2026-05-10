@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import { AdminStatusBar } from "@/components/adminStatus";
 import { AvatarCustomizer } from "@/components/avatarCustomizer";
+import { AudioToggle } from "@/components/audioToggle";
 import { createRandomAvatarConfig, normalizeAvatarConfig, type AvatarConfig } from "@/lib/avatar";
+import { playSfx, primeAudio } from "@/lib/audio";
 import { getSupabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -17,6 +18,7 @@ import {
   generateRoomCode,
   normalizeRoomCode,
 } from "@/lib/utils";
+import type { HostMode } from "@/types/database";
 
 type Mode = "menu" | "guest" | "admin";
 
@@ -41,6 +43,7 @@ export default function HomePage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState<HostMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
 
@@ -57,9 +60,10 @@ export default function HomePage() {
     }, guest.name));
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleCreate(hostMode: HostMode) {
     setError(null);
+    primeAudio();
+    playSfx("primary");
     const guest = saveGuestSession({
       name,
       avatar,
@@ -78,12 +82,12 @@ export default function HomePage() {
       avatarOptions: guest.avatarOptions,
       avatarColor: guest.avatarColor,
     }, guest.name));
+    setCreating(hostMode);
     setLoading(true);
     try {
       const supabase = getSupabase();
       const userId = await getCurrentUserId();
 
-      // On retente quelques fois en cas de collision de code (très rare).
       let roomId: string | null = null;
       let roomCode = "";
       for (let i = 0; i < 5 && !roomId; i++) {
@@ -96,6 +100,7 @@ export default function HomePage() {
             created_by_guest_id: guest.guestId,
             created_by_user_id: userId,
             status: "lobby",
+            host_mode: hostMode,
           })
           .select("id")
           .single();
@@ -103,32 +108,37 @@ export default function HomePage() {
       }
       if (!roomId) throw new Error("Impossible de créer la salle. Réessaie.");
 
-      const { error: pErr } = await supabase.from("players").insert({
-        room_id: roomId,
-        client_id: guest.guestId,
-        guest_id: guest.guestId,
-        auth_user_id: userId,
-        name: guest.name,
-        avatar: guest.avatar,
-        color: guest.color,
-        avatar_style: guest.avatarStyle,
-        avatar_seed: guest.avatarSeed,
-        avatar_options: guest.avatarOptions,
-        avatar_color: guest.avatarColor,
-        is_host: true,
-      });
-      if (pErr) throw pErr;
+      if (hostMode === "classic") {
+        const { error: pErr } = await supabase.from("players").insert({
+          room_id: roomId,
+          client_id: guest.guestId,
+          guest_id: guest.guestId,
+          auth_user_id: userId,
+          name: guest.name,
+          avatar: guest.avatar,
+          color: guest.color,
+          avatar_style: guest.avatarStyle,
+          avatar_seed: guest.avatarSeed,
+          avatar_options: guest.avatarOptions,
+          avatar_color: guest.avatarColor,
+          is_host: true,
+        });
+        if (pErr) throw pErr;
+      }
 
       router.push(`/host/${roomCode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue.");
       setLoading(false);
+      setCreating(null);
     }
   }
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    primeAudio();
+    playSfx("validate");
     const guest = saveGuestSession({
       name,
       avatar,
@@ -163,7 +173,7 @@ export default function HomePage() {
 
       if (rErr) throw rErr;
       if (!room) throw new Error("Aucune salle trouvée avec ce code.");
-      // upsert : si on rejoint deux fois (refresh), on met juste à jour le nom.
+
       const { error: pErr } = await supabase
         .from("players")
         .upsert(
@@ -198,10 +208,12 @@ export default function HomePage() {
     setError(null);
     setAuthMessage(null);
     setLoading(true);
+    primeAudio();
     try {
       const result = await profile.signInWithPassword(adminEmail, adminPassword);
       if (result) throw new Error(result);
       await profile.refresh();
+      playSfx("validate");
       setAuthMessage("Connecté en admin. Tu peux jouer normalement ou ouvrir la bibliothèque.");
       setMode("menu");
     } catch (err) {
@@ -211,124 +223,127 @@ export default function HomePage() {
     }
   }
 
-  return (
-    <main className="home-stage min-h-dvh px-5 py-6 text-white">
-      <div className="home-grid" aria-hidden="true" />
-      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] max-w-md flex-col">
-        <AdminStatusBar
-          userEmail={profile.userEmail}
-          role={profile.role}
-          canManageQuestions={profile.canManageQuestions}
-          loading={profile.loading || loading}
-          onSignOut={() => void profile.signOut()}
-          onAdminClick={() => {
-            setError(null);
-            setAuthMessage(null);
-            setMode("admin");
-          }}
-        />
+  const showAdminBadge = !profile.loading && profile.canManageQuestions;
+  const showAdminLink = !profile.loading && !profile.userEmail && mode !== "admin";
 
-        <header className="home-hero pt-6 text-center">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[28px] border border-neon-yellow/40 bg-neon-yellow/10 shadow-glow">
-            <span className="home-burst-mark">B</span>
+  return (
+    <main className="home-stage min-h-dvh px-5 py-5 text-white">
+      <div className="home-grid" aria-hidden="true" />
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2.5rem)] max-w-md flex-col gap-5">
+        <nav className="app-navbar" aria-label="Navigation principale">
+          <Link href="/" className="app-navbar-brand">
+            <span className="app-navbar-brand-mark">B</span>
+            Badaboum
+          </Link>
+          <div className="app-navbar-actions">
+            <AudioToggle compact />
+            {showAdminBadge && (
+              <Link href="/questions" className="app-navbar-link">
+                Bibliothèque
+              </Link>
+            )}
+            {showAdminBadge ? (
+              <button
+                type="button"
+                className="app-navbar-button"
+                onClick={() => {
+                  primeAudio();
+                  void profile.signOut();
+                }}
+              >
+                Logout
+              </button>
+            ) : showAdminLink ? (
+              <button
+                type="button"
+                className="app-navbar-button"
+                onClick={() => {
+                  primeAudio();
+                  setMode("admin");
+                }}
+              >
+                Connexion admin
+              </button>
+            ) : null}
           </div>
+        </nav>
+
+        <header className="home-hero pt-2 text-center">
           <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">party games calibrés soirée</div>
           <h1 className="home-brand mt-2 text-6xl font-black leading-none">Badaboum</h1>
-          <p className="mx-auto mt-4 max-w-xs text-sm font-semibold text-white/65">
+          <p className="mx-auto mt-3 max-w-xs text-sm font-semibold text-white/65">
             Votes, mimes, accusations amicales et bilans de fin qui restent dans les mémoires.
           </p>
+          {showAdminBadge && (
+            <div className="mt-3">
+              <span className="app-navbar-chip">{profile.isAdmin ? "Admin" : "Trusted"} connecté</span>
+            </div>
+          )}
         </header>
 
         {mode === "menu" && (
-          <div className="mt-8 flex flex-1 flex-col">
+          <>
             {profile.loading && (
-              <section className="home-action-panel mb-4 p-5">
+              <section className="home-action-panel mb-1 p-5">
                 <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Session</div>
                 <h2 className="mt-2 text-2xl font-black">Vérification admin...</h2>
-                <p className="mt-2 text-sm font-semibold text-white/55">
-                  Badaboum vérifie si un compte admin/trusted est déjà connecté.
-                </p>
-              </section>
-            )}
-
-            {!profile.loading && profile.canManageQuestions && (
-              <section className="home-action-panel mb-4 p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-neon-green/40 bg-neon-green/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-neon-green">
-                    {profile.isAdmin ? "Admin" : "Trusted"}
-                  </span>
-                  <span className="text-sm font-black">Connecté en tant qu&apos;{profile.isAdmin ? "admin" : "trusted"}</span>
-                </div>
-                {profile.userEmail && <p className="mt-2 truncate text-sm font-semibold text-white/55">{profile.userEmail}</p>}
-                <div className="mt-4 grid gap-3">
-                  <Link href="/questions" className="btn-primary w-full">
-                    Bibliothèque
-                  </Link>
-                  <button type="button" onClick={() => setMode("guest")} className="btn-secondary w-full">
-                    Jouer / Créer une salle
-                  </button>
-                  <button type="button" onClick={() => void profile.signOut()} className="btn-ghost w-full">
-                    Se déconnecter
-                  </button>
-                </div>
               </section>
             )}
 
             {!profile.loading && (
-              <>
-                <section className="home-action-panel p-3">
-                  {authMessage && (
-                    <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
-                      {authMessage}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setMode("guest")}
-                    className="home-primary-action w-full"
+              <section className="home-action-panel p-5">
+                {authMessage && (
+                  <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
+                    {authMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    primeAudio();
+                    playSfx("click");
+                    setMode("guest");
+                  }}
+                  className="home-primary-action w-full"
+                >
+                  <span>Jouer en invité</span>
+                  <span className="home-action-key">INSTANT</span>
+                </button>
+                {showAdminBadge && (
+                  <Link
+                    href="/questions"
+                    className="home-secondary-action mt-3 w-full"
+                    onClick={() => playSfx("click")}
                   >
-                    <span>Jouer en invité</span>
-                    <span className="home-action-key">INSTANT</span>
-                  </button>
-                  {!profile.userEmail && (
-                    <button
-                      type="button"
-                      onClick={() => setMode("admin")}
-                      className="home-admin-action mt-3 w-full"
-                    >
-                      <span>Connexion admin</span>
-                      <span className="home-action-key">TRUSTED</span>
-                    </button>
-                  )}
-                  {profile.canManageQuestions && (
-                    <Link href="/questions" className="btn-secondary mt-3 w-full">
-                      Ouvrir la bibliothèque
-                    </Link>
-                  )}
-                </section>
-
-                <section className="mt-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
-                      mobile first
-                    </span>
-                  </div>
-                  <div className="grid gap-2">
-                    {GAME_TEASERS.map((game, index) => (
-                      <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
-                        <div className="min-w-0">
-                          <div className="truncate text-base font-black">{game.title}</div>
-                          <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
-                        </div>
-                        <span className="home-game-tag">{game.tag}</span>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              </>
+                    <span>Ouvrir la bibliothèque</span>
+                    <span className="home-action-key">ADMIN</span>
+                  </Link>
+                )}
+              </section>
             )}
-          </div>
+
+            {!profile.loading && (
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
+                    mobile first
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {GAME_TEASERS.map((game, index) => (
+                    <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-black">{game.title}</div>
+                        <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
+                      </div>
+                      <span className="home-game-tag">{game.tag}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
 
         {mode === "guest" && (
@@ -350,6 +365,7 @@ export default function HomePage() {
                     avatarColor: next.avatarColor,
                   });
                   setAvatar(saved.avatar);
+                  playSfx("avatarPick");
                 }}
                 onColorChange={(nextColor) => {
                   setColor(nextColor);
@@ -358,11 +374,36 @@ export default function HomePage() {
                 }}
               />
               {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
-              <form onSubmit={handleCreate}>
-                <button disabled={loading} className="btn-primary w-full" type="submit">
-                  {loading ? "Création..." : "Créer une salle"}
+
+              <div className="home-mode-grid">
+                <button
+                  type="button"
+                  disabled={loading}
+                  className="home-mode-card is-classic"
+                  onClick={() => {
+                    void handleCreate("classic");
+                  }}
+                >
+                  <span className="home-mode-pill">Classique</span>
+                  <span className="home-mode-title">Lancer une partie</span>
+                  <span className="home-mode-detail">Tu joues aussi. Idéal entre amis sans TV.</span>
+                  {creating === "classic" && loading && <span className="home-mode-detail">Création en cours...</span>}
                 </button>
-              </form>
+                <button
+                  type="button"
+                  disabled={loading}
+                  className="home-mode-card is-tv"
+                  onClick={() => {
+                    void handleCreate("tv");
+                  }}
+                >
+                  <span className="home-mode-pill">Mode TV</span>
+                  <span className="home-mode-title">Lancer en mode TV</span>
+                  <span className="home-mode-detail">Cet écran devient l&apos;affichage principal. Tes potes jouent depuis leur tel.</span>
+                  {creating === "tv" && loading && <span className="home-mode-detail">Préparation du studio...</span>}
+                </button>
+              </div>
+
               <form onSubmit={handleJoin} className="grid gap-3">
                 <input
                   className="input uppercase tracking-widest"
@@ -372,10 +413,14 @@ export default function HomePage() {
                   maxLength={10}
                 />
                 <button disabled={loading} className="btn-secondary w-full" type="submit">
-                  {loading ? "Connexion..." : "Rejoindre"}
+                  {loading ? "Connexion..." : "Rejoindre une salle existante"}
                 </button>
               </form>
-              <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
+              <button
+                type="button"
+                onClick={() => setMode("menu")}
+                className="btn-ghost w-full"
+              >
                 Retour
               </button>
             </div>
@@ -404,7 +449,6 @@ export default function HomePage() {
               <button disabled={loading} className="btn-primary w-full" type="submit">
                 {loading ? "Connexion..." : "Se connecter"}
               </button>
-              <Link href="/questions" className="btn-ghost w-full">Ouvrir la bibliothèque</Link>
               <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
                 Retour
               </button>
@@ -470,7 +514,7 @@ function HomeFormShell({
   children: ReactNode;
 }) {
   return (
-    <section className="home-action-panel mt-8 p-5 animate-reveal-in">
+    <section className="home-action-panel p-5 animate-reveal-in">
       <div className="mb-5">
         <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Badaboum</div>
         <h2 className="mt-1 text-3xl font-black">{title}</h2>

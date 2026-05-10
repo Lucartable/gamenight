@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AdminDebugPanel } from "@/components/adminDebugPanel";
+import { AudioToggle } from "@/components/audioToggle";
 import { PlayerAvatar } from "@/components/playerAvatar";
 import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import { ValidationParticles } from "@/components/validationParticles";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
+import { playSfx, primeAudio } from "@/lib/audio";
 import { getSupabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useRoom";
 import { useValidationEvents } from "@/lib/useValidationEvents";
@@ -92,6 +94,8 @@ import {
   VOTE_DURATION_OPTIONS,
   clampInt,
   getOrCreateClientId,
+  getParticipants,
+  isTvRoom,
   secondsLeft,
   triggerHaptic,
 } from "@/lib/utils";
@@ -199,6 +203,10 @@ export default function HostPage() {
     const id = getOrCreateClientId();
     return players.find((p) => p.client_id === id);
   }, [players]);
+
+  const tvMode = isTvRoom(room);
+  const participants = useMemo(() => getParticipants(players, room), [players, room]);
+  const participantCount = participants.length;
 
   const gameType = room?.game_type ?? null;
   const selectedCategories = useMemo(
@@ -449,6 +457,47 @@ export default function HostPage() {
 
   const votingStartedAt = room?.status === "question_active" ? room.question_started_at : null;
   const voteLeft = useCountdown(votingStartedAt, voteDuration);
+
+  useEffect(() => {
+    primeAudio();
+  }, []);
+
+  const lastStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!room) return;
+    const previous = lastStatusRef.current;
+    if (previous === room.status) return;
+    lastStatusRef.current = room.status;
+    if (!previous) return;
+    if (room.status === "question_active") playSfx("roundStart");
+    else if (room.status === "reveal_results") playSfx("reveal");
+    else if (room.status === "scoreboard") playSfx("leaderboard");
+    else if (room.status === "end_game_summary") playSfx("leaderboard");
+  }, [room?.status, room]);
+
+  const lastPlayerCountRef = useRef(0);
+  useEffect(() => {
+    if (!room) return;
+    if (lastPlayerCountRef.current === 0) {
+      lastPlayerCountRef.current = players.length;
+      return;
+    }
+    if (players.length > lastPlayerCountRef.current) playSfx("joined");
+    lastPlayerCountRef.current = players.length;
+  }, [players.length, room]);
+
+  const lastTickRef = useRef<number>(-1);
+  useEffect(() => {
+    if (room?.status !== "question_active") {
+      lastTickRef.current = -1;
+      return;
+    }
+    if (voteLeft > 5 || voteLeft === 0) return;
+    if (voteLeft === lastTickRef.current) return;
+    lastTickRef.current = voteLeft;
+    playSfx("urgent");
+  }, [voteLeft, room?.status]);
+
   const mimeRoundLeft = useCountdown(mimeMode ? votingStartedAt : null, mimeTimerDuration);
   const voteHasExpired =
     votingStartedAt !== null && secondsLeft(votingStartedAt, voteDuration) === 0;
@@ -1399,7 +1448,7 @@ export default function HostPage() {
       : roundsPlayed;
 
   return (
-    <main className="game-stage mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-6">
+    <main className={`game-stage mx-auto flex min-h-dvh ${tvMode ? "max-w-2xl px-4 py-4 lg:max-w-6xl lg:px-10 lg:py-8" : "max-w-2xl px-5 py-6"} flex-col`}>
       <RoomHeader
         code={room.code}
         status={room.status}
@@ -1420,6 +1469,26 @@ export default function HostPage() {
         compact
         onSignOut={() => void profileState.signOut()}
       />
+
+      {tvMode && (
+        <TvHostStage
+          room={room}
+          players={participants}
+          gameLabel={gameDefinition?.label}
+          gameType={gameType}
+          currentQuestionText={currentQ?.text ?? currentJaugeQuestion?.text ?? null}
+          voteLeft={voteLeft}
+          submittedVotesCount={submittedVotesCount}
+          submittedJaugeCount={submittedJaugeCount}
+          totalParticipants={participantCount}
+          totalJaugeVoters={requiredJaugeVoters.length}
+          isJauge={Boolean(jaugeMode)}
+          onRevealNow={revealNow}
+          onNext={goToNextQuestion}
+          onEnd={() => void finishGame(false)}
+          busy={busy}
+        />
+      )}
 
       {showTransfer && (
         <TransferPanel
@@ -1641,7 +1710,7 @@ export default function HostPage() {
         />
       )}
 
-      {room.status === "question_active" && currentQ && gameType === "who_would" && (
+      {room.status === "question_active" && currentQ && gameType === "who_would" && !tvMode && (
         <WhoWouldActiveView
           question={currentQ as WhoWouldQuestion}
           voteLeft={voteLeft}
@@ -1657,7 +1726,7 @@ export default function HostPage() {
         />
       )}
 
-      {room.status === "question_active" && currentQ && gameType === "who_of_us" && (
+      {room.status === "question_active" && currentQ && gameType === "who_of_us" && !tvMode && (
         <WhoOfUsActiveView
           question={currentQ as WhoOfUsGameQuestion}
           voteLeft={voteLeft}
@@ -1674,7 +1743,7 @@ export default function HostPage() {
         />
       )}
 
-      {room.status === "question_active" && currentQ && predictionMode && (
+      {room.status === "question_active" && currentQ && predictionMode && !tvMode && (
         <PredictionVoteScreen
           mode={predictionMode}
           question={currentQ as PredictionGameQuestion}
@@ -1692,7 +1761,7 @@ export default function HostPage() {
         />
       )}
 
-      {room.status === "question_active" && currentJaugeQuestion && jaugeGameState && gameType === "jauge" && (
+      {room.status === "question_active" && currentJaugeQuestion && jaugeGameState && gameType === "jauge" && !tvMode && (
         <JaugeVoteScreen
           question={currentJaugeQuestion}
           targetPlayer={currentJaugeTarget}
@@ -1907,13 +1976,16 @@ function RoomHeader({
             {round > 0 && ` · ${Math.min(round, totalQuestions)} / ${totalQuestions}`}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          {canTransfer && (
-            <button onClick={onToggleTransfer} className="btn-ghost text-neon-cyan">
-              👑 Transférer
-            </button>
-          )}
-          <button onClick={onEnd} className="btn-ghost text-neon-pink">Finir</button>
+        <div className="flex flex-col items-end gap-2">
+          <AudioToggle compact />
+          <div className="flex flex-col items-end gap-1">
+            {canTransfer && (
+              <button onClick={onToggleTransfer} className="btn-ghost text-neon-cyan">
+                👑 Transférer
+              </button>
+            )}
+            <button onClick={onEnd} className="btn-ghost text-neon-pink">Finir</button>
+          </div>
         </div>
       </div>
     </header>
@@ -4151,4 +4223,132 @@ function labelStatus(status: string, gameLabel?: string) {
     case "ended": return "Terminée";
     default: return status;
   }
+}
+
+function TvHostStage({
+  room,
+  players,
+  gameLabel,
+  gameType,
+  currentQuestionText,
+  voteLeft,
+  submittedVotesCount,
+  submittedJaugeCount,
+  totalParticipants,
+  totalJaugeVoters,
+  isJauge,
+  onRevealNow,
+  onNext,
+  onEnd,
+  busy,
+}: {
+  room: Room;
+  players: Player[];
+  gameLabel: string | undefined;
+  gameType: GameType | null;
+  currentQuestionText: string | null;
+  voteLeft: number;
+  submittedVotesCount: number;
+  submittedJaugeCount: number;
+  totalParticipants: number;
+  totalJaugeVoters: number;
+  isJauge: boolean;
+  onRevealNow: () => void;
+  onNext: () => Promise<void> | void;
+  onEnd: () => void;
+  busy: boolean;
+}) {
+  const isLobby = room.status === "lobby";
+  const isQuestionActive = room.status === "question_active";
+  const showLobbyHero = isLobby;
+  const denominator = isJauge ? totalJaugeVoters : totalParticipants;
+  const submittedNow = isJauge ? submittedJaugeCount : submittedVotesCount;
+  const progress = denominator > 0 ? Math.min(100, (submittedNow / denominator) * 100) : 0;
+  const timerHot = voteLeft > 0 && voteLeft <= 5;
+
+  return (
+    <section className="tv-stage mb-4 hidden lg:flex" aria-label="Mode TV">
+      <div className="tv-topbar">
+        <div className="tv-topbar-brand">
+          <span className="app-navbar-brand-mark" aria-hidden="true">B</span>
+          <div>
+            <div className="tv-topbar-eyebrow">Mode TV · Badaboum</div>
+            <div className="tv-topbar-title">{gameLabel ?? "Sélection du jeu"}</div>
+          </div>
+        </div>
+        <div className="tv-topbar-meta">
+          <span>Code : {room.code}</span>
+          <span>{players.length} joueur{players.length > 1 ? "s" : ""}</span>
+          <span>{labelStatus(room.status, gameLabel)}</span>
+        </div>
+      </div>
+
+      {showLobbyHero && (
+        <div className="tv-lobby-hero">
+          <div className="tv-code-card">
+            <div className="tv-code-eyebrow">Rejoindre</div>
+            <div className="tv-code-value">{room.code}</div>
+            <p className="tv-code-help">
+              Sur ton téléphone, ouvre <strong>badaboum.app</strong> · &quot;Jouer en invité&quot; · entre ce code.
+            </p>
+          </div>
+
+          <div className="tv-players-panel">
+            <div className="tv-players-panel-header">
+              <span className="tv-players-panel-title">Joueurs en attente</span>
+              <span className="tv-players-panel-count">{players.length}</span>
+            </div>
+            {players.length === 0 ? (
+              <div className="lobby-grid-empty">
+                <span className="lobby-grid-empty-pulse" aria-hidden="true" />
+                <p>En attente du premier joueur. Partage le code !</p>
+              </div>
+            ) : (
+              <div className="tv-players-grid">
+                {players.map((player, index) => (
+                  <article key={player.id} className="tv-player-card" style={{ animationDelay: `${Math.min(index, 18) * 60}ms` }}>
+                    <PlayerAvatar player={player} size="lg" />
+                    <span className="tv-player-name">{player.name}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isQuestionActive && currentQuestionText && (
+        <div className="tv-vote-progress-card">
+          <div className="flex items-start justify-between gap-4">
+            <div className="tv-vote-progress-label">Question en cours · {gameLabel}</div>
+            <div className={`tv-timer-pill ${timerHot ? "is-hot" : ""}`}>{voteLeft}s</div>
+          </div>
+          <p className="tv-vote-progress-question">{currentQuestionText}</p>
+          <div className="tv-vote-progress-counter">{submittedNow} / {denominator || "?"}</div>
+          <div className="tv-vote-progress-bar">
+            <div className="tv-vote-progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="tv-section-eyebrow">Les votes apparaissent en direct. Reveal automatique quand tout le monde a répondu.</div>
+        </div>
+      )}
+
+      {(isQuestionActive || room.status === "reveal_results") && (
+        <div className="tv-host-toolbar">
+          {isQuestionActive && (
+            <button type="button" disabled={busy} onClick={onRevealNow} className="tv-host-toolbar-button is-primary">
+              Révéler maintenant
+            </button>
+          )}
+          {room.status === "reveal_results" && gameType !== "mime_expressions" && (
+            <button type="button" disabled={busy} onClick={() => void onNext()} className="tv-host-toolbar-button is-primary">
+              Question suivante
+            </button>
+          )}
+          <button type="button" disabled={busy} onClick={onEnd} className="tv-host-toolbar-button is-danger">
+            Finir la partie
+          </button>
+        </div>
+      )}
+    </section>
+  );
 }

@@ -11,6 +11,7 @@ import {
 } from "@/lib/endGameSummary";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
+import { playSfx } from "@/lib/audio";
 import { AnonymousAvatar, PlayerAvatar } from "@/components/playerAvatar";
 import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
@@ -107,6 +108,12 @@ export function EndGameSummaryPanel({
       window.setTimeout(() => {
         setStage(index + 1);
         if (index === 0 || index === 3) triggerHaptic(index === 3 ? [10, 20, 10] : 16);
+        if (index === 0) playSfx("reveal");
+        else if (index === 1) playSfx("leaderboard");
+        else if (index === 2) playSfx("scoreUp");
+        else if (index === 3) playSfx("reveal");
+        else if (index === 4) playSfx("scoreUp");
+        else if (index === 5) playSfx("primary");
       }, delay)
     );
     return () => timers.forEach(window.clearTimeout);
