@@ -2,6 +2,7 @@ import { CATEGORIES, QUESTIONS } from "../lib/questions";
 import { WHO_OF_US_CATEGORIES, WHO_OF_US_QUESTIONS } from "../lib/whoOfUsQuestions";
 import { MAJORITY_CATEGORIES, MAJORITY_QUESTIONS } from "../lib/majorityQuestions";
 import { JAUGE_CATEGORIES, JAUGE_QUESTIONS } from "../lib/jaugeQuestions";
+import { MIME_EXPRESSION_CATEGORIES, MIME_EXPRESSIONS } from "../lib/mimeExpressions";
 
 function normalize(text: string): string {
   return text
@@ -35,12 +36,14 @@ findDups("who_would", QUESTIONS, (q) => `${q.optionA} | ${q.optionB}`);
 findDups("who_of_us", WHO_OF_US_QUESTIONS, (q) => q.text);
 findDups("majority", MAJORITY_QUESTIONS, (q) => q.text);
 findDups("jauge", JAUGE_QUESTIONS, (q) => q.text);
+findDups("mime", MIME_EXPRESSIONS, (q) => q.text);
 
 console.log("\nCategories:");
 console.log("  who_would:", CATEGORIES.length);
 console.log("  who_of_us:", WHO_OF_US_CATEGORIES.length);
 console.log("  majority:", MAJORITY_CATEGORIES.length);
 console.log("  jauge:", JAUGE_CATEGORIES.length);
+console.log("  mime:", MIME_EXPRESSION_CATEGORIES.length);
 
 function dump(name: string, counts: Map<string, number>) {
   const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -52,6 +55,7 @@ dump("who_would", countByCategory(QUESTIONS));
 dump("who_of_us", countByCategory(WHO_OF_US_QUESTIONS));
 dump("majority", countByCategory(MAJORITY_QUESTIONS));
 dump("jauge", countByCategory(JAUGE_QUESTIONS));
+dump("mime", countByCategory(MIME_EXPRESSIONS));
 
-const total = QUESTIONS.length + WHO_OF_US_QUESTIONS.length + MAJORITY_QUESTIONS.length + JAUGE_QUESTIONS.length;
-console.log(`\nGRAND TOTAL: ${total} questions`);
+const total = QUESTIONS.length + WHO_OF_US_QUESTIONS.length + MAJORITY_QUESTIONS.length + JAUGE_QUESTIONS.length + MIME_EXPRESSIONS.length;
+console.log(`\nGRAND TOTAL: ${total} questions/mimes`);

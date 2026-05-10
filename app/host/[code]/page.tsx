@@ -59,6 +59,13 @@ import {
   type MimeOrderMode,
 } from "@/lib/mimeGame";
 import {
+  MIME_MODES,
+  getMimeModeMeta,
+  getMimeModeTimerSeconds,
+  pickModeFlavor,
+  type MimeMode,
+} from "@/lib/mimeModes";
+import {
   buildInitialJaugeState,
   buildNextJaugeState,
   getJaugeCurrentQuestion,
@@ -165,6 +172,7 @@ export default function HostPage() {
   const [optimisticHostVote, setOptimisticHostVote] = useState<LocalVote | null>(null);
   const [optimisticHostRating, setOptimisticHostRating] = useState<LocalRating | null>(null);
   const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("arrival");
+  const [mimeSelectedMode, setMimeSelectedMode] = useState<MimeMode>("classic");
   const [mimeCustomOrder, setMimeCustomOrder] = useState<string[]>([]);
   const [mimeRandomOrder, setMimeRandomOrder] = useState<string[]>([]);
   const [mimeHostPlayMode, setMimeHostPlayMode] = useState(true);
@@ -871,7 +879,7 @@ export default function HostPage() {
     });
   }
 
-  async function startMimeGame(playerOrder: string[], hostPlayMode: boolean) {
+  async function startMimeGame(playerOrder: string[], hostPlayMode: boolean, selectedMode: MimeMode = "classic") {
     if (!room || !mimeMode) return;
     const liveOrder = prunePlayerOrder(playerOrder, players);
     if (!liveOrder.length) {
@@ -926,9 +934,11 @@ export default function HostPage() {
               },
             ],
             roundNumber: 1,
-            timerDuration: voteDuration,
+            timerDuration: getMimeModeTimerSeconds(selectedMode, voteDuration),
             roundStatus: "playing",
             hostPlayMode,
+            mimeMode: selectedMode,
+            mimeRuleFlavor: pickModeFlavor(selectedMode, Math.floor(Math.random() * 1000)) ?? undefined,
           }),
         })
         .eq("id", room.id)
@@ -1007,6 +1017,11 @@ export default function HostPage() {
             timerDuration: mimeGameState.timerDuration || voteDuration,
             roundStatus: "playing",
             hostPlayMode: mimeGameState.hostPlayMode,
+            mimeMode: (mimeGameState.mimeMode as MimeMode | undefined) ?? "classic",
+            mimeRuleFlavor: pickModeFlavor(
+              (mimeGameState.mimeMode as MimeMode | undefined) ?? "classic",
+              roundNumber
+            ) ?? mimeGameState.mimeRuleFlavor,
           }),
         })
         .eq("id", room.id)
@@ -1578,7 +1593,9 @@ export default function HostPage() {
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
-          onStart={() => void startMimeGame(mimeLobbyOrder, mimeHostPlayMode)}
+          onStart={() => void startMimeGame(mimeLobbyOrder, mimeHostPlayMode, mimeSelectedMode)}
+          selectedMode={mimeSelectedMode}
+          onSelectedModeChange={setMimeSelectedMode}
           onChangeGame={changeGame}
         />
       )}
@@ -2804,6 +2821,8 @@ function MimeLobbyView({
   onQuestionSourceSettingsChange,
   onStart,
   onChangeGame,
+  selectedMode,
+  onSelectedModeChange,
 }: {
   players: Player[];
   availableCount: number;
@@ -2832,6 +2851,8 @@ function MimeLobbyView({
   onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
   onStart: () => void;
   onChangeGame: () => void;
+  selectedMode: MimeMode;
+  onSelectedModeChange: (mode: MimeMode) => void;
 }) {
   const enoughPlayers = players.length >= 2;
   const canStart = enoughPlayers && finalOrder.length >= 2 && availableCount > 0 && !busy;
@@ -2973,6 +2994,43 @@ function MimeLobbyView({
         <p className="mt-3 text-sm text-white/50">
           {availableCount} expression{availableCount > 1 ? "s" : ""} disponible{availableCount > 1 ? "s" : ""}.
         </p>
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="mb-3 text-lg font-bold">Mode de jeu</h2>
+        <p className="mb-3 text-sm font-semibold text-white/55">
+          Change la consigne donnée au mimeur sans bloquer la mécanique. Le timer s&apos;adapte au mode.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {MIME_MODES.map((mode) => {
+            const active = selectedMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                disabled={busy}
+                onClick={() => onSelectedModeChange(mode.id)}
+                className={`rounded-2xl border p-3 text-left transition disabled:opacity-50 ${
+                  active
+                    ? "border-neon-pink bg-neon-pink/10 shadow-glow-pink"
+                    : "border-white/10 bg-white/5 hover:-translate-y-0.5 hover:border-white/20"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-lg" aria-hidden="true">{mode.emoji}</span>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${active ? "text-neon-pink" : "text-white/40"}`}>
+                    {mode.id === "chaos_timer" ? "rapide" : mode.timerScale > 1 ? "long" : "standard"}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm font-black">{mode.label}</div>
+                <div className="mt-1 text-xs font-semibold text-white/55">{mode.description}</div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-3 text-sm font-semibold text-neon-cyan">
+          <strong className="font-black">Consigne :</strong> {getMimeModeMeta(selectedMode).rule}
+        </div>
       </section>
 
       <section className="card mb-4 p-5">
@@ -3246,15 +3304,26 @@ function MimeActiveHostView({
   const timeIsHot = roundLeft <= 5;
   const ended = state.roundStatus === "ended" || roundLeft === 0;
   const showExpression = !state.hostPlayMode || isHostMime;
+  const modeMeta = getMimeModeMeta(state.mimeMode);
 
   return (
     <section key={state.currentMimePlayerId} className="card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
+        <span className="chip border-neon-pink/40 bg-neon-pink/10 text-neon-pink">
+          {modeMeta.emoji} {modeMeta.label}
+        </span>
         <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
         <span className={`chip ${ended ? "border-neon-yellow/50 text-neon-yellow" : "border-neon-cyan/40 text-neon-cyan"}`}>
           {ended ? "Temps écoulé" : "Mime en cours"}
         </span>
+      </div>
+
+      <div className="mb-4 rounded-2xl border border-neon-pink/30 bg-neon-pink/5 p-3 text-center text-xs font-semibold text-neon-pink">
+        <strong className="font-black">Règle :</strong> {modeMeta.rule}
+        {state.mimeRuleFlavor && (
+          <div className="mt-1 text-white/80">{state.mimeRuleFlavor}</div>
+        )}
       </div>
 
       <div className={`text-center text-7xl font-black tabular-nums ${timeIsHot ? "timer-hot text-neon-pink" : "text-white"}`}>

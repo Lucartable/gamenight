@@ -3,6 +3,8 @@ import { CATEGORIES, QUESTIONS } from "@/lib/questions";
 import { WHO_OF_US_CATEGORIES, WHO_OF_US_QUESTIONS } from "@/lib/whoOfUsQuestions";
 import { MAJORITY_CATEGORIES, MAJORITY_QUESTIONS } from "@/lib/majorityQuestions";
 import { JAUGE_CATEGORIES, JAUGE_QUESTIONS } from "@/lib/jaugeQuestions";
+import { MIME_EXPRESSION_CATEGORIES, MIME_EXPRESSIONS } from "@/lib/mimeExpressions";
+import { MIME_MODES } from "@/lib/mimeModes";
 
 function normalize(text: string): string {
   return text
@@ -66,6 +68,35 @@ describe("question content invariants", () => {
       normalized.add(fingerprint);
     }
     expect(MAJORITY_QUESTIONS.length).toBeGreaterThan(200);
+  });
+
+  it("mime: ids uniques, texte non vide, catégorie valide, pas de doublon textuel", () => {
+    const ids = new Set<number>();
+    const normalized = new Set<string>();
+    const validCategories = new Set(MIME_EXPRESSION_CATEGORIES.map((c) => c.id));
+    for (const expression of MIME_EXPRESSIONS) {
+      expect(ids.has(expression.id), `duplicate id ${expression.id}`).toBe(false);
+      ids.add(expression.id);
+      expect(expression.text.trim().length).toBeGreaterThan(2);
+      expect(validCategories.has(expression.category)).toBe(true);
+      const fingerprint = normalize(expression.text);
+      expect(normalized.has(fingerprint), `duplicate mime: ${expression.text}`).toBe(false);
+      normalized.add(fingerprint);
+    }
+    expect(MIME_EXPRESSIONS.length).toBeGreaterThan(600);
+    expect(MIME_EXPRESSION_CATEGORIES.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("mime: modes ont des ids uniques et des règles non vides", () => {
+    const ids = new Set<string>();
+    for (const mode of MIME_MODES) {
+      expect(ids.has(mode.id), `duplicate mode ${mode.id}`).toBe(false);
+      ids.add(mode.id);
+      expect(mode.label.trim().length).toBeGreaterThan(0);
+      expect(mode.rule.trim().length).toBeGreaterThan(8);
+      expect(mode.timerScale).toBeGreaterThan(0);
+    }
+    expect(MIME_MODES.length).toBeGreaterThanOrEqual(9);
   });
 
   it("jauge: ids uniques, texte non vide, catégorie valide, format À quel point", () => {

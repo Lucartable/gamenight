@@ -1,4 +1,5 @@
 import type { GameType, MimeGameState, MimeRoundStatus, Player, Room } from "@/types/database";
+import { isMimeMode, type MimeMode } from "./mimeModes";
 
 export type MimeOrderMode = "arrival" | "random" | "custom";
 
@@ -38,6 +39,8 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
   const timerDuration = toInt(raw.timerDuration, 30);
   const roundStatus = isMimeRoundStatus(raw.roundStatus) ? raw.roundStatus : "waiting";
   const hostPlayMode = raw.hostPlayMode === true;
+  const mimeMode = isMimeMode(raw.mimeMode) ? raw.mimeMode : "classic";
+  const mimeRuleFlavor = typeof raw.mimeRuleFlavor === "string" ? raw.mimeRuleFlavor : undefined;
 
   if (!playerOrder.length && !currentExpressionId && !roundNumber) return null;
 
@@ -52,6 +55,8 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
     timerDuration,
     roundStatus,
     hostPlayMode,
+    mimeMode,
+    mimeRuleFlavor,
   };
 }
 
@@ -112,6 +117,8 @@ export function buildMimeGameState({
   timerDuration,
   roundStatus,
   hostPlayMode,
+  mimeMode,
+  mimeRuleFlavor,
 }: {
   playerOrder: string[];
   currentMimeIndex: number;
@@ -122,6 +129,8 @@ export function buildMimeGameState({
   timerDuration: number;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+  mimeMode?: MimeMode;
+  mimeRuleFlavor?: string;
 }): MimeGameState {
   const safeIndex = clampIndex(currentMimeIndex, playerOrder.length);
   return {
@@ -141,6 +150,8 @@ export function buildMimeGameState({
     timerDuration,
     roundStatus,
     hostPlayMode,
+    mimeMode: mimeMode ?? "classic",
+    mimeRuleFlavor,
   };
 }
 

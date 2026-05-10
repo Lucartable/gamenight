@@ -44,6 +44,8 @@ export interface MimeGameState {
   timerDuration: number;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+  mimeMode?: string;
+  mimeRuleFlavor?: string;
 }
 
 export interface MimeRoundRecord {

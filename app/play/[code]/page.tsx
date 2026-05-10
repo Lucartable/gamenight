@@ -25,6 +25,7 @@ import {
   getQuestionForGame,
 } from "@/lib/gameQuestions";
 import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
+import { getMimeModeMeta } from "@/lib/mimeModes";
 import {
   getJaugeCurrentQuestion,
   getJaugeGameState,
@@ -805,11 +806,17 @@ function MimeRoundScreen({
   const isInOrder = state.playerOrder.includes(me.id);
   const timeIsHot = roundLeft <= 5;
   const ended = state.roundStatus === "ended" || roundLeft === 0;
+  const modeMeta = getMimeModeMeta(state.mimeMode);
 
   return (
     <section key={state.currentMimePlayerId} className="game-panel-enter flex flex-1 flex-col animate-reveal-in">
-      <div className="card mb-3 flex items-center justify-between gap-3 p-3 px-4">
-        {category && <span className="chip">{category.emoji} {category.label}</span>}
+      <div className="card mb-3 flex flex-wrap items-center justify-between gap-2 p-3 px-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {category && <span className="chip">{category.emoji} {category.label}</span>}
+          <span className="chip border-neon-pink/40 bg-neon-pink/10 text-neon-pink">
+            {modeMeta.emoji} {modeMeta.label}
+          </span>
+        </div>
         <div className={timeIsHot ? "timer-hot text-neon-pink" : "text-white"}>
           <span className="text-3xl font-black tabular-nums">{roundLeft}</span>
           <span className="ml-2 text-white/60">sec</span>
@@ -828,12 +835,24 @@ function MimeRoundScreen({
           <div className="mt-6 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-5">
             <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">Expression à mimer</div>
             <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
+            <div className="mt-4 rounded-xl border border-neon-pink/30 bg-neon-pink/10 p-3 text-left text-sm font-semibold text-neon-pink">
+              <span className="block text-[10px] font-black uppercase tracking-widest text-neon-pink/70">
+                {modeMeta.label}
+              </span>
+              <span className="mt-1 block">{modeMeta.rule}</span>
+              {state.mimeRuleFlavor && (
+                <span className="mt-2 block text-white/80">{state.mimeRuleFlavor}</span>
+              )}
+            </div>
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="text-xs font-bold uppercase tracking-wider text-white/50">À deviner</div>
             <div className="mt-3 text-xl font-bold text-white/80">
               Regarde le mime, pas besoin de toucher au téléphone.
+            </div>
+            <div className="mt-3 text-xs font-bold uppercase tracking-wider text-neon-pink/80">
+              Mode {modeMeta.label}
             </div>
           </div>
         )}
