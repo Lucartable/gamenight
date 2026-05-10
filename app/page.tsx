@@ -237,11 +237,16 @@ export default function HomePage() {
           </Link>
           <div className="app-navbar-actions">
             <AudioToggle compact />
-            {showAdminBadge && (
-              <Link href="/questions" className="app-navbar-link">
-                Bibliothèque
-              </Link>
-            )}
+            <Link
+              href="/questions"
+              className="app-navbar-link"
+              onClick={() => playSfx("click")}
+              aria-label="Bibliothèque"
+              title={showAdminBadge ? "Bibliothèque" : "Bibliothèque (réservée aux admins)"}
+            >
+              <span aria-hidden="true">📚</span>
+              <span className="app-navbar-link-label">Bibliothèque</span>
+            </Link>
             {showAdminBadge ? (
               <button
                 type="button"
@@ -250,8 +255,10 @@ export default function HomePage() {
                   primeAudio();
                   void profile.signOut();
                 }}
+                aria-label="Se déconnecter"
               >
-                Logout
+                <span aria-hidden="true">⏻</span>
+                <span className="app-navbar-link-label">Logout</span>
               </button>
             ) : showAdminLink ? (
               <button
@@ -261,8 +268,10 @@ export default function HomePage() {
                   primeAudio();
                   setMode("admin");
                 }}
+                aria-label="Connexion admin"
               >
-                Connexion admin
+                <span aria-hidden="true">🔐</span>
+                <span className="app-navbar-link-label">Admin</span>
               </button>
             ) : null}
           </div>
@@ -309,16 +318,6 @@ export default function HomePage() {
                   <span>Jouer en invité</span>
                   <span className="home-action-key">INSTANT</span>
                 </button>
-                {showAdminBadge && (
-                  <Link
-                    href="/questions"
-                    className="home-secondary-action mt-3 w-full"
-                    onClick={() => playSfx("click")}
-                  >
-                    <span>Ouvrir la bibliothèque</span>
-                    <span className="home-action-key">ADMIN</span>
-                  </Link>
-                )}
               </section>
             )}
 

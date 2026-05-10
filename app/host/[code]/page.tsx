@@ -4266,8 +4266,30 @@ function TvHostStage({
   const progress = denominator > 0 ? Math.min(100, (submittedNow / denominator) * 100) : 0;
   const timerHot = voteLeft > 0 && voteLeft <= 5;
 
+  const joinHost = useMemo(() => {
+    if (typeof window === "undefined") return "badaboum.app";
+    return window.location.host || "badaboum.app";
+  }, []);
+  const joinUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/play/${room.code}`;
+  }, [room.code]);
+  const qrUrl = useMemo(() => {
+    if (!joinUrl) return null;
+    const params = new URLSearchParams({
+      size: "320x320",
+      margin: "10",
+      qzone: "2",
+      data: joinUrl,
+      color: "0a0410",
+      bgcolor: "ffffff",
+      format: "svg",
+    });
+    return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
+  }, [joinUrl]);
+
   return (
-    <section className="tv-stage mb-4 hidden lg:flex" aria-label="Mode TV">
+    <section className="tv-stage mb-4" aria-label="Mode TV">
       <div className="tv-topbar">
         <div className="tv-topbar-brand">
           <span className="app-navbar-brand-mark" aria-hidden="true">B</span>
@@ -4286,11 +4308,32 @@ function TvHostStage({
       {showLobbyHero && (
         <div className="tv-lobby-hero">
           <div className="tv-code-card">
-            <div className="tv-code-eyebrow">Rejoindre</div>
-            <div className="tv-code-value">{room.code}</div>
-            <p className="tv-code-help">
-              Sur ton téléphone, ouvre <strong>badaboum.app</strong> · &quot;Jouer en invité&quot; · entre ce code.
-            </p>
+            <div className="tv-code-card-header">
+              <span className="tv-code-eyebrow">Rejoindre</span>
+              <span className="tv-code-host">{joinHost}</span>
+            </div>
+            <div className="tv-code-value-wrap">
+              <span className="tv-code-value">{room.code}</span>
+            </div>
+            {qrUrl && (
+              <figure className="tv-code-qr">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrUrl}
+                  alt={`QR code pour rejoindre la salle ${room.code}`}
+                  loading="lazy"
+                  decoding="async"
+                  width={240}
+                  height={240}
+                />
+                <figcaption>Scan rapide depuis le téléphone</figcaption>
+              </figure>
+            )}
+            <ol className="tv-code-steps">
+              <li><span>1</span> Ouvre <strong>{joinHost}</strong> sur ton tel.</li>
+              <li><span>2</span> Choisis <strong>Jouer en invité</strong>.</li>
+              <li><span>3</span> Entre le code <strong>{room.code}</strong> ou scanne le QR.</li>
+            </ol>
           </div>
 
           <div className="tv-players-panel">
