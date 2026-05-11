@@ -1,14 +1,17 @@
 -- =========================================================================
 -- Migration non destructive — Jeu "L'Intrus" (Undercover style)
+-- Rejouable autant de fois que nécessaire :
+--   * `add column if not exists` pour la colonne
+--   * `drop constraint if exists` explicite + drop dynamique des contraintes
+--     auto-nommées avant chaque `add constraint`
 -- =========================================================================
 
 alter table public.rooms
   add column if not exists intrus_game_state jsonb;
 
--- Étendre le check sur rooms.game_type (drop puis re-create avec le nouveau game type)
+-- ===== rooms.game_type =====================================================
 do $$
-declare
-  cname text;
+declare cname text;
 begin
   for cname in
     select conname from pg_constraint
@@ -20,14 +23,14 @@ begin
   end loop;
 end $$;
 
+alter table public.rooms drop constraint if exists rooms_game_type_check;
 alter table public.rooms
   add constraint rooms_game_type_check
   check (game_type is null or game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
--- Étendre le check sur votes.game_type
+-- ===== votes.game_type =====================================================
 do $$
-declare
-  cname text;
+declare cname text;
 begin
   for cname in
     select conname from pg_constraint
@@ -39,14 +42,14 @@ begin
   end loop;
 end $$;
 
+alter table public.votes drop constraint if exists votes_game_type_check;
 alter table public.votes
   add constraint votes_game_type_check
   check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
--- La clause CHECK sur (selected_option vs selected_player_id) doit accepter le cas intrus
+-- ===== votes payload shape (compatible avec intrus) ========================
 do $$
-declare
-  cname text;
+declare cname text;
 begin
   for cname in
     select conname from pg_constraint
@@ -58,6 +61,7 @@ begin
   end loop;
 end $$;
 
+alter table public.votes drop constraint if exists votes_payload_shape_check;
 alter table public.votes
   add constraint votes_payload_shape_check
   check (
@@ -74,10 +78,9 @@ alter table public.votes
     (game_type = 'intrus' and selected_option is null and selected_player_id is not null)
   );
 
--- Étendre le check sur asked_questions.game_type
+-- ===== asked_questions.game_type ===========================================
 do $$
-declare
-  cname text;
+declare cname text;
 begin
   for cname in
     select conname from pg_constraint
@@ -89,40 +92,84 @@ begin
   end loop;
 end $$;
 
+alter table public.asked_questions drop constraint if exists asked_questions_game_type_check;
 alter table public.asked_questions
   add constraint asked_questions_game_type_check
   check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
--- Étendre les checks sur custom_questions / saved_custom_questions / question_packs
+-- ===== custom_questions.game_type ==========================================
 do $$
-declare
-  cname text;
-  tbl  text;
+declare cname text;
 begin
-  for tbl in select unnest(array['custom_questions','saved_custom_questions','question_packs']) loop
-    for cname in
-      select conname from pg_constraint
-      where conrelid = ('public.' || tbl)::regclass
-        and contype = 'c'
-        and pg_get_constraintdef(oid) ilike '%game_type%who_would%'
-    loop
-      execute format('alter table public.%I drop constraint %I', tbl, cname);
-    end loop;
+  for cname in
+    select conname from pg_constraint
+    where conrelid = 'public.custom_questions'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%game_type%who_would%'
+  loop
+    execute format('alter table public.custom_questions drop constraint %I', cname);
   end loop;
 end $$;
 
+alter table public.custom_questions drop constraint if exists custom_questions_game_type_check;
 alter table public.custom_questions
   add constraint custom_questions_game_type_check
   check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
+-- ===== saved_custom_questions.game_type ====================================
+do $$
+declare cname text;
+begin
+  for cname in
+    select conname from pg_constraint
+    where conrelid = 'public.saved_custom_questions'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%game_type%who_would%'
+      and pg_get_constraintdef(oid) not ilike '%source_game%'
+  loop
+    execute format('alter table public.saved_custom_questions drop constraint %I', cname);
+  end loop;
+end $$;
+
+alter table public.saved_custom_questions drop constraint if exists saved_custom_questions_game_type_check;
 alter table public.saved_custom_questions
   add constraint saved_custom_questions_game_type_check
   check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
+-- ===== saved_custom_questions.source_game ==================================
+do $$
+declare cname text;
+begin
+  for cname in
+    select conname from pg_constraint
+    where conrelid = 'public.saved_custom_questions'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%source_game%who_would%'
+  loop
+    execute format('alter table public.saved_custom_questions drop constraint %I', cname);
+  end loop;
+end $$;
+
+alter table public.saved_custom_questions drop constraint if exists saved_custom_questions_source_game_check;
 alter table public.saved_custom_questions
   add constraint saved_custom_questions_source_game_check
   check (source_game in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
 
+-- ===== question_packs.game_type ============================================
+do $$
+declare cname text;
+begin
+  for cname in
+    select conname from pg_constraint
+    where conrelid = 'public.question_packs'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%game_type%who_would%'
+  loop
+    execute format('alter table public.question_packs drop constraint %I', cname);
+  end loop;
+end $$;
+
+alter table public.question_packs drop constraint if exists question_packs_game_type_check;
 alter table public.question_packs
   add constraint question_packs_game_type_check
   check (game_type is null or game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus'));
