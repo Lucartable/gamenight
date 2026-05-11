@@ -7,6 +7,7 @@ import { useCountdown } from "@/lib/useCountdown";
 import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/playerAvatar";
+import { Button } from "@/components/ui";
 import type { JaugeAnonymityMode, Player, Rating } from "@/types/database";
 
 const RATING_COLORS = [
@@ -166,21 +167,24 @@ export function JaugeVoteScreen({
             })}
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="lg"
+            fullWidth
             disabled={!selectedRating || locked}
             onClick={submitRating}
-            className="btn-primary mt-4 w-full disabled:shadow-none"
+            className="mt-4 disabled:shadow-none"
           >
-            {submitting ? "Envoi..." : validatedRating ? "Note envoyée" : "Valider ma note"}
-          </button>
+            {submitting ? "Envoi…" : validatedRating ? "Note envoyée" : "Valider ma note"}
+          </Button>
         </div>
       )}
 
       {onRevealNow && (
-        <button type="button" onClick={onRevealNow} disabled={busy} className="btn-secondary">
+        <Button type="button" variant="secondary" size="md" fullWidth onClick={onRevealNow} disabled={busy}>
           Révéler maintenant
-        </button>
+        </Button>
       )}
     </section>
   );

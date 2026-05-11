@@ -13,6 +13,7 @@ import { useCountUp } from "@/lib/useCountUp";
 import { useCountdown } from "@/lib/useCountdown";
 import { triggerHaptic } from "@/lib/utils";
 import { PlayerAvatar as AvatarBubble } from "@/components/playerAvatar";
+import { Button, Chip } from "@/components/ui";
 import type { Player, Vote } from "@/types/database";
 
 const OPTION_ACCENTS = [
@@ -97,7 +98,7 @@ export function PredictionVoteScreen({
     <section className="game-panel-enter flex flex-1 flex-col">
       <div className="card mb-3 overflow-hidden p-4">
         <div className="flex items-center justify-between gap-3">
-          {category && <span className="chip">{category.emoji} {category.label}</span>}
+          {category && <Chip tone="cyan" leading={<span>{category.emoji}</span>}>{category.label}</Chip>}
           <div className={`rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-right ${left <= 5 ? "timer-hot text-neon-pink" : ""}`}>
             <div className="text-3xl font-black tabular-nums">{left}</div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/50">sec</div>
@@ -139,28 +140,34 @@ export function PredictionVoteScreen({
         ))}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="primary"
+        size="lg"
+        fullWidth
         disabled={!selectedOption || locked}
         onClick={handleSubmit}
-        className="btn-primary mt-4 w-full disabled:shadow-none"
+        className="mt-4 disabled:shadow-none"
       >
-        {submitting ? "Envoi..." : validatedOption ? "Vote envoyé" : "Valider mon choix"}
-      </button>
+        {submitting ? "Envoi…" : validatedOption ? "Vote envoyé" : "Valider mon choix"}
+      </Button>
       {validatedOption && (
         <div className="mt-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green animate-reveal-in">
           Vote envoyé
         </div>
       )}
       {onRevealNow && (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="md"
+          fullWidth
           onClick={onRevealNow}
           disabled={busy}
-          className="btn-secondary mt-3"
+          className="mt-3"
         >
           Révéler maintenant
-        </button>
+        </Button>
       )}
     </section>
   );
@@ -247,10 +254,8 @@ export function PredictionRevealPanel({
       {ready && result.winners.length > 0 && <MiniConfetti />}
 
       <div className="mb-4 flex items-center justify-between gap-3">
-        {category && <span className="chip">{category.emoji} {category.label}</span>}
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white/50">
-          Résultats
-        </span>
+        {category && <Chip tone="cyan" leading={<span>{category.emoji}</span>}>{category.label}</Chip>}
+        <Chip tone="neutral" size="sm">Résultats</Chip>
       </div>
 
       <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
@@ -280,7 +285,7 @@ export function PredictionRevealPanel({
           </div>
           <ul className="mt-3 flex flex-wrap gap-2">
             {result.winners.map((player) => (
-              <li key={player.id} className="chip">
+              <li key={player.id} className="inline-flex items-center gap-2 rounded-full border border-neon-green/35 bg-neon-green/10 px-3 py-1 text-xs font-black text-neon-green">
                 <AvatarBubble player={player} size="sm" />
                 {player.name}
               </li>
@@ -298,19 +303,19 @@ export function PredictionRevealPanel({
 
       {autoplay && showControls && (
         <p className="mt-4 text-center text-sm font-semibold text-neon-cyan">
-          Préparation de la suite...
+          Préparation de la suite…
         </p>
       )}
 
       {!autoplay && showControls && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <button type="button" disabled={busy} onClick={onPrimary} className="btn-primary">
+          <Button variant="primary" size="md" disabled={busy} onClick={onPrimary}>
             {primaryLabel ?? "Continuer"}
-          </button>
+          </Button>
           {onBackToLobby && (
-            <button type="button" disabled={busy} onClick={onBackToLobby} className="btn-secondary">
+            <Button variant="secondary" size="md" disabled={busy} onClick={onBackToLobby}>
               Retour au lobby
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -375,7 +380,7 @@ function PredictionResultBar({
           {option.statusLabel}
         </span>
         {option.voters.map((player) => (
-          <span key={player.id} className="chip">
+          <span key={player.id} className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-xs font-black text-white/85">
             <AvatarBubble player={player} size="sm" />
             {player.name}
           </span>
@@ -454,13 +459,13 @@ export function PredictionScoreboardPanel({
 
       {!autoplay && showControls && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <button type="button" disabled={busy} onClick={onPrimary} className="btn-primary">
+          <Button variant="primary" size="md" disabled={busy} onClick={onPrimary}>
             {primaryLabel ?? "Continuer"}
-          </button>
+          </Button>
           {onBackToLobby && (
-            <button type="button" disabled={busy} onClick={onBackToLobby} className="btn-secondary">
+            <Button variant="secondary" size="md" disabled={busy} onClick={onBackToLobby}>
               Retour au lobby
-            </button>
+            </Button>
           )}
         </div>
       )}

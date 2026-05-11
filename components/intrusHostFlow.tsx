@@ -22,6 +22,7 @@ import {
   type IntrusRoundResult,
 } from "@/lib/intrusScoring";
 import { INTRUS_PAIR_CATEGORIES, type IntrusPairCategory } from "@/lib/intrusPairs";
+import { Button } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase";
 import { playSfx } from "@/lib/audio";
 import type {
@@ -370,14 +371,17 @@ export function IntrusHostFlow({
         </div>
 
         <div className="card p-5">
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="lg"
+            fullWidth
             disabled={busy || participants.length < 3 || selectedCategories.length === 0}
             onClick={() => void startGame()}
-            className="btn-primary w-full text-xl"
+            className="text-lg"
           >
             Lancer la partie
-          </button>
+          </Button>
           {participants.length < 3 && (
             <p className="mt-3 text-center text-sm text-neon-yellow">Il faut au moins 3 joueurs pour lancer.</p>
           )}

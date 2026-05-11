@@ -13,6 +13,7 @@ import {
   isPlayerIntrus,
 } from "@/lib/intrusGame";
 import { useCountdown } from "@/lib/useCountdown";
+import { Button, Input } from "@/components/ui";
 import type {
   IntrusGameState,
   Player,
@@ -102,8 +103,7 @@ export const IntrusCluesScreen = memo(function IntrusCluesScreen({
               onSubmitClue(draft.trim());
             }}
           >
-            <input
-              className="input"
+            <Input
               value={draft}
               onChange={(event) => setDraft(event.target.value.slice(0, 60))}
               placeholder="Un mot ou une mini phrase…"
@@ -111,21 +111,12 @@ export const IntrusCluesScreen = memo(function IntrusCluesScreen({
               autoFocus
             />
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="submit"
-                disabled={submittingClue || !draft.trim()}
-                className="btn-primary w-full"
-              >
+              <Button type="submit" variant="primary" size="md" fullWidth disabled={submittingClue || !draft.trim()}>
                 {submittingClue ? "Envoi…" : "Valider"}
-              </button>
-              <button
-                type="button"
-                disabled={submittingClue}
-                onClick={() => onPass?.()}
-                className="btn-secondary w-full"
-              >
+              </Button>
+              <Button type="button" variant="secondary" size="md" fullWidth disabled={submittingClue} onClick={() => onPass?.()}>
                 Passer
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -140,14 +131,16 @@ export const IntrusCluesScreen = memo(function IntrusCluesScreen({
           </p>
         )}
         {isHostController && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             disabled={busy}
             onClick={onForceNext}
-            className="btn-ghost mt-2 text-neon-cyan"
+            className="mt-2 text-neon-cyan"
           >
             Forcer le passage
-          </button>
+          </Button>
         )}
       </div>
 
@@ -185,9 +178,9 @@ export const IntrusRevealCluesScreen = memo(function IntrusRevealCluesScreen({
       <CluesFeed clues={state.clues} participants={participants} state={state} expanded />
 
       {isHostController && (
-        <button type="button" disabled={busy} onClick={onStartVote} className="btn-primary mt-2 w-full">
+        <Button type="button" variant="primary" size="lg" fullWidth disabled={busy} onClick={onStartVote} className="mt-2">
           Lancer le vote
-        </button>
+        </Button>
       )}
     </section>
   );
@@ -276,9 +269,9 @@ export const IntrusVoteScreen = memo(function IntrusVoteScreen({
       </div>
 
       {isHostController && (
-        <button type="button" disabled={busy} onClick={onForceReveal} className="btn-secondary w-full">
+        <Button type="button" variant="secondary" size="md" fullWidth disabled={busy} onClick={onForceReveal}>
           Forcer le reveal
-        </button>
+        </Button>
       )}
     </section>
   );
@@ -403,16 +396,16 @@ export const IntrusRevealFinalScreen = memo(function IntrusRevealFinalScreen({
           <p className="mt-1 text-sm font-semibold text-white/85">
             Tu as été démasqué. Devine le mot principal pour rattraper des points.
           </p>
-          <input
-            className="input mt-3"
+          <Input
+            className="mt-3"
             value={finaleDraft}
             onChange={(event) => setFinaleDraft(event.target.value.slice(0, 60))}
             placeholder="Mot principal…"
             maxLength={60}
           />
-          <button type="submit" disabled={submittingFinale || !finaleDraft.trim()} className="btn-primary mt-3 w-full">
+          <Button type="submit" variant="primary" size="md" fullWidth disabled={submittingFinale || !finaleDraft.trim()} className="mt-3">
             {submittingFinale ? "Envoi…" : "Tenter le mot"}
-          </button>
+          </Button>
         </form>
       )}
 
@@ -434,12 +427,12 @@ export const IntrusRevealFinalScreen = memo(function IntrusRevealFinalScreen({
 
       {isHostController && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" disabled={busy} onClick={onNextRound} className="btn-primary">
+          <Button variant="primary" size="md" disabled={busy} onClick={onNextRound}>
             {isFinal ? "Bilan final" : "Manche suivante"}
-          </button>
-          <button type="button" disabled={busy} onClick={onEnd} className="btn-secondary">
+          </Button>
+          <Button variant="secondary" size="md" disabled={busy} onClick={onEnd}>
             Finir la partie
-          </button>
+          </Button>
         </div>
       )}
     </section>

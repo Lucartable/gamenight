@@ -13,6 +13,7 @@ import { useCountUp } from "@/lib/useCountUp";
 import { triggerHaptic } from "@/lib/utils";
 import { playSfx } from "@/lib/audio";
 import { AnonymousAvatar, PlayerAvatar } from "@/components/playerAvatar";
+import { Button } from "@/components/ui";
 import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 const TONE_STYLES: Record<SummaryTone, { border: string; bg: string; text: string; glow: string; bar: string }> = {
@@ -383,14 +384,14 @@ function FinalRecap({
       {isHost && (onBackToLobby || onReplay || onEnd) && (
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {(onBackToLobby || onReplay) && (
-            <button type="button" disabled={busy} onClick={onBackToLobby ?? onReplay} className="btn-primary w-full">
+            <Button variant="primary" size="md" fullWidth disabled={busy} onClick={onBackToLobby ?? onReplay}>
               Retour au lobby
-            </button>
+            </Button>
           )}
           {onEnd && (
-            <button type="button" disabled={busy} onClick={onEnd} className="btn-secondary w-full text-neon-pink">
+            <Button variant="danger" size="md" fullWidth disabled={busy} onClick={onEnd}>
               Terminer la partie
-            </button>
+            </Button>
           )}
         </div>
       )}

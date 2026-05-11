@@ -905,19 +905,32 @@ function MimeRevealScreen({
   const category = getCategoryForGame("mime_expressions", expression.category);
 
   return (
-    <section key={`revealed-${state.currentExpressionId}`} className="card game-panel-enter flex flex-1 flex-col justify-center p-6 text-center animate-reveal-in">
-      <div className="mb-4 flex flex-wrap justify-center gap-2">
-        {category && <span className="chip">{category.emoji} {category.label}</span>}
-        <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
-      </div>
+    <section
+      key={`revealed-${state.currentExpressionId}`}
+      className="card game-panel-enter relative flex flex-1 flex-col justify-center overflow-hidden p-6 text-center animate-reveal-in"
+    >
+      <div className="pointer-events-none absolute -top-20 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-neon-green/24 blur-3xl" aria-hidden="true" />
+      <div className="relative z-10">
+        <div className="mb-4 flex flex-wrap justify-center gap-2">
+          {category && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-cyan/35 bg-neon-cyan/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-neon-cyan">
+              <span>{category.emoji}</span>
+              {category.label}
+            </span>
+          )}
+          <span className="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-white/85">
+            Manche {state.roundNumber} / {totalRounds}
+          </span>
+        </div>
 
-      <div className="rounded-2xl border border-neon-green/40 bg-neon-green/10 p-5">
-        <div className="text-xs font-bold uppercase tracking-wider text-neon-green">Expression révélée</div>
-        <div className="mt-3 text-4xl font-black leading-tight">{expression.text}</div>
+        <div className="rounded-2xl border border-neon-green/40 bg-neon-green/10 p-5 shadow-glow-green">
+          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-neon-green">Expression révélée</div>
+          <div className="mt-3 text-3xl font-black leading-tight sm:text-4xl">{expression.text}</div>
+        </div>
+        <p className="mt-4 text-sm font-semibold text-white/60">
+          Mime : <span className="font-black text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
+        </p>
       </div>
-      <p className="mt-4 text-white/60">
-        Mime : <span className="font-bold text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
-      </p>
     </section>
   );
 }
