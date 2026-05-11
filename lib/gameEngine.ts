@@ -107,6 +107,22 @@ export const GAME_ENGINE_CONTRACTS: Record<GameType, GameEngineContract> = {
     summary: { profile: "rating", heatmap: "ratings" },
     validateQuestion: (question) => question.gameType === "jauge" && hasQuestionText(question),
   },
+  intrus: {
+    gameType: "intrus",
+    config: {
+      supportsCategories: true,
+      supportsPlayerQuestions: false,
+      supportsSavedQuestions: false,
+      supportsTimer: true,
+      requiresPlayers: 3,
+    },
+    question: { format: "rating_text", minOptions: 0, maxOptions: 0, needsTargetPlayer: false },
+    answer: { format: "player_vote", storedIn: "votes" },
+    round: { flow: "standard_question", autoNextSupported: false },
+    reveal: { flow: "vote_results", canRevealEarly: true },
+    summary: { profile: "social_vote", heatmap: "targets" },
+    validateQuestion: () => true,
+  },
 };
 
 export function getGameEngineContract(gameType: GameType): GameEngineContract {

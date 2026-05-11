@@ -48,6 +48,8 @@ import {
   JaugeRevealPanel,
   JaugeVoteScreen,
 } from "@/components/jaugeMode";
+import { IntrusPlayFlow } from "@/components/intrusPlayFlow";
+import { isIntrusGame } from "@/lib/intrusGame";
 import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import { isPredictionGame } from "@/lib/scoring";
 import { useCountUp } from "@/lib/useCountUp";
@@ -108,6 +110,7 @@ export default function PlayerPage() {
   const predictionMode = isPredictionGame(gameType) ? gameType : null;
   const mimeMode = isMimeGame(gameType);
   const jaugeMode = isJaugeGame(gameType);
+  const intrusMode = isIntrusGame(gameType);
   const gameDefinition = getGameDefinition(gameType);
   const questionSourceSettings = useMemo(
     () => getQuestionSourceSettings(room?.question_source_settings),
@@ -618,6 +621,16 @@ export default function PlayerPage() {
           votes={votes}
           currentQuestionId={currentQ?.id ?? null}
           scoreTarget={room.score_target}
+        />
+      )}
+
+      {intrusMode && (
+        <IntrusPlayFlow
+          room={room}
+          participants={players}
+          me={me}
+          votes={votes}
+          refresh={refresh}
         />
       )}
 

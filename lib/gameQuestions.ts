@@ -28,9 +28,14 @@ import {
   type JaugeCategory,
   type JaugeCategoryMeta,
 } from "./jaugeQuestions";
+import {
+  INTRUS_PAIR_CATEGORIES,
+  type IntrusPairCategory,
+  type IntrusPairCategoryMeta,
+} from "./intrusPairs";
 import type { GameType } from "@/types/database";
 
-export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory | MimeExpressionCategory | JaugeCategory;
+export type GameCategory = WhoWouldCategory | WhoOfUsCategory | MajorityCategory | MimeExpressionCategory | JaugeCategory | IntrusPairCategory;
 
 export interface GameDefinition {
   id: GameType;
@@ -78,7 +83,7 @@ export interface JaugeGameQuestion {
 }
 
 export type GameQuestion = WhoWouldQuestion | WhoOfUsGameQuestion | PredictionGameQuestion | MimeExpressionQuestion | JaugeGameQuestion;
-export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta | MimeExpressionCategoryMeta | JaugeCategoryMeta) & { id: GameCategory };
+export type GameCategoryMeta = (CategoryMeta | WhoOfUsCategoryMeta | MajorityCategoryMeta | MimeExpressionCategoryMeta | JaugeCategoryMeta | IntrusPairCategoryMeta) & { id: GameCategory };
 
 export const GAME_DEFINITIONS: GameDefinition[] = [
   {
@@ -117,6 +122,12 @@ export const GAME_DEFINITIONS: GameDefinition[] = [
     shortLabel: "Jauge",
     description: "Évalue un joueur de 1 à 10 et découvre la moyenne du groupe.",
   },
+  {
+    id: "intrus",
+    label: "L'Intrus",
+    shortLabel: "L'Intrus",
+    description: "Un joueur reçoit un mot différent. Découvre-le ou survis.",
+  },
 ];
 
 export const WHO_WOULD_QUESTIONS: WhoWouldQuestion[] = RAW_WHO_WOULD_QUESTIONS.map((q) => ({
@@ -135,6 +146,7 @@ export function getGameCategories(gameType: GameType | null | undefined): GameCa
   if (gameType === "mime_expressions") return MIME_EXPRESSION_CATEGORIES as GameCategoryMeta[];
   if (gameType === "jauge") return JAUGE_CATEGORIES as GameCategoryMeta[];
   if (gameType === "who_would") return WHO_WOULD_CATEGORIES as GameCategoryMeta[];
+  if (gameType === "intrus") return INTRUS_PAIR_CATEGORIES as GameCategoryMeta[];
   return [];
 }
 
@@ -144,6 +156,7 @@ export function getDefaultCategories(gameType: GameType | null | undefined): Gam
   if (gameType === "mime_expressions") return ["classique"];
   if (gameType === "jauge") return ["survie", "relations", "chaos", "soiree"];
   if (gameType === "who_would") return ["soft"];
+  if (gameType === "intrus") return ["food", "internet", "gaming", "brands", "movies_tv", "social"];
   return [];
 }
 

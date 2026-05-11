@@ -15,6 +15,7 @@ const GAME_LABELS: Record<GameType, string> = {
   minority: "Minorité",
   mime_expressions: "Mime les expressions",
   jauge: "Jauge",
+  intrus: "L'Intrus",
 };
 
 const GAME_OPTIONS = Object.keys(GAME_LABELS) as GameType[];

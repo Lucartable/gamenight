@@ -1,6 +1,8 @@
 export type RoomStatus = "lobby" | "question_active" | "reveal_results" | "scoreboard" | "end_game_summary" | "ended";
 export type HostMode = "classic" | "tv";
-export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions" | "jauge";
+export type GameType = "who_would" | "who_of_us" | "majority" | "minority" | "mime_expressions" | "jauge" | "intrus";
+export type IntrusPhase = "clues" | "reveal_clues" | "vote" | "reveal_final" | "ended";
+export type IntrusMode = "unconscious" | "conscious";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
 export type MimeRoundStatus = "waiting" | "playing" | "ended" | "revealed";
@@ -81,6 +83,47 @@ export interface JaugePlayerQuestion {
   source?: "live" | "saved";
 }
 
+export interface IntrusClue {
+  playerId: string;
+  text: string | null;
+  ts: number;
+}
+
+export interface IntrusRoundRecord {
+  roundNumber: number;
+  pairId: number;
+  intrusPlayerId: string;
+  mainWord: string;
+  intrusWord: string;
+  intrusFound: boolean;
+  topVotedPlayerId: string | null;
+  finaleCorrect: boolean | null;
+  clues: IntrusClue[];
+}
+
+export interface IntrusGameState {
+  pairId: number;
+  mainWord: string;
+  intrusWord: string;
+  intrusPlayerId: string;
+  playerOrder: string[];
+  currentClueIndex: number;
+  clues: IntrusClue[];
+  phase: IntrusPhase;
+  roundNumber: number;
+  usedPairIds: number[];
+  mode: IntrusMode;
+  cluePhaseStartedAt: string | null;
+  votePhaseStartedAt: string | null;
+  clueDurationSec: number;
+  voteDurationSec: number;
+  finaleEnabled: boolean;
+  finaleAttempt: string | null;
+  finaleCorrect: boolean | null;
+  scoresByPlayer: Record<string, number>;
+  history: IntrusRoundRecord[];
+}
+
 export interface Room {
   id: string;
   code: string;
@@ -108,6 +151,7 @@ export interface Room {
   current_question_snapshot: QuestionSnapshot | null;
   mime_game_state: MimeGameState | null;
   jauge_game_state: JaugeGameState | null;
+  intrus_game_state: IntrusGameState | null;
   last_activity_at: string;
   expires_at: string | null;
   created_at: string;

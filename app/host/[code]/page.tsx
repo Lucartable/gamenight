@@ -83,6 +83,8 @@ import {
   JaugeRevealPanel,
   JaugeVoteScreen,
 } from "@/components/jaugeMode";
+import { IntrusHostFlow } from "@/components/intrusHostFlow";
+import { isIntrusGame } from "@/lib/intrusGame";
 import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import {
   computePredictionScores,
@@ -261,6 +263,7 @@ export default function HostPage() {
   const predictionMode = isPredictionGame(gameType) ? gameType : null;
   const mimeMode = isMimeGame(gameType);
   const jaugeMode = isJaugeGame(gameType);
+  const intrusMode = isIntrusGame(gameType);
   const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
   const jaugeGameState = useMemo(() => getJaugeGameState(room?.jauge_game_state), [room?.jauge_game_state]);
   const mimeTimerDuration = mimeGameState?.timerDuration ?? voteDuration;
@@ -1682,7 +1685,7 @@ export default function HostPage() {
         />
       )}
 
-      {room.status === "lobby" && gameType && gameType !== "mime_expressions" && gameType !== "jauge" && gameDefinition && (
+      {room.status === "lobby" && gameType && gameType !== "mime_expressions" && gameType !== "jauge" && gameType !== "intrus" && gameDefinition && (
         <LobbyView
           players={players}
           availableCount={filteredAvailable.length}
@@ -1912,6 +1915,21 @@ export default function HostPage() {
           primaryLabel={shouldFinishAfterCurrentRound ? "Résultats finaux" : "Question suivante"}
           onPrimary={goToNextQuestion}
           onBackToLobby={resetToLobby}
+        />
+      )}
+
+      {intrusMode && (
+        <IntrusHostFlow
+          room={room}
+          participants={participants}
+          hostPlayer={me ?? null}
+          votes={votes}
+          totalQuestions={totalQuestions}
+          isTv={tvMode}
+          busy={busy}
+          runTransition={runTransition}
+          refresh={refresh}
+          onEndGame={() => void finishGame(false)}
         />
       )}
 
