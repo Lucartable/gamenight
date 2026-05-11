@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "./tokens.css";
 import "./globals.css";
 import "./animations.css";
 import "./game.css";

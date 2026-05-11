@@ -654,17 +654,17 @@ function PlayerHeader({
 }) {
   return (
     <header className="card game-topbar mb-4 flex items-center justify-between gap-3 p-4">
-      <div>
-        <div className="text-xs uppercase tracking-wider text-white/50">Salle</div>
-        <div className="text-xl font-black tracking-widest">{code}</div>
-        {gameLabel && <div className="mt-1 text-xs text-neon-cyan">{gameLabel}</div>}
+      <div className="min-w-0">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-cyan">Salle</div>
+        <div className="text-xl font-black tracking-[0.18em] tabular-nums">{code}</div>
+        {gameLabel && <div className="mt-1 text-xs font-bold text-white/65">{gameLabel}</div>}
       </div>
       <div className="flex items-center gap-2">
         <AudioToggle compact />
         <div className="text-right">
-          <div className="text-xs uppercase tracking-wider text-white/50">Toi</div>
-          <div className="text-lg font-bold">{me.name}</div>
-          <div className="text-xs text-white/50">{totalPlayers} joueurs</div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Toi</div>
+          <div className="truncate text-base font-black">{me.name}</div>
+          <div className="text-xs font-semibold text-white/50">{totalPlayers} joueur{totalPlayers > 1 ? "s" : ""}</div>
         </div>
       </div>
     </header>
@@ -732,16 +732,22 @@ function Lobby({
         : "L'hôte prépare la partie.";
 
   return (
-    <section className="card game-panel-enter flex flex-1 flex-col p-6 text-center">
-      <div className="self-center text-5xl" aria-hidden="true">🎉</div>
-      <h2 className="mt-3 text-2xl font-bold">{title}</h2>
-      <p className="mt-2 text-white/60">{subtitle}</p>
+    <section className="game-panel-enter flex flex-1 flex-col gap-4">
+      <div className="card relative overflow-hidden p-6 text-center">
+        <div className="pointer-events-none absolute -top-12 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-neon-pink/22 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-16 right-0 h-32 w-32 rounded-full bg-neon-cyan/16 blur-3xl" aria-hidden="true" />
+        <div className="relative z-10 flex flex-col items-center gap-2">
+          <span className="text-5xl animate-floaty" aria-hidden="true">🎉</span>
+          <h2 className="text-2xl font-black leading-tight">{title}</h2>
+          <p className="text-sm font-semibold text-white/65">{subtitle}</p>
+        </div>
+      </div>
 
-      <div className="mt-5 text-left">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-black uppercase tracking-wider text-white/55">Joueurs en attente</span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white/55">
-            {players.length} / {Math.max(players.length, 2)}
+      <div className="card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-cyan">Joueurs en attente</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-cyan/35 bg-neon-cyan/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-neon-cyan">
+            {players.length}
           </span>
         </div>
         <PlayersLobbyGrid
@@ -754,8 +760,8 @@ function Lobby({
       </div>
 
       {gameType && allowQuestions && (
-        <div className="mt-6 w-full rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-4 text-left">
-          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Question joueur</div>
+        <div className="card border border-neon-cyan/30 bg-neon-cyan/10 p-4">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-cyan">Question joueur</div>
           {gameType === "who_would" ? (
             <div className="mt-3 grid gap-2">
               <input className="input rounded-2xl p-3" value={questionDraft} onChange={(event) => onQuestionDraftChange(event.target.value)} placeholder="Question / contexte (optionnel)" />

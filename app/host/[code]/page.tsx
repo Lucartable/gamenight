@@ -140,6 +140,7 @@ type RoomConfigPatch = Partial<
     | "current_question_snapshot"
     | "mime_game_state"
     | "jauge_game_state"
+    | "intrus_game_state"
   >
 >;
 
@@ -526,7 +527,7 @@ export default function HostPage() {
     scoreboardStartedAt !== null && secondsLeft(scoreboardStartedAt, scoreboardDuration) === 0;
 
   useEffect(() => {
-    if (!mimeMode && !jaugeMode && room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
+    if (!mimeMode && !jaugeMode && !intrusMode && room?.status === "question_active" && (voteHasExpired || allVotesSubmitted)) {
       void revealNow();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -590,7 +591,7 @@ export default function HostPage() {
       await action();
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Erreur inconnue.");
+      setActionError(describeError(err, "Erreur inconnue."));
     } finally {
       transitionRef.current = false;
       setBusy(false);
@@ -606,7 +607,7 @@ export default function HostPage() {
       if (error) throw error;
       await refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Erreur de configuration.");
+      setActionError(describeError(err, "Erreur de configuration."));
     } finally {
       setBusy(false);
     }
@@ -665,6 +666,7 @@ export default function HostPage() {
       question_source_settings: getQuestionSourceSettings(null),
       mime_game_state: null,
       jauge_game_state: null,
+      intrus_game_state: null,
     });
   }
 
@@ -677,6 +679,7 @@ export default function HostPage() {
       current_question_snapshot: null,
       mime_game_state: null,
       jauge_game_state: null,
+      intrus_game_state: null,
     });
   }
 
@@ -4298,6 +4301,21 @@ function uniqueIds(ids: number[]): number[] {
 
 function addUniqueId(ids: number[], id: number): number[] {
   return uniqueIds([...ids, id]);
+}
+
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === "object") {
+    const candidate = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts: string[] = [];
+    if (typeof candidate.message === "string" && candidate.message) parts.push(candidate.message);
+    if (typeof candidate.details === "string" && candidate.details) parts.push(candidate.details);
+    if (typeof candidate.hint === "string" && candidate.hint) parts.push(`(${candidate.hint})`);
+    if (typeof candidate.code === "string" && candidate.code) parts.push(`[${candidate.code}]`);
+    if (parts.length) return parts.join(" ");
+  }
+  if (typeof err === "string" && err) return err;
+  return fallback;
 }
 
 function labelStatus(status: string, gameLabel?: string) {

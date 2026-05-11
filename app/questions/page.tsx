@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { AdminStatusBar } from "@/components/adminStatus";
+import { Button, Card, Chip, Input, Section } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import { useSavedQuestions } from "@/lib/useSavedQuestions";
@@ -199,9 +200,20 @@ export default function SavedQuestionsPage() {
     await refreshPacks();
   }
 
+  const gameFilterChips: Array<{ value: GameType | "all"; label: string; tone: "neutral" | "pink" | "cyan" | "yellow" | "green" | "purple" }> = [
+    { value: "all", label: "Tous", tone: "neutral" },
+    { value: "who_would", label: "Tu préfères", tone: "pink" },
+    { value: "who_of_us", label: "Qui de nous ?", tone: "cyan" },
+    { value: "majority", label: "Majorité", tone: "yellow" },
+    { value: "minority", label: "Minorité", tone: "pink" },
+    { value: "mime_expressions", label: "Mime", tone: "cyan" },
+    { value: "jauge", label: "Jauge", tone: "yellow" },
+    { value: "intrus", label: "L'Intrus", tone: "purple" },
+  ];
+
   return (
-    <main className="game-stage min-h-dvh px-4 py-5 text-white">
-      <div className="mx-auto max-w-5xl">
+    <main className="game-stage min-h-dvh px-4 pb-8 pt-3 text-white sm:px-5 sm:pt-5 safe-area-pb">
+      <div className="mx-auto max-w-5xl space-y-5">
         <AdminStatusBar
           userEmail={profile.userEmail}
           role={profile.role}
@@ -210,81 +222,132 @@ export default function SavedQuestionsPage() {
           onSignOut={() => void profile.signOut()}
         />
 
-        <header className="game-topbar mb-5 rounded-[24px] border p-4 shadow-glow">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Badaboum</div>
-              <h1 className="mt-1 text-3xl font-black leading-tight md:text-5xl">Questions sauvegardées</h1>
-              <p className="mt-2 max-w-2xl text-sm font-semibold text-white/60">
-                Bibliothèque globale, triée par jeu, réservée aux rôles trusted et admin.
+        <Card variant="hero" padding="lg" className="animate-slideUp">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <Chip tone="yellow" size="sm">Badaboum · admin</Chip>
+              <h1 className="text-brand mt-3 text-3xl font-black leading-none sm:text-5xl">Bibliothèque</h1>
+              <p className="mt-2 max-w-2xl text-sm font-semibold text-white/65">
+                Questions sauvegardées et packs. Synchronisé, filtrable, multi-jeu.
               </p>
             </div>
-            <Link href="/" className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm font-black text-white/70 transition hover:scale-[1.02] hover:text-white">
-              Accueil
+            <Link
+              href="/"
+              className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-4 py-2 text-xs font-black uppercase tracking-wider text-white/80 transition hover:bg-white/14"
+            >
+              ← Accueil
             </Link>
           </div>
-        </header>
+        </Card>
 
-        {profile.loading && <section className="card p-5 text-sm font-bold text-white/60">Chargement du profil...</section>}
+        {profile.loading && (
+          <Card padding="md" className="text-sm font-bold text-white/60">
+            Chargement du profil…
+          </Card>
+        )}
 
         {!profile.loading && !profile.userId && (
-          <section className="card mx-auto max-w-md p-5 animate-reveal-in">
-            <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Supabase Auth</div>
+          <Card variant="default" padding="lg" className="mx-auto max-w-md animate-slideUp">
+            <Chip tone="cyan" size="sm">Supabase Auth</Chip>
             <h2 className="mt-2 text-2xl font-black">Connexion requise</h2>
             <p className="mt-2 text-sm font-semibold text-white/60">
               Les questions sauvegardées et les packs sont protégés par RLS.
             </p>
             <form onSubmit={signIn} className="mt-5 space-y-3">
-              <input className="input" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email@exemple.com" type="email" />
-              <input className="input" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mot de passe" type="password" />
-              <button className="btn-primary w-full" type="submit">Connexion admin</button>
+              <Input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email@exemple.com" type="email" />
+              <Input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mot de passe" type="password" />
+              <Button type="submit" variant="primary" size="lg" fullWidth>Connexion admin</Button>
             </form>
-            {authMessage && <p className="mt-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-sm font-bold text-neon-green">{authMessage}</p>}
-            {error && <p className="mt-3 rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
-          </section>
+            {authMessage && (
+              <p className="mt-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-sm font-bold text-neon-green">
+                {authMessage}
+              </p>
+            )}
+            {error && (
+              <p className="mt-3 rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">
+                {error}
+              </p>
+            )}
+          </Card>
         )}
 
         {!profile.loading && profile.userId && !profile.canManageQuestions && (
-          <section className="card mx-auto max-w-xl p-5 animate-reveal-in">
-            <div className="text-xs font-black uppercase tracking-wider text-neon-pink">Rôle actuel : {profile.role}</div>
+          <Card variant="default" padding="lg" className="mx-auto max-w-xl animate-slideUp">
+            <Chip tone="pink" size="sm">Rôle actuel : {profile.role}</Chip>
             <h2 className="mt-2 text-2xl font-black">Accès réservé</h2>
             <p className="mt-2 text-sm font-semibold text-white/60">
-              Ton compte est connecté, mais la sauvegarde, la bibliothèque, la suppression et les packs demandent un rôle trusted ou admin.
+              Ton compte est connecté, mais la sauvegarde, la suppression et les packs demandent un rôle trusted ou admin.
             </p>
-            <button onClick={() => void profile.signOut()} className="btn-ghost mt-5 w-full" type="button">Se déconnecter</button>
-          </section>
+            <Button onClick={() => void profile.signOut()} variant="ghost" size="md" fullWidth className="mt-5">
+              Se déconnecter
+            </Button>
+          </Card>
         )}
 
         {!profile.loading && profile.canManageQuestions && (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
             <section className="space-y-4">
-              <div className="card p-4 animate-reveal-in">
-                <div className="flex flex-col gap-3 md:flex-row">
-                  <input className="input md:flex-1" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une question, catégorie..." />
-                  <select className="input md:w-56" value={gameFilter} onChange={(event) => setGameFilter(event.target.value as GameType | "all")}>
-                    <option value="all">Tous les jeux</option>
-                    {GAME_OPTIONS.map((gameType) => (
-                      <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
-                    ))}
-                  </select>
+              <Card padding="md" className="animate-slideUp">
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Rechercher une question, catégorie…"
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {gameFilterChips.map((chip) => {
+                    const active = gameFilter === chip.value;
+                    return (
+                      <button
+                        key={chip.value}
+                        type="button"
+                        onClick={() => setGameFilter(chip.value)}
+                        className={`focus-ring rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] transition ${
+                          active
+                            ? "border-white/30 bg-white/10 text-white shadow-glow-cyan"
+                            : "border-white/8 bg-white/4 text-white/55 hover:border-white/16 hover:text-white"
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="mt-3 text-xs font-black uppercase tracking-wider text-white/45">
-                  {loading ? "Synchronisation..." : `${filteredQuestions.length} question${filteredQuestions.length > 1 ? "s" : ""} visible${filteredQuestions.length > 1 ? "s" : ""}`}
+                <div className="mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
+                  {loading
+                    ? "Synchronisation…"
+                    : `${filteredQuestions.length} question${filteredQuestions.length > 1 ? "s" : ""} visible${filteredQuestions.length > 1 ? "s" : ""}`}
                 </div>
-              </div>
+              </Card>
 
-              {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
+              {error && (
+                <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">
+                  {error}
+                </p>
+              )}
 
               <div className="grid gap-3">
                 {filteredQuestions.map((question, index) => (
-                  <article key={question.id} className="library-card p-4" style={{ animationDelay: `${Math.min(index, 10) * 34}ms` }}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">{GAME_LABELS[question.game_type]}</div>
+                  <Card
+                    key={question.id}
+                    padding="md"
+                    className="library-card animate-slideUp"
+                    style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Chip tone="cyan" size="sm">{GAME_LABELS[question.game_type]}</Chip>
                         {editingId === question.id ? (
                           <div className="mt-3 space-y-3">
-                            <textarea className="input min-h-28 resize-none" value={editText} onChange={(event) => setEditText(event.target.value)} />
-                            <input className="input" value={editCategory} onChange={(event) => setEditCategory(event.target.value)} placeholder="Catégorie" />
+                            <textarea
+                              className="input min-h-28 resize-none"
+                              value={editText}
+                              onChange={(event) => setEditText(event.target.value)}
+                            />
+                            <Input
+                              value={editCategory}
+                              onChange={(event) => setEditCategory(event.target.value)}
+                              placeholder="Catégorie"
+                            />
                             {questionHasEditablePayload(question) && (
                               <textarea
                                 className="input min-h-24 resize-none"
@@ -296,67 +359,111 @@ export default function SavedQuestionsPage() {
                           </div>
                         ) : (
                           <>
-                            <h2 className="mt-1 text-lg font-black leading-snug">{question.question_text}</h2>
-                            <p className="mt-2 text-xs font-bold uppercase tracking-wider text-white/40">{question.category}</p>
+                            <h2 className="mt-2 text-base font-black leading-snug sm:text-lg">{question.question_text}</h2>
+                            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+                              {question.category}
+                            </p>
                           </>
                         )}
                       </div>
-                      <span className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2 text-xs font-black text-white/55">
-                        {question.source_game}
-                      </span>
+                      <Chip tone="neutral" size="sm">{question.source_game}</Chip>
                     </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {editingId === question.id ? (
                         <>
-                          <button disabled={busyId === question.id} onClick={() => void saveEdit(question)} className="btn-primary sm:col-span-2" type="button">Valider</button>
-                          <button onClick={() => setEditingId(null)} className="btn-ghost sm:col-span-2" type="button">Annuler</button>
+                          <Button
+                            variant="primary"
+                            size="md"
+                            disabled={busyId === question.id}
+                            onClick={() => void saveEdit(question)}
+                          >
+                            Valider
+                          </Button>
+                          <Button variant="ghost" size="md" onClick={() => setEditingId(null)}>
+                            Annuler
+                          </Button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => void startEdit(question)} className="btn-ghost" type="button">Modifier</button>
+                          <Button variant="secondary" size="sm" onClick={() => startEdit(question)}>
+                            Modifier
+                          </Button>
                           {activePackQuestionIds.has(question.id) ? (
-                            <button disabled={!activePackId || busyId === question.id} onClick={() => void removeFromPack(question.id)} className="btn-ghost" type="button">Retirer pack</button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!activePackId || busyId === question.id}
+                              onClick={() => void removeFromPack(question.id)}
+                            >
+                              Retirer du pack
+                            </Button>
                           ) : (
-                            <button disabled={!activePackId || busyId === question.id} onClick={() => void addToPack(question.id)} className="btn-ghost" type="button">Ajouter au pack actif</button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!activePackId || busyId === question.id}
+                              onClick={() => void addToPack(question.id)}
+                            >
+                              + Pack actif
+                            </Button>
                           )}
-                          <button disabled={busyId === question.id} onClick={() => void deleteQuestion(question.id)} className="btn-danger sm:col-span-2" type="button">Supprimer</button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={busyId === question.id}
+                            onClick={() => void deleteQuestion(question.id)}
+                            className="ml-auto"
+                          >
+                            Supprimer
+                          </Button>
                         </>
                       )}
                     </div>
-                  </article>
+                  </Card>
                 ))}
 
                 {!loading && filteredQuestions.length === 0 && (
-                  <section className="card p-6 text-center animate-reveal-in">
-                    <h2 className="text-xl font-black">Bibliothèque vide</h2>
+                  <Card padding="lg" className="text-center animate-slideUp">
+                    <div className="text-4xl" aria-hidden="true">📚</div>
+                    <h2 className="mt-2 text-xl font-black">Bibliothèque vide</h2>
                     <p className="mt-2 text-sm font-semibold text-white/55">
                       Sauvegarde une question pendant un reveal pour la retrouver ici.
                     </p>
-                  </section>
+                  </Card>
                 )}
               </div>
             </section>
 
             <aside className="space-y-4">
-              <section className="card p-4 animate-reveal-in">
-                <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Packs</div>
-                <h2 className="mt-1 text-2xl font-black">Créer un pack</h2>
-                <form onSubmit={createPack} className="mt-4 space-y-3">
-                  <input className="input" value={packName} onChange={(event) => setPackName(event.target.value)} placeholder="Nom du pack" />
-                  <select className="input" value={packGame} onChange={(event) => setPackGame(event.target.value as GameType | "all")}>
-                    <option value="all">Multi-jeux</option>
-                    {GAME_OPTIONS.map((gameType) => (
-                      <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
-                    ))}
-                  </select>
-                  <button className="btn-primary w-full" type="submit">Créer le pack</button>
-                </form>
-              </section>
+              <Card padding="md" className="animate-slideUp">
+                <Section eyebrow="Packs" title="Créer un pack" spacing="tight">
+                  <form onSubmit={createPack} className="mt-1 space-y-3">
+                    <Input value={packName} onChange={(event) => setPackName(event.target.value)} placeholder="Nom du pack" />
+                    <select
+                      className="input"
+                      value={packGame}
+                      onChange={(event) => setPackGame(event.target.value as GameType | "all")}
+                    >
+                      <option value="all">Multi-jeux</option>
+                      {GAME_OPTIONS.map((gameType) => (
+                        <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
+                      ))}
+                    </select>
+                    <Button type="submit" variant="primary" size="md" fullWidth>
+                      Créer le pack
+                    </Button>
+                  </form>
+                </Section>
+              </Card>
 
-              <section className="card p-4 animate-reveal-in">
-                <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Pack actif</div>
-                <select className="input mt-3" value={activePackId} onChange={(event) => setActivePackId(event.target.value)}>
+              <Card padding="md" className="animate-slideUp">
+                <Chip tone="cyan" size="sm">Pack actif</Chip>
+                <select
+                  className="input mt-3"
+                  value={activePackId}
+                  onChange={(event) => setActivePackId(event.target.value)}
+                >
                   <option value="">Aucun pack</option>
                   {packs.map((pack) => (
                     <option key={pack.id} value={pack.id}>
@@ -365,51 +472,80 @@ export default function SavedQuestionsPage() {
                   ))}
                 </select>
                 {activePack && (
-                  <div className="mt-3 rounded-2xl border border-neon-cyan/20 bg-neon-cyan/10 p-3">
+                  <div className="mt-3 rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-3">
                     <div className="text-sm font-black">{activePack.name}</div>
-                    <div className="mt-1 text-xs font-bold text-white/50">
-                      {activePackQuestions.length} question{activePackQuestions.length > 1 ? "s" : ""} dans ce pack.
+                    <div className="mt-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+                      {activePackQuestions.length} question{activePackQuestions.length > 1 ? "s" : ""}
                     </div>
                     <div className="mt-3 grid gap-2">
                       {activePackQuestions.slice(0, 6).map((question) => (
-                        <div key={question.id} className="flex items-center justify-between gap-2 rounded-xl bg-black/20 px-3 py-2 text-xs font-bold">
+                        <div
+                          key={question.id}
+                          className="flex items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold"
+                        >
                           <span className="truncate">{question.question_text}</span>
-                          <button type="button" onClick={() => void removeFromPack(question.id)} className="text-neon-pink">
+                          <button
+                            type="button"
+                            onClick={() => void removeFromPack(question.id)}
+                            className="focus-ring text-neon-pink hover:underline"
+                          >
                             Retirer
                           </button>
                         </div>
                       ))}
-                      {activePackQuestions.length === 0 && <p className="text-xs font-semibold text-white/45">Clique sur “Ajouter au pack actif” sur une question.</p>}
+                      {activePackQuestions.length === 0 && (
+                        <p className="text-xs font-semibold text-white/55">
+                          Clique sur &quot;+ Pack actif&quot; sur une question pour l&apos;ajouter.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
                 <div className="mt-4 grid gap-2">
                   {packs.map((pack) => (
-                    <div key={pack.id} className="rounded-2xl border border-white/10 bg-white/6 p-3">
+                    <div
+                      key={pack.id}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-black">{pack.name}</div>
-                          <div className="mt-1 text-xs font-bold text-white/45">
-                            {pack.game_type ? GAME_LABELS[pack.game_type] : "Multi-jeux"} · {countPackItems(packItems, pack.id)} question{countPackItems(packItems, pack.id) > 1 ? "s" : ""}
+                          <div className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
+                            {pack.game_type ? GAME_LABELS[pack.game_type] : "Multi-jeux"} · {countPackItems(packItems, pack.id)}
                           </div>
                         </div>
-                        <button disabled={busyId === pack.id} onClick={() => void deletePack(pack.id)} className="rounded-xl border border-neon-pink/30 bg-neon-pink/10 px-3 py-2 text-xs font-black text-neon-pink" type="button">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={busyId === pack.id}
+                          onClick={() => void deletePack(pack.id)}
+                        >
                           Suppr.
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
-                  {packs.length === 0 && <p className="text-sm font-semibold text-white/50">Aucun pack pour le moment.</p>}
+                  {packs.length === 0 && (
+                    <p className="text-sm font-semibold text-white/55">Aucun pack pour le moment.</p>
+                  )}
                 </div>
-              </section>
+              </Card>
 
-              <section className="card p-4 animate-reveal-in">
-                <div className="text-xs font-black uppercase tracking-wider text-neon-green">Sécurité</div>
+              <Card padding="md" className="animate-slideUp">
+                <Chip tone="green" size="sm">Sécurité</Chip>
                 <p className="mt-2 text-sm font-semibold text-white/55">
                   Connecté en {profile.role}. Les opérations sensibles sont aussi bloquées côté Supabase par RLS.
                 </p>
-                <button onClick={() => void profile.signOut()} className="btn-ghost mt-4 w-full" type="button">Se déconnecter</button>
-              </section>
+                <Button
+                  onClick={() => void profile.signOut()}
+                  variant="ghost"
+                  size="md"
+                  fullWidth
+                  className="mt-4"
+                >
+                  Se déconnecter
+                </Button>
+              </Card>
             </aside>
           </div>
         )}

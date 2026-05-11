@@ -1,0 +1,213 @@
+/* =========================================================================
+ * Design tokens — Neon Party Premium
+ * Toutes les valeurs visuelles centralisées comme variables CSS.
+ * Mirror partiel dans tailwind.config.ts pour utilisation via utilities.
+ * ========================================================================= */
+
+:root {
+  /* ===== Neon palette ===== */
+  /* Pink */
+  --c-pink-50: 255 62 165 / 0.06;
+  --c-pink-100: 255 62 165 / 0.12;
+  --c-pink-200: 255 62 165 / 0.2;
+  --c-pink-400: 255 62 165 / 0.45;
+  --c-pink-500: 255 62 165 / 0.7;
+  --c-pink-600: 255 62 165 / 0.85;
+  --c-pink-700: 255 62 165 / 1;
+  --c-pink: 255 62 165;
+
+  /* Cyan */
+  --c-cyan-50: 34 211 238 / 0.06;
+  --c-cyan-100: 34 211 238 / 0.12;
+  --c-cyan-200: 34 211 238 / 0.22;
+  --c-cyan-400: 34 211 238 / 0.45;
+  --c-cyan-500: 34 211 238 / 0.7;
+  --c-cyan-600: 34 211 238 / 0.85;
+  --c-cyan-700: 34 211 238 / 1;
+  --c-cyan: 34 211 238;
+
+  /* Yellow */
+  --c-yellow-50: 250 204 21 / 0.06;
+  --c-yellow-100: 250 204 21 / 0.12;
+  --c-yellow-200: 250 204 21 / 0.22;
+  --c-yellow-400: 250 204 21 / 0.45;
+  --c-yellow-500: 250 204 21 / 0.7;
+  --c-yellow-600: 250 204 21 / 0.85;
+  --c-yellow-700: 250 204 21 / 1;
+  --c-yellow: 250 204 21;
+
+  /* Green */
+  --c-green-50: 74 222 128 / 0.06;
+  --c-green-100: 74 222 128 / 0.12;
+  --c-green-200: 74 222 128 / 0.22;
+  --c-green-400: 74 222 128 / 0.45;
+  --c-green-500: 74 222 128 / 0.7;
+  --c-green: 74 222 128;
+
+  /* Purple */
+  --c-purple-100: 168 85 247 / 0.12;
+  --c-purple-200: 168 85 247 / 0.22;
+  --c-purple-400: 168 85 247 / 0.45;
+  --c-purple-600: 168 85 247 / 0.85;
+  --c-purple: 168 85 247;
+
+  /* Neutrals */
+  --c-ink: 243 232 255;
+  --c-ink-soft: 243 232 255 / 0.78;
+  --c-ink-mute: 243 232 255 / 0.55;
+  --c-ink-faint: 243 232 255 / 0.32;
+  --c-ink-ghost: 243 232 255 / 0.14;
+  --c-ink-line: 255 255 255 / 0.1;
+  --c-ink-line-soft: 255 255 255 / 0.06;
+
+  /* ===== Surfaces (fonds sombres en couches) ===== */
+  --surface-0: #050310;
+  --surface-1: #0b0613;
+  --surface-2: #150a25;
+  --surface-3: #1d1130;
+  --surface-hero: linear-gradient(135deg, #1a0c2e 0%, #0d0721 55%, #050310 100%);
+  --surface-card: rgba(18, 12, 30, 0.78);
+  --surface-card-elev: rgba(22, 14, 38, 0.86);
+  --surface-card-subtle: rgba(255, 255, 255, 0.04);
+
+  /* Sheen / aurora overlays */
+  --grad-aurora-pink: radial-gradient(circle at 18% 8%, rgba(255, 62, 165, 0.16), transparent 40%);
+  --grad-aurora-cyan: radial-gradient(circle at 88% 20%, rgba(34, 211, 238, 0.14), transparent 42%);
+  --grad-aurora-yellow: radial-gradient(circle at 50% 92%, rgba(250, 204, 21, 0.12), transparent 44%);
+
+  /* Hero gradient (party text + CTA) */
+  --grad-brand: linear-gradient(110deg, #facc15 0%, #ff3ea5 38%, #a855f7 62%, #22d3ee 100%);
+  --grad-cta: linear-gradient(135deg, #ff3ea5 0%, #a855f7 55%, #22d3ee 100%);
+  --grad-success: linear-gradient(135deg, #4ade80 0%, #22d3ee 100%);
+  --grad-danger: linear-gradient(135deg, #ff3ea5 0%, #f97316 100%);
+
+  /* ===== Borders ===== */
+  --border-soft: 1px solid rgba(255, 255, 255, 0.08);
+  --border-medium: 1px solid rgba(255, 255, 255, 0.14);
+  --border-strong: 1px solid rgba(255, 255, 255, 0.22);
+  --border-pink: 1px solid rgba(255, 62, 165, 0.45);
+  --border-cyan: 1px solid rgba(34, 211, 238, 0.4);
+
+  /* ===== Radii ===== */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+
+  /* ===== Shadows ===== */
+  --shadow-card: 0 18px 44px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-card-elev: 0 26px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-card-soft: 0 12px 28px rgba(0, 0, 0, 0.32);
+  --shadow-glow-pink: 0 0 22px rgba(255, 62, 165, 0.34), 0 14px 32px rgba(255, 62, 165, 0.18);
+  --shadow-glow-cyan: 0 0 22px rgba(34, 211, 238, 0.32), 0 14px 32px rgba(34, 211, 238, 0.16);
+  --shadow-glow-yellow: 0 0 22px rgba(250, 204, 21, 0.34), 0 14px 32px rgba(250, 204, 21, 0.16);
+  --shadow-glow-green: 0 0 22px rgba(74, 222, 128, 0.32);
+  --shadow-inner-line: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-inner-line-active: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  --shadow-press: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+
+  /* ===== Typography scale ===== */
+  --type-display: 700 clamp(2.25rem, 6vw, 3.5rem)/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-title:   1000 clamp(1.5rem, 3.4vw, 2.25rem)/1.1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-subtitle:900 clamp(1.125rem, 2.2vw, 1.5rem)/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-body:    600 0.95rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-body-strong: 800 0.95rem/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-caption: 700 0.78rem/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  --type-eyebrow: 1000 0.7rem/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* ===== Motion ===== */
+  --duration-instant: 90ms;
+  --duration-fast: 180ms;
+  --duration-normal: 320ms;
+  --duration-slow: 520ms;
+  --duration-cinematic: 820ms;
+
+  --ease-out: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0.04, 0.35, 1);
+  --ease-spring-soft: cubic-bezier(0.34, 1.18, 0.64, 1);
+  --ease-bounce: cubic-bezier(0.18, 1.4, 0.4, 1);
+
+  /* ===== Spacing scale (en + des classes Tailwind) ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ===== Layout ===== */
+  --container-mobile: 28rem;   /* 448px */
+  --container-tablet: 42rem;   /* 672px */
+  --container-tv: 76rem;       /* 1216px */
+}
+
+/* Composition utilitaires (utilisables avec class="surface-card") */
+.surface-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 38%),
+    linear-gradient(320deg, rgba(34, 211, 238, 0.05), transparent 44%),
+    var(--surface-card);
+  background-clip: padding-box;
+  box-shadow: var(--shadow-card);
+}
+
+.surface-card-elev {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(320deg, rgba(255, 62, 165, 0.05), transparent 42%),
+    var(--surface-card-elev);
+  background-clip: padding-box;
+  box-shadow: var(--shadow-card-elev);
+}
+
+.surface-hero {
+  background:
+    var(--grad-aurora-pink),
+    var(--grad-aurora-cyan),
+    var(--grad-aurora-yellow),
+    var(--surface-hero);
+  background-clip: padding-box;
+  box-shadow: var(--shadow-card-elev);
+}
+
+.text-brand {
+  background: var(--grad-brand);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: brandShimmer 6s ease-in-out infinite;
+}
+
+@keyframes brandShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Focus state cohérent pour tous les composants interactifs */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.85);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.22);
+}
+
+/* Safe area iOS */
+.safe-area-pt { padding-top: max(1rem, env(safe-area-inset-top)); }
+.safe-area-pb { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+/* Reduce motion respect */
+@media (prefers-reduced-motion: reduce) {
+  .text-brand {
+    animation: none;
+  }
+}

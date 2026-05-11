@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { AvatarCustomizer } from "@/components/avatarCustomizer";
 import { AudioToggle } from "@/components/audioToggle";
+import { Button, Card, Chip, Input, Section } from "@/components/ui";
 import { createRandomAvatarConfig, normalizeAvatarConfig, type AvatarConfig } from "@/lib/avatar";
 import { playSfx, primeAudio } from "@/lib/audio";
 import { getSupabase } from "@/lib/supabase";
@@ -23,12 +24,13 @@ import type { HostMode } from "@/types/database";
 type Mode = "menu" | "guest" | "admin";
 
 const GAME_TEASERS = [
-  { title: "Tu préfères", detail: "Choix rapides, débats immédiats.", tag: "Duel" },
-  { title: "Qui de nous ?", detail: "Accusations sociales en douceur.", tag: "Social" },
-  { title: "Majorité", detail: "Lis le groupe, marque des points.", tag: "Mindgame" },
-  { title: "Minorité", detail: "Sois rare, mais pas seul dans le vide.", tag: "Chaos" },
-  { title: "Mime les expressions", detail: "Un ordre auto, des grands gestes.", tag: "Show" },
-  { title: "Jauge", detail: "Note un joueur de 1 à 10.", tag: "Rate" },
+  { title: "Qui pourrait ?", detail: "Accusations sociales, débats immédiats.", tag: "Social", tone: "pink" as const },
+  { title: "Qui de nous ?", detail: "Pointe celui qui colle à la question.", tag: "Mindgame", tone: "cyan" as const },
+  { title: "Majorité", detail: "Lis le groupe, marque des points.", tag: "Mindgame", tone: "yellow" as const },
+  { title: "Minorité", detail: "Sois rare mais pas seul dans le vide.", tag: "Chaos", tone: "pink" as const },
+  { title: "Mime", detail: "9 modes, des indices, du n'importe quoi.", tag: "Show", tone: "cyan" as const },
+  { title: "Jauge", detail: "Note un joueur de 1 à 10, anonyme possible.", tag: "Rate", tone: "yellow" as const },
+  { title: "L'Intrus", detail: "Un mot diffère. Qui est l'imposteur ?", tag: "Bluff", tone: "purple" as const },
 ];
 
 export default function HomePage() {
@@ -87,7 +89,6 @@ export default function HomePage() {
     try {
       const supabase = getSupabase();
       const userId = await getCurrentUserId();
-
       let roomId: string | null = null;
       let roomCode = "";
       for (let i = 0; i < 5 && !roomId; i++) {
@@ -164,7 +165,6 @@ export default function HomePage() {
     try {
       const supabase = getSupabase();
       const userId = await getCurrentUserId();
-
       const { data: room, error: rErr } = await supabase
         .from("rooms")
         .select("id, status")
@@ -214,7 +214,7 @@ export default function HomePage() {
       if (result) throw new Error(result);
       await profile.refresh();
       playSfx("validate");
-      setAuthMessage("Connecté en admin. Tu peux jouer normalement ou ouvrir la bibliothèque.");
+      setAuthMessage("Connecté en admin. Tu peux jouer ou ouvrir la bibliothèque.");
       setMode("menu");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connexion impossible.");
@@ -227,10 +227,10 @@ export default function HomePage() {
   const showAdminLink = !profile.loading && !profile.userEmail && mode !== "admin";
 
   return (
-    <main className="home-stage min-h-dvh px-5 py-5 text-white">
+    <main className="home-stage min-h-dvh px-4 pb-8 pt-3 text-white sm:px-5 sm:pt-5">
       <div className="home-grid" aria-hidden="true" />
-      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2.5rem)] max-w-md flex-col gap-5">
-        <nav className="app-navbar" aria-label="Navigation principale">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-2rem)] max-w-md flex-col gap-5">
+        <nav className="app-navbar safe-area-pt" aria-label="Navigation principale">
           <Link href="/" className="app-navbar-brand">
             <span className="app-navbar-brand-mark">B</span>
             Badaboum
@@ -277,76 +277,68 @@ export default function HomePage() {
           </div>
         </nav>
 
-        <header className="home-hero pt-2 text-center">
-          <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">party games calibrés soirée</div>
-          <h1 className="home-brand mt-2 text-6xl font-black leading-none">Badaboum</h1>
-          <p className="mx-auto mt-3 max-w-xs text-sm font-semibold text-white/65">
-            Votes, mimes, accusations amicales et bilans de fin qui restent dans les mémoires.
-          </p>
-          {showAdminBadge && (
-            <div className="mt-3">
-              <span className="app-navbar-chip">{profile.isAdmin ? "Admin" : "Trusted"} connecté</span>
-            </div>
-          )}
-        </header>
-
         {mode === "menu" && (
           <>
-            {profile.loading && (
-              <section className="home-action-panel mb-1 p-5">
-                <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Session</div>
-                <h2 className="mt-2 text-2xl font-black">Vérification admin...</h2>
-              </section>
-            )}
+            <HomeHero adminConnected={showAdminBadge} adminLabel={profile.isAdmin ? "Admin" : "Trusted"} />
 
-            {!profile.loading && (
-              <section className="home-action-panel p-5">
+            {profile.loading ? (
+              <Card variant="default" padding="md" className="animate-slideUp">
+                <Chip tone="cyan">Session</Chip>
+                <h2 className="mt-2 text-xl font-black">Vérification admin…</h2>
+              </Card>
+            ) : (
+              <Card variant="default" padding="md" className="animate-slideUp">
                 {authMessage && (
                   <p className="mb-3 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-3 text-center text-sm font-bold text-neon-green">
                     {authMessage}
                   </p>
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  trailing={<Chip tone="yellow" size="sm">INSTANT</Chip>}
                   onClick={() => {
                     primeAudio();
                     playSfx("click");
                     setMode("guest");
                   }}
-                  className="home-primary-action w-full"
                 >
-                  <span>Jouer en invité</span>
-                  <span className="home-action-key">INSTANT</span>
-                </button>
-              </section>
+                  Jouer en invité
+                </Button>
+              </Card>
             )}
 
             {!profile.loading && (
-              <section>
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-black uppercase tracking-wider text-white/50">Modes prêts</h2>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/55">
-                    mobile first
-                  </span>
-                </div>
+              <Section
+                eyebrow="Modes prêts"
+                trailing={<Chip tone="neutral" size="sm">mobile + TV</Chip>}
+                spacing="tight"
+              >
                 <div className="grid gap-2">
                   {GAME_TEASERS.map((game, index) => (
-                    <article key={game.title} className="home-game-row" style={{ animationDelay: `${index * 70}ms` }}>
+                    <Card
+                      key={game.title}
+                      variant="interactive"
+                      padding="sm"
+                      className="flex items-center justify-between gap-3 animate-slideUp"
+                      style={{ animationDelay: `${Math.min(index, 8) * 50}ms` }}
+                    >
                       <div className="min-w-0">
                         <div className="truncate text-base font-black">{game.title}</div>
-                        <div className="mt-0.5 truncate text-xs font-medium text-white/50">{game.detail}</div>
+                        <div className="mt-0.5 truncate text-xs font-medium text-white/55">{game.detail}</div>
                       </div>
-                      <span className="home-game-tag">{game.tag}</span>
-                    </article>
+                      <Chip tone={game.tone} size="sm">{game.tag}</Chip>
+                    </Card>
                   ))}
                 </div>
-              </section>
+              </Section>
             )}
           </>
         )}
 
         {mode === "guest" && (
-          <HomeFormShell title="Jouer en invité" subtitle="Pseudo, code éventuel, et c'est parti. Aucun compte requis.">
+          <HomeFormShell title="Jouer en invité" subtitle="Pseudo, avatar et c'est parti. Aucun compte requis.">
             <div className="space-y-4">
               <GuestIdentityPicker
                 name={name}
@@ -372,90 +364,145 @@ export default function HomePage() {
                   saveGuestSession({ name, color: nextColor, avatarColor: nextColor });
                 }}
               />
-              {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
+              {error && (
+                <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">
+                  {error}
+                </p>
+              )}
 
-              <div className="home-mode-grid">
-                <button
-                  type="button"
+              <div className="grid gap-3">
+                <ModeChoiceButton
+                  tone="pink"
+                  badge="Classique"
+                  title="Lancer une partie"
+                  detail="Tu joues aussi. Idéal entre amis sans TV."
+                  loading={creating === "classic" && loading}
                   disabled={loading}
-                  className="home-mode-card is-classic"
-                  onClick={() => {
-                    void handleCreate("classic");
-                  }}
-                >
-                  <span className="home-mode-pill">Classique</span>
-                  <span className="home-mode-title">Lancer une partie</span>
-                  <span className="home-mode-detail">Tu joues aussi. Idéal entre amis sans TV.</span>
-                  {creating === "classic" && loading && <span className="home-mode-detail">Création en cours...</span>}
-                </button>
-                <button
-                  type="button"
+                  onClick={() => void handleCreate("classic")}
+                />
+                <ModeChoiceButton
+                  tone="cyan"
+                  badge="Mode TV"
+                  title="Lancer en mode TV"
+                  detail="Cet écran devient l'affichage principal. Les phones jouent."
+                  loading={creating === "tv" && loading}
                   disabled={loading}
-                  className="home-mode-card is-tv"
-                  onClick={() => {
-                    void handleCreate("tv");
-                  }}
-                >
-                  <span className="home-mode-pill">Mode TV</span>
-                  <span className="home-mode-title">Lancer en mode TV</span>
-                  <span className="home-mode-detail">Cet écran devient l&apos;affichage principal. Tes potes jouent depuis leur tel.</span>
-                  {creating === "tv" && loading && <span className="home-mode-detail">Préparation du studio...</span>}
-                </button>
+                  onClick={() => void handleCreate("tv")}
+                />
               </div>
 
-              <form onSubmit={handleJoin} className="grid gap-3">
-                <input
-                  className="input uppercase tracking-widest"
+              <form onSubmit={handleJoin} className="grid gap-3 pt-1">
+                <Input
+                  inputSize="lg"
+                  className="uppercase tracking-widest"
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   placeholder="CODE DE SALLE"
                   maxLength={10}
                 />
-                <button disabled={loading} className="btn-secondary w-full" type="submit">
-                  {loading ? "Connexion..." : "Rejoindre une salle existante"}
-                </button>
+                <Button type="submit" variant="secondary" size="lg" fullWidth disabled={loading}>
+                  {loading ? "Connexion…" : "Rejoindre une salle existante"}
+                </Button>
               </form>
-              <button
-                type="button"
-                onClick={() => setMode("menu")}
-                className="btn-ghost w-full"
-              >
+              <Button type="button" variant="ghost" size="md" fullWidth onClick={() => setMode("menu")}>
                 Retour
-              </button>
+              </Button>
             </div>
           </HomeFormShell>
         )}
 
         {mode === "admin" && (
-          <HomeFormShell title="Connexion admin" subtitle="Réservé aux comptes trusted/admin : bibliothèque, packs, modération.">
+          <HomeFormShell title="Connexion admin" subtitle="Réservé aux comptes trusted/admin.">
             <form onSubmit={handleAdminLogin} className="space-y-4">
-              <input
+              <Input
                 autoFocus
-                className="input"
+                inputSize="lg"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
                 placeholder="Email"
                 type="email"
               />
-              <input
-                className="input"
+              <Input
+                inputSize="lg"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="Mot de passe"
                 type="password"
               />
-              {error && <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">{error}</p>}
-              <button disabled={loading} className="btn-primary w-full" type="submit">
-                {loading ? "Connexion..." : "Se connecter"}
-              </button>
-              <button type="button" onClick={() => setMode("menu")} className="btn-ghost w-full">
+              {error && (
+                <p className="rounded-2xl border border-neon-pink/40 bg-neon-pink/10 p-3 text-sm font-bold text-neon-pink">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
+                {loading ? "Connexion…" : "Se connecter"}
+              </Button>
+              <Button type="button" variant="ghost" size="md" fullWidth onClick={() => setMode("menu")}>
                 Retour
-              </button>
+              </Button>
             </form>
           </HomeFormShell>
         )}
       </div>
     </main>
+  );
+}
+
+function ModeChoiceButton({
+  tone,
+  badge,
+  title,
+  detail,
+  loading,
+  disabled,
+  onClick,
+}: {
+  tone: "pink" | "cyan";
+  badge: string;
+  title: string;
+  detail: string;
+  loading?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const toneRing = tone === "pink" ? "border-neon-pink/45 hover:shadow-glow-pink" : "border-neon-cyan/45 hover:shadow-glow-cyan";
+  const toneAura = tone === "pink"
+    ? "from-neon-pink/18 via-neon-purple/10 to-transparent"
+    : "from-neon-cyan/18 via-neon-purple/10 to-transparent";
+  const toneTxt = tone === "pink" ? "text-neon-pink" : "text-neon-cyan";
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`focus-ring relative isolate overflow-hidden rounded-2xl border ${toneRing} bg-surface-2/80 p-4 text-left transition-all duration-200 ease-out-soft hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60`}
+      style={{ backgroundClip: "padding-box" }}
+    >
+      <span className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br ${toneAura}`} aria-hidden="true" />
+      <span className="absolute right-3 top-3">
+        <Chip tone={tone} size="sm">{badge}</Chip>
+      </span>
+      <div className="text-lg font-black">{title}</div>
+      <div className="mt-1 text-xs font-semibold text-white/65">{detail}</div>
+      {loading && <div className={`mt-2 text-xs font-semibold ${toneTxt}`}>Préparation…</div>}
+    </button>
+  );
+}
+
+function HomeHero({ adminConnected, adminLabel }: { adminConnected: boolean; adminLabel: string }) {
+  return (
+    <header className="home-hero relative overflow-hidden rounded-2xl border border-white/12 surface-hero p-5 text-center">
+      <div className="relative z-10 flex flex-col items-center gap-3">
+        <Chip tone="cyan" size="sm">Party games — calibrés soirée</Chip>
+        <h1 className="text-brand text-5xl font-black leading-none sm:text-6xl">Badaboum</h1>
+        <p className="mx-auto max-w-xs text-sm font-semibold text-white/70">
+          Votes, mimes, accusations amicales et bilans qui restent dans les mémoires.
+        </p>
+        {adminConnected && (
+          <Chip tone="green" size="sm">{adminLabel} connecté</Chip>
+        )}
+      </div>
+    </header>
   );
 }
 
@@ -473,19 +520,17 @@ function GuestIdentityPicker({
   onColorChange: (value: string) => void;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/5 p-3">
-      <div className="flex items-center gap-3">
-        <input
-          className="input min-w-0 flex-1"
-          value={name}
-          onChange={(e) => {
-            onNameChange(e.target.value);
-            saveGuestSession({ name: e.target.value });
-          }}
-          placeholder="Ton pseudo"
-          maxLength={24}
-        />
-      </div>
+    <Card variant="subtle" padding="sm">
+      <Input
+        inputSize="lg"
+        value={name}
+        onChange={(e) => {
+          onNameChange(e.target.value);
+          saveGuestSession({ name: e.target.value });
+        }}
+        placeholder="Ton pseudo"
+        maxLength={24}
+      />
       <div className="mt-3">
         <AvatarCustomizer
           name={name}
@@ -494,7 +539,7 @@ function GuestIdentityPicker({
           onColorChange={onColorChange}
         />
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -513,13 +558,13 @@ function HomeFormShell({
   children: ReactNode;
 }) {
   return (
-    <section className="home-action-panel p-5 animate-reveal-in">
+    <Card variant="default" padding="lg" className="animate-slideUp">
       <div className="mb-5">
-        <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Badaboum</div>
-        <h2 className="mt-1 text-3xl font-black">{title}</h2>
+        <Chip tone="yellow" size="sm">Badaboum</Chip>
+        <h2 className="mt-2 text-2xl sm:text-3xl font-black">{title}</h2>
         <p className="mt-2 text-sm font-medium text-white/55">{subtitle}</p>
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
