@@ -15,6 +15,7 @@ import {
   getOrderedPlayers,
   mergePlayerOrder,
 } from "@/lib/mimeGame";
+import { getEffectiveJaugeQuestionMode } from "@/lib/jaugeQuestionMode";
 import {
   QUESTION_COUNT_PRESETS,
   REVEAL_DURATION_OPTIONS,
@@ -436,14 +437,4 @@ export function JaugeLobbyView({
       </section>
     </>
   );
-}
-
-function getEffectiveJaugeQuestionMode(
-  settings: QuestionSourceSettings,
-  fallback: JaugeQuestionMode,
-): JaugeQuestionMode {
-  if (settings.mode === "players_only") return "players";
-  if (settings.mode === "system_only") return "fixed";
-  if (settings.useLiveQuestions || settings.useSavedQuestions) return "players";
-  return fallback;
 }

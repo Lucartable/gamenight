@@ -66,6 +66,7 @@ import {
   isJaugeGame,
   shuffleIds as shuffleJaugeIds,
 } from "@/lib/jaugeGame";
+import { getEffectiveJaugeQuestionMode } from "@/lib/jaugeQuestionMode";
 import {
   PredictionRevealPanel,
   PredictionScoreboardPanel,
@@ -100,6 +101,19 @@ import {
   WhoWouldRevealView,
 } from "@/components/host/voteHostViews";
 import { getIntrusGameState, isIntrusGame } from "@/lib/intrusGame";
+import {
+  addUniqueId,
+  countSubmittedRatings,
+  countSubmittedVotes,
+  dedupeJaugePlayerQuestions,
+  describeError,
+  getJaugeLobbyOrder,
+  getSelectedCategories,
+  sameOrder,
+  uniqueIds,
+  voteToLocalVote,
+  type HostLocalVote,
+} from "@/lib/hostGameRuntime";
 import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import {
   computePredictionScores,
@@ -125,9 +139,7 @@ import type {
   JaugeTargetMode,
   Player,
   QuestionSourceSettings,
-  Rating,
   Room,
-  Vote,
 } from "@/types/database";
 
 import type { RoomConfigPatch } from "@/lib/hostTypes";
@@ -135,12 +147,6 @@ import type { RoomConfigPatch } from "@/lib/hostTypes";
 interface LocalRating {
   qid: number;
   rating: number;
-}
-
-interface LocalVote {
-  qid: number;
-  selected_option: Choice | null;
-  selected_player_id: string | null;
 }
 
 export default function HostPage() {
@@ -160,7 +166,7 @@ export default function HostPage() {
   const [hostSelectedPredictionOption, setHostSelectedPredictionOption] = useState<string | null>(null);
   const [hostSelectedRating, setHostSelectedRating] = useState<number | null>(null);
   const [hostSubmitting, setHostSubmitting] = useState(false);
-  const [optimisticHostVote, setOptimisticHostVote] = useState<LocalVote | null>(null);
+  const [optimisticHostVote, setOptimisticHostVote] = useState<HostLocalVote | null>(null);
   const [optimisticHostRating, setOptimisticHostRating] = useState<LocalRating | null>(null);
   const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("arrival");
   const [mimeSelectedMode, setMimeSelectedMode] = useState<MimeMode>("classic");
@@ -1931,100 +1937,6 @@ export default function HostPage() {
       )}
     </main>
   );
-}
-
-function getSelectedCategories(room: Room | null): string[] {
-  if (!room?.game_type) return [];
-  if (room.selected_categories?.length) return room.selected_categories;
-  return getDefaultCategories(room.game_type);
-}
-
-function voteToLocalVote(vote: Vote | undefined): LocalVote | null {
-  if (!vote) return null;
-  return {
-    qid: vote.question_id,
-    selected_option: vote.selected_option,
-    selected_player_id: vote.selected_player_id,
-  };
-}
-
-function countSubmittedVotes(gameType: GameType | null, players: Player[], votes: Vote[]): number {
-  const playerIds = new Set(players.map((player) => player.id));
-  return votes.filter((vote) => {
-    if (!playerIds.has(vote.voter_player_id)) return false;
-    if (gameType === "who_would") return vote.selected_option === "A" || vote.selected_option === "B";
-    if (gameType === "who_of_us") return Boolean(vote.selected_player_id);
-    if (isPredictionGame(gameType)) return Boolean(vote.selected_option);
-    return false;
-  }).length;
-}
-
-function countSubmittedRatings(requiredPlayers: Player[], ratings: Rating[]): number {
-  const requiredIds = new Set(requiredPlayers.map((player) => player.id));
-  const voterIds = new Set(
-    ratings
-      .filter((rating) => requiredIds.has(rating.voter_player_id) && rating.rating >= 1 && rating.rating <= 10)
-      .map((rating) => rating.voter_player_id)
-  );
-  return voterIds.size;
-}
-
-function getJaugeLobbyOrder(
-  mode: JaugeTargetMode,
-  players: Player[],
-  randomOrder: string[],
-  customOrder: string[]
-): string[] {
-  if (mode === "arrival") return getArrivalOrder(players);
-  if (mode === "custom") return mergePlayerOrder(customOrder, players);
-  const arrivalOrder = getArrivalOrder(players);
-  return randomOrder.length ? mergePlayerOrder(randomOrder, players) : shuffleJaugeIds(arrivalOrder);
-}
-
-function getEffectiveJaugeQuestionMode(settings: QuestionSourceSettings, fallback: JaugeQuestionMode): JaugeQuestionMode {
-  if (settings.mode === "system_only") return "fixed";
-  if (settings.mode === "players_only" || settings.mode === "saved_only") return "players";
-  if (!settings.useSystemQuestions && (settings.useLiveQuestions || settings.useSavedQuestions)) return "players";
-  if (fallback === "fixed" && (settings.useLiveQuestions || settings.useSavedQuestions)) return "random";
-  return fallback;
-}
-
-function dedupeJaugePlayerQuestions(questions: NonNullable<Room["jauge_game_state"]>["playerQuestions"]) {
-  const seen = new Set<number>();
-  const output: NonNullable<Room["jauge_game_state"]>["playerQuestions"] = [];
-  for (const question of questions) {
-    if (seen.has(question.id)) continue;
-    seen.add(question.id);
-    output.push(question);
-  }
-  return output;
-}
-
-function sameOrder(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((id, index) => id === b[index]);
-}
-
-function uniqueIds(ids: number[]): number[] {
-  return [...new Set(ids.filter((id) => Number.isFinite(id) && id !== 0))];
-}
-
-function addUniqueId(ids: number[], id: number): number[] {
-  return uniqueIds([...ids, id]);
-}
-
-function describeError(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message;
-  if (err && typeof err === "object") {
-    const candidate = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    const parts: string[] = [];
-    if (typeof candidate.message === "string" && candidate.message) parts.push(candidate.message);
-    if (typeof candidate.details === "string" && candidate.details) parts.push(candidate.details);
-    if (typeof candidate.hint === "string" && candidate.hint) parts.push(`(${candidate.hint})`);
-    if (typeof candidate.code === "string" && candidate.code) parts.push(`[${candidate.code}]`);
-    if (parts.length) return parts.join(" ");
-  }
-  if (typeof err === "string" && err) return err;
-  return fallback;
 }
 
 // TvHostStage et labelStatus ont été extraits vers components/tvHostStage.tsx
