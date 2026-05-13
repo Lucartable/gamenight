@@ -442,11 +442,13 @@ export const IntrusRevealFinalScreen = memo(function IntrusRevealFinalScreen({
 export const IntrusScoreboardSection = memo(function IntrusScoreboardSection({
   state,
   participants,
+  votes = [],
 }: {
   state: IntrusGameState | null;
   participants: Player[];
+  votes?: Vote[];
 }) {
-  const rows = useMemo(() => buildIntrusScoreboard(participants, state), [participants, state]);
+  const rows = useMemo(() => buildIntrusScoreboard(participants, state, votes), [participants, state, votes]);
   return (
     <section className="card p-5">
       <div className="mb-3 text-xs font-black uppercase tracking-wider text-white/55">Classement</div>

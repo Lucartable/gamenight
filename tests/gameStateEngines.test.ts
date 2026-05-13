@@ -15,6 +15,12 @@ import {
   isCluePhaseDone,
 } from "@/lib/intrusGame";
 import {
+  applyIntrusFinaleAttempt,
+  applyRoundResultToScores,
+  buildIntrusScoreboard,
+  computeIntrusRoundResult,
+} from "@/lib/intrusScoring";
+import {
   buildInitialJaugeState,
   buildNextJaugeState,
   computeJaugeRoundResult,
@@ -28,6 +34,7 @@ import type {
   QuestionSourceSettings,
   Player,
   Rating,
+  Vote,
 } from "@/types/database";
 
 const ROOM_ID = "room-state-tests";
@@ -73,6 +80,29 @@ function rating({
     question_id: 101,
     rating: value,
     is_anonymous: false,
+    created_at: new Date(Date.parse(START) + index * 1000).toISOString(),
+  };
+}
+
+function intrusVote({
+  voterId,
+  targetId,
+  pairId,
+  index,
+}: {
+  voterId: string;
+  targetId: string;
+  pairId: number;
+  index: number;
+}): Vote {
+  return {
+    id: `vote-${voterId}-${targetId}-${index}`,
+    room_id: ROOM_ID,
+    game_type: "intrus",
+    voter_player_id: voterId,
+    question_id: pairId,
+    selected_option: null,
+    selected_player_id: targetId,
     created_at: new Date(Date.parse(START) + index * 1000).toISOString(),
   };
 }
@@ -257,5 +287,107 @@ describe("game state engines", () => {
     expect(next?.roundNumber).toBe(2);
     expect(next?.usedPairIds).toContain(state?.pairId);
     expect(next?.pairId).not.toBe(state?.pairId);
+  });
+
+  it("intrus partie factice complete : indices, votes, reveal, finale et score", () => {
+    const participants = [
+      player("p1", "Luca", 0),
+      player("p2", "Emma", 1),
+      player("p3", "Tom", 2),
+      player("p4", "Clara", 3),
+    ];
+    const initial = buildInitialIntrusState({
+      participants,
+      selectedCategories: [],
+      orderMode: "arrival",
+      customOrder: [],
+      clueDurationSec: 15,
+      voteDurationSec: 30,
+      mode: "conscious",
+      finaleEnabled: true,
+    });
+
+    expect(initial).not.toBeNull();
+
+    const withClues = participants.reduce(
+      (current, item, index) =>
+        appendClue(current, {
+          playerId: item.id,
+          text: `indice-${index + 1}`,
+          ts: index,
+        }),
+      initial!,
+    );
+    expect(isCluePhaseDone(withClues)).toBe(true);
+
+    const votePhase = {
+      ...withClues,
+      phase: "vote" as const,
+      votePhaseStartedAt: START,
+    };
+    const nonIntrus = participants.filter((item) => item.id !== votePhase.intrusPlayerId);
+    const votes = [
+      intrusVote({ voterId: nonIntrus[0]!.id, targetId: votePhase.intrusPlayerId, pairId: votePhase.pairId, index: 0 }),
+      intrusVote({ voterId: nonIntrus[1]!.id, targetId: votePhase.intrusPlayerId, pairId: votePhase.pairId, index: 1 }),
+      intrusVote({ voterId: nonIntrus[2]!.id, targetId: nonIntrus[0]!.id, pairId: votePhase.pairId, index: 2 }),
+      intrusVote({ voterId: votePhase.intrusPlayerId, targetId: nonIntrus[1]!.id, pairId: votePhase.pairId, index: 3 }),
+    ];
+
+    const result = computeIntrusRoundResult({
+      state: votePhase,
+      votes,
+      players: participants,
+    });
+    expect(result.intrusFound).toBe(true);
+    expect(result.topVotedPlayerId).toBe(votePhase.intrusPlayerId);
+
+    const revealState = {
+      ...votePhase,
+      phase: "reveal_final" as const,
+      scoresByPlayer: applyRoundResultToScores(votePhase.scoresByPlayer, result),
+      history: [
+        {
+          roundNumber: votePhase.roundNumber,
+          pairId: votePhase.pairId,
+          intrusPlayerId: votePhase.intrusPlayerId,
+          mainWord: votePhase.mainWord,
+          intrusWord: votePhase.intrusWord,
+          intrusFound: result.intrusFound,
+          topVotedPlayerId: result.topVotedPlayerId,
+          finaleCorrect: result.finaleCorrect,
+          clues: votePhase.clues,
+        },
+      ],
+    };
+    const scoreBeforeFinale = revealState.scoresByPlayer[votePhase.intrusPlayerId] ?? 0;
+    const afterFinale = applyIntrusFinaleAttempt({
+      state: revealState,
+      votes,
+      players: participants,
+      attempt: votePhase.mainWord,
+      correct: true,
+    });
+
+    expect(afterFinale.finaleCorrect).toBe(true);
+    expect(afterFinale.finaleAttempt).toBe(votePhase.mainWord);
+    expect(afterFinale.scoresByPlayer[votePhase.intrusPlayerId]).toBe(scoreBeforeFinale + 2);
+    expect(afterFinale.history).toHaveLength(1);
+    expect(afterFinale.history[0]?.finaleCorrect).toBe(true);
+
+    const scoreboard = buildIntrusScoreboard(participants, afterFinale, votes);
+    const detectiveCountByPlayer = new Map(scoreboard.map((row) => [row.player.id, row.detectiveCount]));
+    expect(detectiveCountByPlayer.get(nonIntrus[0]!.id)).toBe(1);
+    expect(detectiveCountByPlayer.get(nonIntrus[1]!.id)).toBe(1);
+    expect(detectiveCountByPlayer.get(nonIntrus[2]!.id)).toBe(0);
+    expect(detectiveCountByPlayer.get(votePhase.intrusPlayerId)).toBe(0);
+
+    const afterDuplicateSubmit = applyIntrusFinaleAttempt({
+      state: afterFinale,
+      votes,
+      players: participants,
+      attempt: votePhase.mainWord,
+      correct: true,
+    });
+    expect(afterDuplicateSubmit.scoresByPlayer[votePhase.intrusPlayerId]).toBe(scoreBeforeFinale + 2);
   });
 });

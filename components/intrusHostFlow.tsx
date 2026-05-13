@@ -390,7 +390,7 @@ export function IntrusHostFlow({
           )}
         </div>
 
-        <IntrusScoreboardSection state={intrusState} participants={participants} />
+        <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
       </section>
     );
   }
@@ -458,7 +458,7 @@ export function IntrusHostFlow({
           onEnd={onEndGame}
         />
       )}
-      <IntrusScoreboardSection state={intrusState} participants={participants} />
+      <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
     </>
   );
 }

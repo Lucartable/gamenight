@@ -15,8 +15,8 @@ import {
 } from "@/lib/intrusGame";
 import { getSupabase } from "@/lib/supabase";
 import { playSfx } from "@/lib/audio";
+import { applyIntrusFinaleAttempt } from "@/lib/intrusScoring";
 import type {
-  IntrusGameState,
   Player,
   Room,
   Vote,
@@ -123,14 +123,17 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
     async (guess: string) => {
       if (!intrusState || submittingFinale) return;
       if (intrusState.intrusPlayerId !== me.id) return;
+      if (intrusState.finaleCorrect !== null) return;
       const isCorrect = normalize(guess) === normalize(intrusState.mainWord);
       setSubmittingFinale(true);
       try {
-        const nextState: IntrusGameState = {
-          ...intrusState,
-          finaleAttempt: guess,
-          finaleCorrect: isCorrect,
-        };
+        const nextState = applyIntrusFinaleAttempt({
+          state: intrusState,
+          votes: intrusVotes,
+          players: participants,
+          attempt: guess,
+          correct: isCorrect,
+        });
         const { error } = await getSupabase()
           .from("rooms")
           .update({ intrus_game_state: nextState })
@@ -141,7 +144,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
         setSubmittingFinale(false);
       }
     },
-    [intrusState, submittingFinale, me.id, room.id, refresh]
+    [intrusState, submittingFinale, me.id, intrusVotes, participants, room.id, refresh]
   );
 
   if (!intrusState) {
@@ -203,7 +206,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
           isFinal={false}
         />
       )}
-      <IntrusScoreboardSection state={intrusState} participants={participants} />
+      <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
     </>
   );
 }

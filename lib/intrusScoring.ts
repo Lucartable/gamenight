@@ -1,4 +1,4 @@
-import type { IntrusGameState, Player, Vote } from "@/types/database";
+import type { IntrusGameState, IntrusRoundRecord, Player, Vote } from "@/types/database";
 
 export interface IntrusRoundResult {
   intrusPlayerId: string;
@@ -98,6 +98,59 @@ export function applyRoundResultToScores(
   return next;
 }
 
+export function applyIntrusFinaleAttempt({
+  state,
+  votes,
+  players,
+  attempt,
+  correct,
+}: {
+  state: IntrusGameState;
+  votes: Vote[];
+  players: Player[];
+  attempt: string;
+  correct: boolean;
+}): IntrusGameState {
+  if (state.finaleCorrect !== null) return state;
+
+  const before = computeIntrusRoundResult({ state, votes, players });
+  const patched: IntrusGameState = {
+    ...state,
+    finaleAttempt: attempt,
+    finaleCorrect: correct,
+  };
+  const after = computeIntrusRoundResult({ state: patched, votes, players });
+  const scoresByPlayer = { ...state.scoresByPlayer };
+
+  for (const player of players) {
+    const beforePoints = before.awards[player.id] ?? 0;
+    const afterPoints = after.awards[player.id] ?? 0;
+    const delta = afterPoints - beforePoints;
+    if (delta !== 0) {
+      scoresByPlayer[player.id] = (scoresByPlayer[player.id] ?? 0) + delta;
+    }
+  }
+
+  const record: IntrusRoundRecord = {
+    roundNumber: state.roundNumber,
+    pairId: state.pairId,
+    intrusPlayerId: state.intrusPlayerId,
+    mainWord: state.mainWord,
+    intrusWord: state.intrusWord,
+    intrusFound: after.intrusFound,
+    topVotedPlayerId: after.topVotedPlayerId,
+    finaleCorrect: correct,
+    clues: state.clues,
+  };
+  const historyWithoutCurrentRound = state.history.filter((round) => round.roundNumber !== state.roundNumber);
+
+  return {
+    ...patched,
+    scoresByPlayer,
+    history: [...historyWithoutCurrentRound, record],
+  };
+}
+
 export interface IntrusScoreboardRow {
   player: Player;
   score: number;
@@ -107,7 +160,8 @@ export interface IntrusScoreboardRow {
 
 export function buildIntrusScoreboard(
   players: Player[],
-  state: IntrusGameState | null
+  state: IntrusGameState | null,
+  votes: Vote[] = [],
 ): IntrusScoreboardRow[] {
   if (!state) {
     return players.map((player) => ({
@@ -119,14 +173,24 @@ export function buildIntrusScoreboard(
   }
   const intrusByPlayer = new Map<string, number>();
   const detectiveByPlayer = new Map<string, number>();
+  const playerIds = new Set(players.map((player) => player.id));
+  const votesByQuestion = new Map<number, Vote[]>();
+  for (const vote of votes) {
+    if (vote.game_type !== "intrus") continue;
+    if (!playerIds.has(vote.voter_player_id)) continue;
+    const items = votesByQuestion.get(vote.question_id) ?? [];
+    items.push(vote);
+    votesByQuestion.set(vote.question_id, items);
+  }
+
   for (const record of state.history) {
     intrusByPlayer.set(record.intrusPlayerId, (intrusByPlayer.get(record.intrusPlayerId) ?? 0) + 1);
     if (record.intrusFound) {
-      const detectives = record.clues
-        .map((clue) => clue.playerId)
-        .filter((id) => id !== record.intrusPlayerId);
-      for (const id of detectives) {
-        if (record.intrusFound) detectiveByPlayer.set(id, (detectiveByPlayer.get(id) ?? 0) + 1);
+      const correctVotes = (votesByQuestion.get(record.pairId) ?? []).filter(
+        (vote) => vote.voter_player_id !== record.intrusPlayerId && vote.selected_player_id === record.intrusPlayerId,
+      );
+      for (const vote of correctVotes) {
+        detectiveByPlayer.set(vote.voter_player_id, (detectiveByPlayer.get(vote.voter_player_id) ?? 0) + 1);
       }
     }
   }
