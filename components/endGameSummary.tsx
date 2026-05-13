@@ -14,7 +14,7 @@ import { triggerHaptic } from "@/lib/utils";
 import { playSfx } from "@/lib/audio";
 import { AnonymousAvatar, PlayerAvatar } from "@/components/playerAvatar";
 import { Button } from "@/components/ui";
-import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
+import type { AskedQuestion, GameType, IntrusGameState, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 const TONE_STYLES: Record<SummaryTone, { border: string; bg: string; text: string; glow: string; bar: string }> = {
   gold: {
@@ -77,6 +77,7 @@ export function EndGameSummaryPanel({
   roundQuestionIds,
   mimeGameState,
   jaugeGameState,
+  intrusGameState,
   isHost = false,
   busy = false,
   onReplay,
@@ -91,6 +92,7 @@ export function EndGameSummaryPanel({
   roundQuestionIds?: number[];
   mimeGameState: MimeGameState | null;
   jaugeGameState?: JaugeGameState | null;
+  intrusGameState?: IntrusGameState | null;
   isHost?: boolean;
   busy?: boolean;
   onReplay?: () => void;
@@ -98,8 +100,8 @@ export function EndGameSummaryPanel({
   onEnd?: () => void;
 }) {
   const summary = useMemo(
-    () => buildEndGameSummary({ gameType, players, votes, ratings: ratings ?? [], askedQuestions, roundQuestionIds, mimeGameState, jaugeGameState }),
-    [askedQuestions, gameType, jaugeGameState, mimeGameState, players, ratings, roundQuestionIds, votes]
+    () => buildEndGameSummary({ gameType, players, votes, ratings: ratings ?? [], askedQuestions, roundQuestionIds, mimeGameState, jaugeGameState, intrusGameState }),
+    [askedQuestions, gameType, intrusGameState, jaugeGameState, mimeGameState, players, ratings, roundQuestionIds, votes]
   );
   const [stage, setStage] = useState(0);
 

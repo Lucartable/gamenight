@@ -1,4 +1,5 @@
 import type { GameType, MimeGameState, Player, Vote } from "@/types/database";
+import { buildIntrusSummary } from "./endGameSummaryIntrus";
 import { buildJaugeSummary } from "./endGameSummaryJauge";
 import { getLeaderLabel, getSectionLabels, getSummaryProfile } from "./endGameSummaryLabels";
 import { buildMimeInsights, buildMimeRareMoments, buildMimeSpotlights } from "./endGameSummaryMime";
@@ -46,6 +47,7 @@ export function buildEndGameSummary({
   roundQuestionIds = [],
   mimeGameState,
   jaugeGameState = null,
+  intrusGameState = null,
 }: BuildSummaryInput): EndGameSummary {
   const activePlayers = [...players].sort((a, b) => a.name.localeCompare(b.name));
   const playerById = new Map(activePlayers.map((player) => [player.id, player]));
@@ -61,6 +63,13 @@ export function buildEndGameSummary({
       askedForGame,
       roundQuestionIds,
       jaugeGameState,
+    });
+  }
+  if (gameType === "intrus") {
+    return buildIntrusSummary({
+      players: activePlayers,
+      votes: gameVotes,
+      intrusGameState,
     });
   }
   const currentRoundIds = unique(roundQuestionIds.filter((id) => Number.isFinite(id) && id > 0));

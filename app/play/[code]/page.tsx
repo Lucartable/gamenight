@@ -49,7 +49,7 @@ import {
   JaugeVoteScreen,
 } from "@/components/jaugeMode";
 import { IntrusPlayFlow } from "@/components/intrusPlayFlow";
-import { isIntrusGame } from "@/lib/intrusGame";
+import { getIntrusGameState, isIntrusGame } from "@/lib/intrusGame";
 import { EndGameSummaryPanel } from "@/components/endGameSummary";
 import { isPredictionGame } from "@/lib/scoring";
 import { useCountUp } from "@/lib/useCountUp";
@@ -126,6 +126,7 @@ export default function PlayerPage() {
   const currentQ = currentSnapshotQuestion ?? getQuestionForGame(gameType, room?.current_question_id);
   const mimeGameState = useMemo(() => getMimeGameState(room?.mime_game_state), [room?.mime_game_state]);
   const jaugeGameState = useMemo(() => getJaugeGameState(room?.jauge_game_state), [room?.jauge_game_state]);
+  const intrusGameState = useMemo(() => getIntrusGameState(room?.intrus_game_state), [room?.intrus_game_state]);
   const currentMimePlayer = useMemo(
     () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
     [mimeGameState?.currentMimePlayerId, players]
@@ -431,6 +432,7 @@ export default function PlayerPage() {
         roundQuestionIds={room.round_question_ids ?? []}
         mimeGameState={mimeGameState}
         jaugeGameState={jaugeGameState}
+        intrusGameState={intrusGameState}
       />
     );
 
@@ -624,7 +626,7 @@ export default function PlayerPage() {
         />
       )}
 
-      {intrusMode && (
+      {intrusMode && room.status !== "lobby" && (
         <IntrusPlayFlow
           room={room}
           participants={players}

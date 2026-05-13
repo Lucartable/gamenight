@@ -7,6 +7,7 @@ export function getSummaryProfile(gameType: GameType | null | undefined): Summar
   if (gameType === "who_would") return "duel";
   if (gameType === "majority" || gameType === "minority") return "prediction";
   if (gameType === "jauge") return "rating";
+  if (gameType === "intrus") return "intrus";
   return "generic";
 }
 
@@ -16,6 +17,7 @@ export function getLeaderLabel(profile: SummaryProfile): string {
   if (profile === "duel") return "Influence du soir";
   if (profile === "prediction") return "Leader final";
   if (profile === "rating") return "Réputation du soir";
+  if (profile === "intrus") return "Champion de l'enquête";
   return "Leader final";
 }
 
@@ -97,6 +99,26 @@ export function getSectionLabels(profile: SummaryProfile): SummarySectionLabels 
       rareFallbackDetail: "Aucun événement rarissime, mais les choix ont laissé des traces.",
       recapEyebrow: "Recap final",
       recapTitle: "À retenir avant de relancer",
+    };
+  }
+
+  if (profile === "intrus") {
+    return {
+      scoreboardEyebrow: "Manuel du détective",
+      scoreboardTitle: "Classement final",
+      scoreboardPill: "intrus",
+      scoreboardEmpty: "Aucune manche jouée. Lancez une partie pour remplir le tableau.",
+      spotlightsEyebrow: "Dossiers de l'enquête",
+      spotlightsTitle: "Les coups marquants",
+      heatmapEyebrow: "Cartographie des accusations",
+      heatmapTitle: "Qui démasque qui",
+      heatmapEmpty: "Pas assez d'enquêtes réussies pour cartographier les démasquages.",
+      rareEyebrow: "Moments de bluff",
+      rareTitle: "Les manches qui se racontent",
+      rareFallbackTitle: "Enquête calme",
+      rareFallbackDetail: "Aucun retournement, mais les indices ont circulé.",
+      recapEyebrow: "Recap d'enquête",
+      recapTitle: "À retenir avant la prochaine manche",
     };
   }
 

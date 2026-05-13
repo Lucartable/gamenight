@@ -1,7 +1,7 @@
-import type { AskedQuestion, GameType, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
+import type { AskedQuestion, GameType, IntrusGameState, JaugeGameState, MimeGameState, Player, Rating, Vote } from "@/types/database";
 
 export type SummaryTone = "gold" | "cyan" | "pink" | "green" | "purple" | "ghost" | "danger";
-export type SummaryProfile = "mime" | "social_vote" | "duel" | "prediction" | "rating" | "generic";
+export type SummaryProfile = "mime" | "social_vote" | "duel" | "prediction" | "rating" | "intrus" | "generic";
 
 export interface SummaryScoreRow {
   player: Player;
@@ -82,4 +82,5 @@ export interface BuildSummaryInput {
   roundQuestionIds?: number[];
   mimeGameState: MimeGameState | null;
   jaugeGameState?: JaugeGameState | null;
+  intrusGameState?: IntrusGameState | null;
 }
