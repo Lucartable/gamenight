@@ -227,6 +227,9 @@ export function JaugeLobbyView({
         canUseSavedQuestions={canUseSavedQuestions}
         savedQuestionCount={savedQuestionCount}
         liveQuestionCount={playerQuestionCount}
+        validLiveQuestionCount={questionPoolDiagnostics?.sources.liveValid ?? liveQuestionCount}
+        totalQuestions={room.total_questions}
+        onUseAllLiveQuestions={(count) => onUpdateConfig({ total_questions: count })}
         onChange={onQuestionSourceSettingsChange}
       />
       {questionPoolDiagnostics?.issue && (

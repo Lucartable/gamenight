@@ -24,6 +24,7 @@ export function buildQuestionPlan({
   liveQuestions,
   savedQuestions,
   settings,
+  random,
 }: {
   gameType: GameType;
   selectedCategories: string[];
@@ -32,6 +33,7 @@ export function buildQuestionPlan({
   liveQuestions: CustomQuestion[];
   savedQuestions: SavedCustomQuestion[];
   settings: QuestionSourceSettings;
+  random?: () => number;
 }): QuestionPoolItem[] {
   return buildQuestionPlanWithDiagnostics({
     gameType,
@@ -41,6 +43,7 @@ export function buildQuestionPlan({
     liveQuestions,
     savedQuestions,
     settings,
+    random,
   }).plan;
 }
 
@@ -52,6 +55,7 @@ export function buildQuestionPlanWithDiagnostics({
   liveQuestions,
   savedQuestions,
   settings,
+  random = Math.random,
 }: {
   gameType: GameType;
   selectedCategories: string[];
@@ -60,6 +64,7 @@ export function buildQuestionPlanWithDiagnostics({
   liveQuestions: CustomQuestion[];
   savedQuestions: SavedCustomQuestion[];
   settings: QuestionSourceSettings;
+  random?: () => number;
 }): { plan: QuestionPoolItem[]; diagnostics: QuestionPoolDiagnostics } {
   const categories = selectedCategories.length ? selectedCategories : getDefaultCategories(gameType);
   const excluded = new Set(excludeIds);
@@ -85,18 +90,26 @@ export function buildQuestionPlanWithDiagnostics({
     .filter((question): question is QuestionPoolItem => Boolean(question))
     .filter((question) => validateGameQuestion(question, gameType));
 
+  const systemPool = shuffle(dedupeQuestions(systemQuestions), random);
+  const livePool = shuffle(dedupeQuestions(live), random);
+  const savedPool = shuffle(dedupeQuestions(saved), random);
+
   let plan: QuestionPoolItem[];
   if (sourceSettings.mode === "system_only") {
-    plan = shuffle(dedupeQuestions(systemQuestions)).slice(0, totalQuestions);
+    plan = systemPool.slice(0, totalQuestions);
   } else if (sourceSettings.mode === "players_only") {
-    plan = shuffle(dedupeQuestions(live)).slice(0, totalQuestions);
+    plan = livePool.slice(0, totalQuestions);
   } else if (sourceSettings.mode === "saved_only") {
-    plan = shuffle(dedupeQuestions(saved)).slice(0, totalQuestions);
+    plan = savedPool.slice(0, totalQuestions);
   } else {
-    const requiredCustom = shuffle(dedupeQuestions([...live, ...saved])).slice(0, totalQuestions);
-    const remainingSlots = Math.max(0, totalQuestions - requiredCustom.length);
-    const systemFill = shuffle(dedupeQuestions(systemQuestions)).slice(0, remainingSlots);
-    plan = shuffle(dedupeQuestions([...requiredCustom, ...systemFill])).slice(0, totalQuestions);
+    const selectedLive = sourceSettings.useLiveQuestions ? livePool.slice(0, totalQuestions) : [];
+    const withSaved = sourceSettings.useSavedQuestions
+      ? appendUniqueQuestions(selectedLive, savedPool, totalQuestions)
+      : selectedLive;
+    const withSystem = sourceSettings.useSystemQuestions
+      ? appendUniqueQuestions(withSaved, systemPool, totalQuestions)
+      : withSaved;
+    plan = shuffle(withSystem, random);
   }
 
   const rejected =
@@ -155,6 +168,9 @@ function buildQuestionPoolIssue({
   totalQuestions: number;
 }): string | null {
   if (plan.length > 0) {
+    if (settings.useLiveQuestions && live.length > totalQuestions) {
+      return `${live.length} questions joueurs valides sont disponibles, mais la partie est réglée sur ${totalQuestions}. ${live.length - totalQuestions} ne pourront pas passer.`;
+    }
     if (plan.length < totalQuestions) return `Pool partiel : ${plan.length}/${totalQuestions} questions disponibles.`;
     return null;
   }
@@ -183,16 +199,33 @@ function dedupeQuestions<T extends GameQuestion>(questions: T[]): T[] {
   return output;
 }
 
+function appendUniqueQuestions<T extends GameQuestion>(selected: T[], candidates: T[], totalQuestions: number): T[] {
+  const output = [...selected];
+  const seen = new Set(output.map((question) => questionKey(question)));
+  for (const candidate of candidates) {
+    if (output.length >= totalQuestions) break;
+    const key = questionKey(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(candidate);
+  }
+  return output;
+}
+
+function questionKey(question: GameQuestion): string {
+  return `${question.gameType}:${signatureForQuestion(question)}`;
+}
+
 function signatureForQuestion(question: GameQuestion): string {
   if (question.gameType === "who_would") return `${question.optionA}|${question.optionB}`.toLowerCase();
   if (question.gameType === "majority" || question.gameType === "minority") return `${question.text}|${question.options.join("|")}`.toLowerCase();
   return question.text.toLowerCase();
 }
 
-function shuffle<T>(items: T[]): T[] {
+function shuffle<T>(items: T[], random: () => number): T[] {
   const next = [...items];
   for (let i = next.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [next[i], next[j]] = [next[j], next[i]];
   }
   return next;

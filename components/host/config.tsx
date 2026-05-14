@@ -103,15 +103,25 @@ export function QuestionSourcePanel({
   canUseSavedQuestions,
   savedQuestionCount,
   liveQuestionCount,
+  validLiveQuestionCount,
+  totalQuestions,
   onChange,
+  onUseAllLiveQuestions,
 }: {
   settings: QuestionSourceSettings;
   canUseSavedQuestions: boolean;
   savedQuestionCount: number;
   liveQuestionCount: number;
+  validLiveQuestionCount?: number;
+  totalQuestions?: number;
   onChange: (settings: QuestionSourceSettings) => void;
+  onUseAllLiveQuestions?: (count: number) => void;
 }) {
   const patch = (next: Partial<QuestionSourceSettings>) => onChange({ ...settings, ...next });
+  const coverageLiveCount = validLiveQuestionCount ?? liveQuestionCount;
+  const liveOverflow = totalQuestions ? Math.max(0, coverageLiveCount - totalQuestions) : 0;
+  const showLiveCoverage = settings.useLiveQuestions && typeof totalQuestions === "number";
+
   return (
     <section className="card mb-4 p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -152,6 +162,40 @@ export function QuestionSourcePanel({
         />
       </div>
 
+      {showLiveCoverage && (
+        <div className={`mt-3 rounded-2xl border p-4 ${
+          liveOverflow > 0
+            ? "border-neon-yellow/35 bg-neon-yellow/10"
+            : coverageLiveCount > 0
+              ? "border-neon-green/30 bg-neon-green/10"
+              : "border-white/10 bg-white/5"
+        }`}>
+          <div className="text-xs font-black uppercase tracking-wider text-white/45">Priorité questions joueurs</div>
+          {coverageLiveCount > 0 ? (
+            <>
+              <p className={`mt-1 text-sm font-bold ${liveOverflow > 0 ? "text-neon-yellow" : "text-neon-green"}`}>
+                {liveOverflow > 0
+                  ? `${coverageLiveCount} questions joueurs valides, mais la partie est réglée sur ${totalQuestions}. ${liveOverflow} ne pourront pas passer.`
+                  : `${coverageLiveCount} questions joueurs valides disponibles. Elles seront toutes jouées.`}
+              </p>
+              {liveOverflow > 0 && onUseAllLiveQuestions && (
+                <button
+                  type="button"
+                  className="btn-secondary mt-3 rounded-xl px-4 py-2 text-sm"
+                  onClick={() => onUseAllLiveQuestions(coverageLiveCount)}
+                >
+                  Passer à {coverageLiveCount} questions
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="mt-1 text-sm font-bold text-white/55">
+              Aucune question joueur valide pour l&apos;instant. Le système complètera selon les sources activées.
+            </p>
+          )}
+        </div>
+      )}
+
       <ConfigGroup label="Auteurs">
         <ConfigButton active={settings.authorVisibility === "hidden"} disabled={false} onClick={() => patch({ authorVisibility: "hidden" })}>Anonyme</ConfigButton>
         <ConfigButton active={settings.authorVisibility === "final_reveal"} disabled={false} onClick={() => patch({ authorVisibility: "final_reveal" })}>Reveal final</ConfigButton>
@@ -167,7 +211,7 @@ export function QuestionSourcePanel({
       </ConfigGroup>
 
       <p className="mt-3 text-sm font-semibold text-white/55">
-        En mix intelligent, les questions live/sauvegardées sont injectées en priorité, puis les questions système complètent les manches restantes.
+        En mix intelligent, les questions live de la room passent avant tout, puis les sauvegardées, puis les questions système complètent les manches restantes.
       </p>
     </section>
   );

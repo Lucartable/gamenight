@@ -86,6 +86,33 @@ function savedQuestion({
   };
 }
 
+function validLiveQuestion(gameType: GameType, id: number): CustomQuestion {
+  if (gameType === "who_would") {
+    return liveQuestion({
+      id,
+      gameType,
+      text: `Duel joueur ${Math.abs(id)}`,
+      payload: { optionA: `Option A ${Math.abs(id)}`, optionB: `Option B ${Math.abs(id)}` },
+    });
+  }
+  if (gameType === "majority" || gameType === "minority") {
+    return liveQuestion({
+      id,
+      gameType,
+      text: `Question prediction ${Math.abs(id)} ?`,
+      payload: { options: ["Oui", "Non", "Peut-etre"] },
+    });
+  }
+  if (gameType === "mime_expressions") {
+    return liveQuestion({ id, gameType, text: `Expression joueur ${Math.abs(id)}` });
+  }
+  return liveQuestion({ id, gameType, text: `Question joueur ${Math.abs(id)} ?` });
+}
+
+function validLiveQuestions(gameType: GameType, count: number, startId = -101): CustomQuestion[] {
+  return Array.from({ length: count }, (_, index) => validLiveQuestion(gameType, startId - index));
+}
+
 describe("QuestionPoolEngine", () => {
   it("utilise uniquement les questions systeme en mode system_only", () => {
     const live = liveQuestion({
@@ -206,6 +233,84 @@ describe("QuestionPoolEngine", () => {
     expect(diagnostics.issue).toBeNull();
   });
 
+  it("selectionne uniquement les questions joueurs quand elles remplissent toute la partie en smart_mix", () => {
+    const liveQuestions = validLiveQuestions("who_of_us", 12);
+
+    const { plan, diagnostics } = buildQuestionPlanWithDiagnostics({
+      gameType: "who_of_us",
+      selectedCategories: [],
+      totalQuestions: 12,
+      excludeIds: [],
+      liveQuestions,
+      savedQuestions: [],
+      settings: settings("smart_mix"),
+      random: () => 0,
+    });
+
+    expect(plan).toHaveLength(12);
+    expect(plan.every((question) => question.source === "live")).toBe(true);
+    expect(diagnostics.sources.liveValid).toBe(12);
+    expect(diagnostics.sources.systemValid).toBeGreaterThan(0);
+    expect(diagnostics.issue).toBeNull();
+  });
+
+  it("garde la priorite joueurs quand il y a plus de questions joueurs que de manches", () => {
+    const liveQuestions = validLiveQuestions("who_of_us", 12);
+
+    const { plan, diagnostics } = buildQuestionPlanWithDiagnostics({
+      gameType: "who_of_us",
+      selectedCategories: [],
+      totalQuestions: 10,
+      excludeIds: [],
+      liveQuestions,
+      savedQuestions: [],
+      settings: settings("smart_mix"),
+      random: () => 0,
+    });
+
+    expect(plan).toHaveLength(10);
+    expect(plan.every((question) => question.source === "live")).toBe(true);
+    expect(diagnostics.issue).toContain("12 questions joueurs valides");
+    expect(diagnostics.issue).toContain("2 ne pourront pas passer");
+  });
+
+  it("complete avec le systeme uniquement apres avoir retenu toutes les questions joueurs", () => {
+    const liveQuestions = validLiveQuestions("jauge", 8);
+
+    const { plan } = buildQuestionPlanWithDiagnostics({
+      gameType: "jauge",
+      selectedCategories: [],
+      totalQuestions: 12,
+      excludeIds: [],
+      liveQuestions,
+      savedQuestions: [],
+      settings: settings("smart_mix"),
+      random: () => 0,
+    });
+
+    expect(plan).toHaveLength(12);
+    expect(plan.filter((question) => question.source === "live")).toHaveLength(8);
+    expect(plan.filter((question) => question.source === "system")).toHaveLength(4);
+  });
+
+  it("ne conserve pas l'ordre de soumission visible apres le shuffle final", () => {
+    const liveQuestions = validLiveQuestions("who_of_us", 12);
+    const submittedOrder = liveQuestions.map((question) => question.local_question_id);
+
+    const { plan } = buildQuestionPlanWithDiagnostics({
+      gameType: "who_of_us",
+      selectedCategories: [],
+      totalQuestions: 12,
+      excludeIds: [],
+      liveQuestions,
+      savedQuestions: [],
+      settings: settings("smart_mix"),
+      random: () => 0,
+    });
+
+    expect(plan.map((question) => question.id)).not.toEqual(submittedOrder);
+  });
+
   it("garantit les questions live et sauvegardees en all_mix puis complete", () => {
     const liveQuestions = [
       liveQuestion({
@@ -246,6 +351,67 @@ describe("QuestionPoolEngine", () => {
     expect(ids.has(-102)).toBe(true);
     expect(ids.has(-201)).toBe(true);
     expect(plan.filter((question) => question.source === "system")).toHaveLength(1);
+  });
+
+  it("priorise live puis sauvegardees puis systeme en all_mix", () => {
+    const liveQuestions = validLiveQuestions("majority", 3);
+    const savedQuestions = [
+      savedQuestion({
+        id: -201,
+        gameType: "majority",
+        text: "Question sauvegardee prioritaire 1 ?",
+        payload: { options: ["A", "B"] },
+      }),
+      savedQuestion({
+        id: -202,
+        gameType: "majority",
+        text: "Question sauvegardee prioritaire 2 ?",
+        payload: { options: ["A", "B"] },
+      }),
+      savedQuestion({
+        id: -203,
+        gameType: "majority",
+        text: "Question sauvegardee non retenue ?",
+        payload: { options: ["A", "B"] },
+      }),
+    ];
+
+    const { plan } = buildQuestionPlanWithDiagnostics({
+      gameType: "majority",
+      selectedCategories: [],
+      totalQuestions: 5,
+      excludeIds: [],
+      liveQuestions,
+      savedQuestions,
+      settings: settings("all_mix"),
+      random: () => 0,
+    });
+
+    expect(plan).toHaveLength(5);
+    expect(plan.filter((question) => question.source === "live")).toHaveLength(3);
+    expect(plan.filter((question) => question.source === "saved")).toHaveLength(2);
+    expect(plan.filter((question) => question.source === "system")).toHaveLength(0);
+  });
+
+  it("valide la priorite joueurs sur chaque jeu compatible avec les questions live", () => {
+    const compatibleGameTypes: GameType[] = ["who_would", "who_of_us", "majority", "minority", "jauge", "mime_expressions"];
+
+    for (const gameType of compatibleGameTypes) {
+      const { plan } = buildQuestionPlanWithDiagnostics({
+        gameType,
+        selectedCategories: [],
+        totalQuestions: 1,
+        excludeIds: [],
+        liveQuestions: [validLiveQuestion(gameType, -101)],
+        savedQuestions: [],
+        settings: settings("smart_mix"),
+        random: () => 0,
+      });
+
+      expect(plan).toHaveLength(1);
+      expect(plan[0]?.source).toBe("live");
+      expect(plan[0]?.gameType).toBe(gameType);
+    }
   });
 
   it("rejette les formats invalides propres a chaque jeu", () => {

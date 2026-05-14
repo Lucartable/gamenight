@@ -95,6 +95,9 @@ export function LobbyView({
         canUseSavedQuestions={canUseSavedQuestions}
         savedQuestionCount={savedQuestionCount}
         liveQuestionCount={liveQuestionCount}
+        validLiveQuestionCount={questionPoolDiagnostics?.sources.liveValid ?? liveQuestionCount}
+        totalQuestions={room.total_questions}
+        onUseAllLiveQuestions={(count) => onUpdateConfig({ total_questions: count })}
         onChange={onQuestionSourceSettingsChange}
       />
 
