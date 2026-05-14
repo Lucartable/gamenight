@@ -217,6 +217,98 @@ export function JaugeRevealPanel({
   );
   const averageCount = useCountUp(Math.round(result.average * 10), 950);
   const averageDisplay = (averageCount / 10).toFixed(1);
+  const anonymityLabel =
+    anonymityMode === "visible"
+      ? "Votes visibles"
+      : finalReveal
+        ? "Auteurs révélés au bilan"
+        : "Votes anonymes";
+
+  if (isTv) {
+    return (
+      <section className="tv-reveal-card tv-jauge-reveal tv-jauge-reveal-grid game-panel-enter">
+        <div className="tv-jauge-primary">
+          <div className="mx-auto mb-4 w-fit rounded-full border border-neon-pink/40 bg-neon-pink/10 px-4 py-1 text-xs font-black uppercase tracking-wider text-neon-pink">
+            Reveal Jauge
+          </div>
+          <PlayerAvatar player={result.target} size="xl" />
+          <h1 className="mt-3 text-4xl font-black">{result.target?.name ?? "Joueur absent"}</h1>
+          <p className="mx-auto mt-4 max-w-2xl text-3xl font-black leading-tight text-white/90">{question.text}</p>
+
+          <div className="tv-jauge-average mx-auto mt-6 w-fit rounded-[2rem] border border-neon-yellow/40 bg-neon-yellow/10 px-8 py-5 shadow-glow">
+            <div className="text-xs font-black uppercase tracking-wider text-neon-yellow">Moyenne</div>
+            <div className="text-7xl font-black tabular-nums text-neon-yellow">{averageDisplay}</div>
+            <div className="text-sm font-black uppercase tracking-wider text-white/45">sur 10</div>
+          </div>
+
+          <p className="mx-auto mt-4 max-w-xl text-base font-bold text-white/68">{result.comment}</p>
+        </div>
+
+        <aside className="tv-jauge-side">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <MiniStat label="Votes" value={result.rows.length || "-"} />
+            <MiniStat label="Min" value={result.min || "-"} />
+            <MiniStat label="Écart" value={result.spread || "-"} hot={result.isDivided} />
+          </div>
+
+          <div className="tv-jauge-side-card">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-xs font-black uppercase tracking-wider text-white/45">Distribution</div>
+              <div className="rounded-full border border-neon-cyan/30 bg-neon-cyan/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-neon-cyan">
+                {anonymityLabel}
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              {result.distribution.map((bucket) => (
+                <div key={bucket.rating} className="grid grid-cols-[1.7rem_1fr_1.7rem] items-center gap-2">
+                  <div className="text-right text-xs font-black text-white/65">{bucket.rating}</div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${RATING_COLORS[bucket.rating - 1]} transition-all duration-700`}
+                      style={{ width: `${bucket.percent}%` }}
+                    />
+                  </div>
+                  <div className="text-xs font-bold text-white/45">{bucket.count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="tv-jauge-side-card tv-jauge-notes">
+            <div className="mb-3 text-xs font-black uppercase tracking-wider text-white/45">Notes révélées</div>
+            <div className="grid gap-2">
+              {result.rows.length ? result.rows.map((row, index) => (
+                <div
+                  key={`${row.voter?.id ?? "anonymous"}-${index}`}
+                  className="jauge-reveal-row flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-2.5"
+                  style={{ animationDelay: `${index * 90}ms` }}
+                >
+                  <PlayerAvatar
+                    player={row.visible ? row.voter : null}
+                    variant={row.visible ? "default" : "anonymous"}
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-black">{row.visible ? row.voter?.name ?? "Joueur" : row.anonymousLabel}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">{row.visible ? "Auteur révélé" : "Auteur masqué"}</div>
+                  </div>
+                  <div className={`rounded-xl bg-gradient-to-br ${RATING_COLORS[row.rating - 1]} px-3 py-1.5 text-2xl font-black text-night shadow-glow`}>
+                    {row.rating}
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-white/55">
+                  Aucune note envoyée.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {controls && <div className="tv-host-controls">{controls}</div>}
+        </aside>
+      </section>
+    );
+  }
 
   return (
     <section className={`game-panel-enter flex flex-1 flex-col gap-4 ${isTv ? "tv-reveal-card tv-jauge-reveal" : ""}`}>

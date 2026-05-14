@@ -23,6 +23,7 @@ import {
 } from "@/lib/intrusScoring";
 import { INTRUS_PAIR_CATEGORIES, type IntrusPairCategory } from "@/lib/intrusPairs";
 import { HostStartDock } from "@/components/host/config";
+import { Button } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase";
 import { playSfx } from "@/lib/audio";
 import type {
@@ -44,6 +45,8 @@ interface IntrusHostFlowProps {
   busy: boolean;
   runTransition: (action: () => Promise<void>) => Promise<void>;
   refresh: () => Promise<void>;
+  onBackToLobby: () => void;
+  onChangeGame: () => void;
   onEndGame: () => void;
 }
 
@@ -57,6 +60,8 @@ export function IntrusHostFlow({
   busy,
   runTransition,
   refresh,
+  onBackToLobby,
+  onChangeGame,
   onEndGame,
 }: IntrusHostFlowProps) {
   const intrusState = room.intrus_game_state;
@@ -240,6 +245,15 @@ export function IntrusHostFlow({
   if (isLobby) {
     return (
       <section className="game-panel-enter flex flex-1 flex-col gap-4">
+        <IntrusHostToolbar
+          isLobby
+          busy={busy}
+          isTv={isTv}
+          onBackToLobby={onBackToLobby}
+          onChangeGame={onChangeGame}
+          onEndGame={onEndGame}
+        />
+
         <div className="card p-5">
           <div className="text-xs font-black uppercase tracking-[0.24em] text-neon-pink">L&apos;Intrus</div>
           <h2 className="mt-1 text-2xl font-black">Configure la partie</h2>
@@ -403,6 +417,14 @@ export function IntrusHostFlow({
 
   return (
     <>
+      <IntrusHostToolbar
+        busy={busy}
+        isTv={isTv}
+        onBackToLobby={onBackToLobby}
+        onChangeGame={onChangeGame}
+        onEndGame={onEndGame}
+      />
+
       {intrusState.phase === "clues" && (
         <IntrusCluesScreen
           state={intrusState}
@@ -456,5 +478,47 @@ export function IntrusHostFlow({
       )}
       <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} isTv={isTv} />
     </>
+  );
+}
+
+function IntrusHostToolbar({
+  isLobby = false,
+  busy,
+  isTv,
+  onBackToLobby,
+  onChangeGame,
+  onEndGame,
+}: {
+  isLobby?: boolean;
+  busy: boolean;
+  isTv: boolean;
+  onBackToLobby: () => void;
+  onChangeGame: () => void;
+  onEndGame: () => void;
+}) {
+  return (
+    <nav className={`intrus-host-toolbar ${isTv ? "intrus-host-toolbar-tv" : ""} rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-3`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-[0.22em] text-neon-pink">Contrôles hôte</div>
+          <div className="text-sm font-bold text-white/55">
+            {isLobby ? "Configuration Intrus" : "La partie Intrus reste pilotable à tout moment."}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!isLobby && (
+            <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={onBackToLobby}>
+              Retour lobby
+            </Button>
+          )}
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onChangeGame}>
+            Changer de jeu
+          </Button>
+          <Button type="button" variant="danger" size="sm" disabled={busy} onClick={onEndGame}>
+            Bilan / fin
+          </Button>
+        </div>
+      </div>
+    </nav>
   );
 }

@@ -217,6 +217,7 @@ export default function HostPage() {
 
   const tvMode = isTvRoom(room);
   const participants = useMemo(() => getParticipants(players, room), [players, room]);
+  const gamePlayers = tvMode ? participants : players;
   const participantCount = participants.length;
 
   useEffect(() => {
@@ -277,28 +278,28 @@ export default function HostPage() {
   const mimeTimerDuration = mimeGameState?.timerDuration ?? voteDuration;
   const mimePlayerOrder = useMemo(() => mimeGameState?.playerOrder ?? [], [mimeGameState?.playerOrder]);
   const currentMimePlayer = useMemo(
-    () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
-    [mimeGameState?.currentMimePlayerId, players]
+    () => gamePlayers.find((player) => player.id === mimeGameState?.currentMimePlayerId),
+    [gamePlayers, mimeGameState?.currentMimePlayerId]
   );
   const mimePlayersInOrder = useMemo(
-    () => getOrderedPlayers(mimePlayerOrder, players),
-    [mimePlayerOrder, players]
+    () => getOrderedPlayers(mimePlayerOrder, gamePlayers),
+    [mimePlayerOrder, gamePlayers]
   );
   const mimePlayersOutsideOrder = useMemo(
-    () => getPlayersOutsideOrder(mimePlayerOrder, players),
-    [mimePlayerOrder, players]
+    () => getPlayersOutsideOrder(mimePlayerOrder, gamePlayers),
+    [mimePlayerOrder, gamePlayers]
   );
   const currentJaugeQuestion = useMemo(
     () => getJaugeCurrentQuestion(jaugeGameState, room?.current_question_id),
     [jaugeGameState, room?.current_question_id]
   );
   const currentJaugeTarget = useMemo(
-    () => players.find((player) => player.id === jaugeGameState?.currentTargetPlayerId) ?? null,
-    [jaugeGameState?.currentTargetPlayerId, players]
+    () => gamePlayers.find((player) => player.id === jaugeGameState?.currentTargetPlayerId) ?? null,
+    [gamePlayers, jaugeGameState?.currentTargetPlayerId]
   );
   const requiredJaugeVoters = useMemo(
-    () => getJaugeRequiredVoters(players, jaugeGameState),
-    [jaugeGameState, players]
+    () => getJaugeRequiredVoters(gamePlayers, jaugeGameState),
+    [gamePlayers, jaugeGameState]
   );
   const currentJaugeRatings = useMemo(
     () =>
@@ -347,31 +348,31 @@ export default function HostPage() {
 
   useEffect(() => {
     if (!mimeMode || room?.status !== "lobby") return;
-    const arrivalOrder = getArrivalOrder(players);
+    const arrivalOrder = getArrivalOrder(gamePlayers);
     setMimeCustomOrder((prev) => {
       const base = prev.length ? prev : arrivalOrder;
-      const next = mergePlayerOrder(base, players);
+      const next = mergePlayerOrder(base, gamePlayers);
       return sameOrder(prev, next) ? prev : next;
     });
     setMimeRandomOrder((prev) => {
-      const next = prev.length ? mergePlayerOrder(prev, players) : shuffleIds(arrivalOrder);
+      const next = prev.length ? mergePlayerOrder(prev, gamePlayers) : shuffleIds(arrivalOrder);
       return sameOrder(prev, next) ? prev : next;
     });
-  }, [mimeMode, players, room?.status]);
+  }, [gamePlayers, mimeMode, room?.status]);
 
   useEffect(() => {
     if (!jaugeMode || room?.status !== "lobby") return;
-    const arrivalOrder = getArrivalOrder(players);
+    const arrivalOrder = getArrivalOrder(gamePlayers);
     setJaugeCustomOrder((prev) => {
       const base = prev.length ? prev : arrivalOrder;
-      const next = mergePlayerOrder(base, players);
+      const next = mergePlayerOrder(base, gamePlayers);
       return sameOrder(prev, next) ? prev : next;
     });
     setJaugeRandomOrder((prev) => {
-      const next = prev.length ? mergePlayerOrder(prev, players) : shuffleJaugeIds(arrivalOrder);
+      const next = prev.length ? mergePlayerOrder(prev, gamePlayers) : shuffleJaugeIds(arrivalOrder);
       return sameOrder(prev, next) ? prev : next;
     });
-  }, [jaugeMode, players, room?.status]);
+  }, [gamePlayers, jaugeMode, room?.status]);
 
   const askedForGameIds = useMemo(
     () =>
@@ -432,10 +433,10 @@ export default function HostPage() {
   const questionPoolDiagnostics = questionPlanResult?.diagnostics ?? null;
 
   const submittedVotesCount = useMemo(
-    () => countSubmittedVotes(gameType, players, currentVotes),
-    [gameType, players, currentVotes]
+    () => countSubmittedVotes(gameType, gamePlayers, currentVotes),
+    [gamePlayers, gameType, currentVotes]
   );
-  const allVotesSubmitted = players.length > 0 && submittedVotesCount >= players.length;
+  const allVotesSubmitted = gamePlayers.length > 0 && submittedVotesCount >= gamePlayers.length;
 
   const isHostQuestionActive = room?.status === "question_active";
   const hostJaugeAnonymous = jaugeMode && jaugeGameState ? jaugeGameState.anonymityMode !== "visible" : false;
@@ -571,7 +572,7 @@ export default function HostPage() {
 
   useEffect(() => {
     if (!mimeMode || !room || !mimeGameState || room.status === "lobby" || room.status === "ended" || room.status === "end_game_summary") return;
-    const liveOrder = prunePlayerOrder(mimeGameState.playerOrder, players);
+    const liveOrder = prunePlayerOrder(mimeGameState.playerOrder, gamePlayers);
     if (!liveOrder.length || sameOrder(liveOrder, mimeGameState.playerOrder)) return;
     if (!liveOrder.includes(mimeGameState.currentMimePlayerId)) {
       void goToNextMimeRound({ forceOrder: liveOrder });
@@ -579,7 +580,7 @@ export default function HostPage() {
     }
     void syncMimePlayerOrder(liveOrder);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mimeMode, room?.id, room?.status, mimeGameState?.currentMimePlayerId, mimeGameState?.playerOrder.join("|"), players]);
+  }, [gamePlayers, mimeMode, room?.id, room?.status, mimeGameState?.currentMimePlayerId, mimeGameState?.playerOrder.join("|")]);
 
   useEffect(() => {
     if (!mimeMode && room?.status === "reveal_results" && autoplay && revealHasExpired) {
@@ -659,14 +660,14 @@ export default function HostPage() {
 
   function chooseGame(nextGameType: GameType) {
     if (nextGameType === "mime_expressions") {
-      const arrivalOrder = getArrivalOrder(players);
+      const arrivalOrder = getArrivalOrder(gamePlayers);
       setMimeOrderMode("arrival");
       setMimeCustomOrder(arrivalOrder);
       setMimeRandomOrder(shuffleIds(arrivalOrder));
       setMimeHostPlayMode(true);
     }
     if (nextGameType === "jauge") {
-      const arrivalOrder = getArrivalOrder(players);
+      const arrivalOrder = getArrivalOrder(gamePlayers);
       setJaugeTargetMode("random");
       setJaugeQuestionMode("random");
       setJaugeAnonymityMode("visible");
@@ -778,8 +779,8 @@ export default function HostPage() {
 
   async function startJaugeGame(playerOrder: string[]) {
     if (!room || !jaugeMode) return;
-    const liveOrder = mergePlayerOrder(playerOrder, players);
-    if (players.length < 2 || liveOrder.length < 2) {
+    const liveOrder = mergePlayerOrder(playerOrder, gamePlayers);
+    if (gamePlayers.length < 2 || liveOrder.length < 2) {
       setActionError("Il faut au moins 2 joueurs pour lancer Jauge.");
       return;
     }
@@ -794,7 +795,7 @@ export default function HostPage() {
       return;
     }
     const picked = buildInitialJaugeState({
-      players,
+      players: gamePlayers,
       selectedCategories,
       targetMode: jaugeTargetMode,
       targetOrder: liveOrder,
@@ -850,7 +851,7 @@ export default function HostPage() {
   async function goToNextJaugeRound() {
     if (!room || !jaugeMode) return;
     if (!jaugeGameState) {
-      const order = getJaugeLobbyOrder(jaugeTargetMode, players, jaugeRandomOrder, jaugeCustomOrder);
+      const order = getJaugeLobbyOrder(jaugeTargetMode, gamePlayers, jaugeRandomOrder, jaugeCustomOrder);
       await startJaugeGame(order);
       return;
     }
@@ -859,7 +860,7 @@ export default function HostPage() {
       return;
     }
     const picked = buildNextJaugeState({
-      players,
+      players: gamePlayers,
       selectedCategories,
       previous: jaugeGameState,
       extraUsedQuestionIds: uniqueIds([...askedForGameIds, ...roundQuestionIds]),
@@ -906,7 +907,7 @@ export default function HostPage() {
 
   async function startMimeGame(playerOrder: string[], hostPlayMode: boolean, selectedMode: MimeMode = "classic") {
     if (!room || !mimeMode) return;
-    const liveOrder = prunePlayerOrder(playerOrder, players);
+    const liveOrder = prunePlayerOrder(playerOrder, gamePlayers);
     if (!liveOrder.length) {
       setActionError("Ajoute au moins un joueur dans l'ordre de passage.");
       return;
@@ -976,7 +977,7 @@ export default function HostPage() {
     if (!room || !mimeMode || !mimeGameState) return;
     const liveOrder = options?.forceOrder?.length
       ? options.forceOrder
-      : prunePlayerOrder(mimeGameState.playerOrder, players);
+      : prunePlayerOrder(mimeGameState.playerOrder, gamePlayers);
     if (!liveOrder.length) {
       await resetToLobby();
       return;
@@ -1075,6 +1076,7 @@ export default function HostPage() {
 
   async function revealMimeExpression() {
     if (!room || !mimeMode || !mimeGameState || !currentQ) return;
+    if (room.status !== "question_active") return;
     await runTransition(async () => {
       const { error } = await getSupabase()
         .from("rooms")
@@ -1085,6 +1087,30 @@ export default function HostPage() {
         })
         .eq("id", room.id)
         .in("status", ["question_active", "reveal_results"]);
+      if (error) throw error;
+    });
+  }
+
+  async function revealJaugeNow() {
+    if (!room || !jaugeMode) return;
+    if (room.status !== "question_active") return;
+    if (!jaugeGameState || !currentJaugeQuestion) {
+      setActionError("Impossible de révéler : la manche Jauge n'est pas prête.");
+      return;
+    }
+    if (!jaugeGameState.currentTargetPlayerId) {
+      setActionError("Impossible de révéler : aucun joueur cible pour cette Jauge.");
+      return;
+    }
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "reveal_results",
+          reveal_started_at: new Date().toISOString(),
+        })
+        .eq("id", room.id)
+        .eq("status", "question_active");
       if (error) throw error;
     });
   }
@@ -1140,11 +1166,19 @@ export default function HostPage() {
   }
 
   async function revealNow() {
+    if (!room || room.status !== "question_active") return;
     if (mimeMode) {
       await revealMimeExpression();
       return;
     }
-    if (!room || !(currentQ || currentJaugeQuestion || room.current_question_id)) return;
+    if (jaugeMode) {
+      await revealJaugeNow();
+      return;
+    }
+    if (!currentQ) {
+      setActionError("Impossible de révéler : aucune question active.");
+      return;
+    }
     await runTransition(async () => {
       const { error } = await getSupabase()
         .from("rooms")
@@ -1188,6 +1222,33 @@ export default function HostPage() {
           scoreboard_started_at: null,
           mime_game_state: null,
           jauge_game_state: null,
+          intrus_game_state: null,
+        })
+        .eq("id", room.id);
+      if (error) throw error;
+    });
+  }
+
+  async function returnToGameSelection() {
+    if (!room) return;
+    if (room.status !== "lobby" && !confirm("Revenir à la sélection des jeux ? La manche en cours sera arrêtée.")) return;
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "lobby",
+          game_type: null,
+          selected_categories: [],
+          current_question_id: null,
+          current_question_snapshot: null,
+          round_question_ids: [],
+          question_source_settings: getQuestionSourceSettings(null),
+          question_started_at: null,
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: null,
+          jauge_game_state: null,
+          intrus_game_state: null,
         })
         .eq("id", room.id);
       if (error) throw error;
@@ -1237,6 +1298,7 @@ export default function HostPage() {
           scoreboard_started_at: null,
           mime_game_state: null,
           jauge_game_state: null,
+          intrus_game_state: null,
         })
         .eq("id", room.id);
       if (roomError) throw roomError;
@@ -1259,6 +1321,7 @@ export default function HostPage() {
           scoreboard_started_at: null,
           mime_game_state: null,
           jauge_game_state: null,
+          intrus_game_state: null,
         })
         .eq("id", room.id);
       if (error) throw error;
@@ -1527,7 +1590,7 @@ export default function HostPage() {
     return (
       <EndGameSummaryPanel
         gameType={gameType}
-        players={players}
+        players={gamePlayers}
         votes={votes}
         ratings={ratings}
         askedQuestions={askedQuestions}
@@ -1556,15 +1619,15 @@ export default function HostPage() {
       ? optimisticHostRating.rating
       : dbRating?.rating ?? null;
   const otherPlayers = players.filter((player) => player.client_id !== room.host_client_id);
-  const targetPlayers = players;
+  const targetPlayers = gamePlayers;
   const isFinalReveal = room.status === "reveal_results" && roundsPlayed >= totalQuestions;
   const mimeLobbyOrder =
     mimeOrderMode === "arrival"
-      ? getArrivalOrder(players)
+      ? getArrivalOrder(gamePlayers)
       : mimeOrderMode === "random"
-        ? prunePlayerOrder(mimeRandomOrder, players)
-        : mergePlayerOrder(mimeCustomOrder, players);
-  const jaugeLobbyOrder = getJaugeLobbyOrder(jaugeTargetMode, players, jaugeRandomOrder, jaugeCustomOrder);
+        ? prunePlayerOrder(mimeRandomOrder, gamePlayers)
+        : mergePlayerOrder(mimeCustomOrder, gamePlayers);
+  const jaugeLobbyOrder = getJaugeLobbyOrder(jaugeTargetMode, gamePlayers, jaugeRandomOrder, jaugeCustomOrder);
   const displayRound = mimeMode
     ? mimeGameState?.roundNumber ?? 0
     : jaugeMode
@@ -1632,7 +1695,7 @@ export default function HostPage() {
           totalParticipants={participantCount}
           totalJaugeVoters={requiredJaugeVoters.length}
           isJauge={Boolean(jaugeMode)}
-          onRevealNow={revealNow}
+          onRevealNow={jaugeMode ? revealJaugeNow : revealNow}
           onNext={goToNextQuestion}
           onEnd={() => void finishGame(false)}
           busy={busy}
@@ -1687,7 +1750,7 @@ export default function HostPage() {
           roomLiveQuestionCount={liveQuestionCountForRoom}
           playedLiveQuestionCount={playedLiveQuestionIdsForGame.length}
           maxQuestionsPerPlayer={questionSourceSettings.maxQuestionsPerPlayer}
-          expectedQuestionCount={players.length * questionSourceSettings.maxQuestionsPerPlayer}
+          expectedQuestionCount={gamePlayers.length * questionSourceSettings.maxQuestionsPerPlayer}
           clearingQuestions={clearingLiveQuestions}
           onDraftChange={setHostQuestionDraft}
           onOptionAChange={setHostQuestionOptionA}
@@ -1710,7 +1773,7 @@ export default function HostPage() {
 
       {room.status === "lobby" && gameType === "mime_expressions" && gameDefinition && (
         <MimeLobbyView
-          players={players}
+          players={gamePlayers}
           availableCount={filteredAvailable.length}
           gameLabel={gameDefinition.label}
           selectedCategories={selectedCategories}
@@ -1723,12 +1786,12 @@ export default function HostPage() {
           customOrder={mimeCustomOrder}
           onOrderModeChange={(mode) => {
             setMimeOrderMode(mode);
-            if (mode === "random") setMimeRandomOrder(shuffleIds(getArrivalOrder(players)));
-            if (mode === "custom") setMimeCustomOrder((prev) => mergePlayerOrder(prev, players));
+            if (mode === "random") setMimeRandomOrder(shuffleIds(getArrivalOrder(gamePlayers)));
+            if (mode === "custom") setMimeCustomOrder((prev) => mergePlayerOrder(prev, gamePlayers));
           }}
-          onShuffle={() => setMimeRandomOrder(shuffleIds(getArrivalOrder(players)))}
+          onShuffle={() => setMimeRandomOrder(shuffleIds(getArrivalOrder(gamePlayers)))}
           onMoveCustomPlayer={(playerId, direction) => {
-            setMimeCustomOrder((prev) => moveId(mergePlayerOrder(prev, players), playerId, direction));
+            setMimeCustomOrder((prev) => moveId(mergePlayerOrder(prev, gamePlayers), playerId, direction));
           }}
           onHostPlayModeChange={setMimeHostPlayMode}
           onCustomQuestionCountChange={setCustomQuestionCount}
@@ -1750,7 +1813,7 @@ export default function HostPage() {
 
       {room.status === "lobby" && gameType === "jauge" && gameDefinition && (
         <JaugeLobbyView
-          players={players}
+          players={gamePlayers}
           availableCount={filteredAvailable.length}
           gameLabel={gameDefinition.label}
           selectedCategories={selectedCategories}
@@ -1767,8 +1830,8 @@ export default function HostPage() {
           customOrder={jaugeCustomOrder}
           onTargetModeChange={(mode) => {
             setJaugeTargetMode(mode);
-            if (mode === "random") setJaugeRandomOrder(shuffleJaugeIds(getArrivalOrder(players)));
-            if (mode === "custom") setJaugeCustomOrder((prev) => mergePlayerOrder(prev, players));
+            if (mode === "random") setJaugeRandomOrder(shuffleJaugeIds(getArrivalOrder(gamePlayers)));
+            if (mode === "custom") setJaugeCustomOrder((prev) => mergePlayerOrder(prev, gamePlayers));
             patchJaugeLobbyState({ targetMode: mode });
           }}
           onQuestionModeChange={(mode) => {
@@ -1787,9 +1850,9 @@ export default function HostPage() {
             setJaugeAnonymityMode(mode);
             patchJaugeLobbyState({ anonymityMode: mode });
           }}
-          onShuffle={() => setJaugeRandomOrder(shuffleJaugeIds(getArrivalOrder(players)))}
+          onShuffle={() => setJaugeRandomOrder(shuffleJaugeIds(getArrivalOrder(gamePlayers)))}
           onMoveCustomPlayer={(playerId, direction) => {
-            setJaugeCustomOrder((prev) => moveId(mergePlayerOrder(prev, players), playerId, direction));
+            setJaugeCustomOrder((prev) => moveId(mergePlayerOrder(prev, gamePlayers), playerId, direction));
           }}
           onBrutalModeChange={(value) => {
             setJaugeBrutalMode(value);
@@ -1832,7 +1895,7 @@ export default function HostPage() {
 
       {room.status === "lobby" && gameType && gameType !== "mime_expressions" && gameType !== "jauge" && gameType !== "intrus" && gameDefinition && (
         <LobbyView
-          players={players}
+          players={gamePlayers}
           availableCount={filteredAvailable.length}
           gameType={gameType}
           gameLabel={gameDefinition.label}
@@ -1881,7 +1944,7 @@ export default function HostPage() {
           question={currentQ as WhoWouldQuestion}
           voteLeft={voteLeft}
           votedCount={submittedVotesCount}
-          totalPlayers={players.length}
+          totalPlayers={gamePlayers.length}
           selectedChoice={hostSelectedOption}
           validatedChoice={effectiveHostVote?.selected_option ?? null}
           submitting={hostSubmitting}
@@ -1897,7 +1960,7 @@ export default function HostPage() {
           question={currentQ as WhoOfUsGameQuestion}
           voteLeft={voteLeft}
           votedCount={submittedVotesCount}
-          totalPlayers={players.length}
+          totalPlayers={gamePlayers.length}
           targetPlayers={targetPlayers}
           selectedPlayerId={hostSelectedPlayerId}
           validatedPlayerId={effectiveHostVote?.selected_player_id ?? null}
@@ -1919,7 +1982,7 @@ export default function HostPage() {
           validatedOption={effectiveHostVote?.selected_option ?? null}
           submitting={hostSubmitting}
           votedCount={submittedVotesCount}
-          totalPlayers={players.length}
+          totalPlayers={gamePlayers.length}
           busy={busy}
           onSelect={setHostSelectedPredictionOption}
           onSubmit={submitHostVote}
@@ -1968,7 +2031,7 @@ export default function HostPage() {
       {room.status === "reveal_results" && currentQ && gameType === "who_would" && (
         <WhoWouldRevealView
           question={currentQ as WhoWouldQuestion}
-          players={players}
+          players={gamePlayers}
           votes={currentVotes}
           revealLeft={revealLeft}
           autoplay={autoplay}
@@ -1984,7 +2047,7 @@ export default function HostPage() {
       {room.status === "reveal_results" && currentQ && gameType === "who_of_us" && (
         <WhoOfUsRevealView
           question={currentQ as WhoOfUsGameQuestion}
-          players={players}
+          players={gamePlayers}
           votes={currentVotes}
           revealLeft={revealLeft}
           autoplay={autoplay}
@@ -2001,7 +2064,7 @@ export default function HostPage() {
         <PredictionRevealPanel
           mode={predictionMode}
           question={currentQ as PredictionGameQuestion}
-          players={players}
+          players={gamePlayers}
           votes={currentVotes}
           isTv={tvMode}
           revealLeft={revealLeft}
@@ -2023,7 +2086,7 @@ export default function HostPage() {
         <JaugeRevealPanel
           question={currentJaugeQuestion}
           targetPlayerId={jaugeGameState.currentTargetPlayerId}
-          players={players}
+          players={gamePlayers}
           ratings={currentJaugeRatings}
           anonymityMode={jaugeGameState.anonymityMode}
           isTv={tvMode}
@@ -2055,7 +2118,7 @@ export default function HostPage() {
       {room.status === "scoreboard" && predictionMode && (
         <PredictionScoreboardPanel
           mode={predictionMode}
-          players={players}
+          players={gamePlayers}
           votes={votes}
           isTv={tvMode}
           currentQuestionId={currentQ?.id ?? null}
@@ -2081,6 +2144,8 @@ export default function HostPage() {
           busy={busy}
           runTransition={runTransition}
           refresh={refresh}
+          onBackToLobby={() => void resetToLobby()}
+          onChangeGame={() => void returnToGameSelection()}
           onEndGame={() => void finishGame(false)}
         />
       )}

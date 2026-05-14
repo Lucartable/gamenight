@@ -56,6 +56,7 @@ import { useCountUp } from "@/lib/useCountUp";
 import {
   DEFAULT_REVEAL_DURATION_SEC,
   DEFAULT_VOTE_DURATION_SEC,
+  getParticipants,
   getOrCreateClientId,
   triggerHaptic,
 } from "@/lib/utils";
@@ -112,6 +113,7 @@ export default function PlayerPage() {
   const jaugeMode = isJaugeGame(gameType);
   const intrusMode = isIntrusGame(gameType);
   const gameDefinition = getGameDefinition(gameType);
+  const participants = useMemo(() => getParticipants(players, room), [players, room]);
   const questionSourceSettings = useMemo(
     () => getQuestionSourceSettings(room?.question_source_settings),
     [room?.question_source_settings]
@@ -128,20 +130,20 @@ export default function PlayerPage() {
   const jaugeGameState = useMemo(() => getJaugeGameState(room?.jauge_game_state), [room?.jauge_game_state]);
   const intrusGameState = useMemo(() => getIntrusGameState(room?.intrus_game_state), [room?.intrus_game_state]);
   const currentMimePlayer = useMemo(
-    () => players.find((player) => player.id === mimeGameState?.currentMimePlayerId),
-    [mimeGameState?.currentMimePlayerId, players]
+    () => participants.find((player) => player.id === mimeGameState?.currentMimePlayerId),
+    [mimeGameState?.currentMimePlayerId, participants]
   );
   const currentJaugeQuestion = useMemo(
     () => getJaugeCurrentQuestion(jaugeGameState, room?.current_question_id),
     [jaugeGameState, room?.current_question_id]
   );
   const currentJaugeTarget = useMemo(
-    () => players.find((player) => player.id === jaugeGameState?.currentTargetPlayerId) ?? null,
-    [jaugeGameState?.currentTargetPlayerId, players]
+    () => participants.find((player) => player.id === jaugeGameState?.currentTargetPlayerId) ?? null,
+    [jaugeGameState?.currentTargetPlayerId, participants]
   );
   const requiredJaugeVoters = useMemo(
-    () => getJaugeRequiredVoters(players, jaugeGameState),
-    [jaugeGameState, players]
+    () => getJaugeRequiredVoters(participants, jaugeGameState),
+    [jaugeGameState, participants]
   );
   const currentJaugeRatings = useMemo(
     () =>
@@ -425,7 +427,7 @@ export default function PlayerPage() {
     return (
       <EndGameSummaryPanel
         gameType={gameType}
-        players={players}
+        players={participants}
         votes={votes}
         ratings={ratings}
         askedQuestions={askedQuestions}
@@ -436,14 +438,14 @@ export default function PlayerPage() {
       />
     );
 
-  const targetPlayers = players;
+  const targetPlayers = participants;
 
   return (
     <main className="game-stage mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">
       <PlayerHeader
         code={room.code}
         me={me}
-        totalPlayers={players.length}
+        totalPlayers={participants.length}
         gameLabel={gameDefinition?.shortLabel}
       />
 
@@ -468,7 +470,7 @@ export default function PlayerPage() {
 
       {room.status === "lobby" && (
         <Lobby
-          players={players}
+          players={participants}
           me={me}
           hostClientId={room.host_client_id}
           gameLabel={gameDefinition?.label}
@@ -575,7 +577,7 @@ export default function PlayerPage() {
       {room.status === "reveal_results" && currentQ && gameType === "who_would" && (
         <WhoWouldReveal
           question={currentQ as WhoWouldQuestion}
-          players={players}
+          players={participants}
           votes={currentVotes}
           revealStartedAt={room.reveal_started_at}
           revealDurationSec={revealDuration}
@@ -586,7 +588,7 @@ export default function PlayerPage() {
       {room.status === "reveal_results" && currentQ && gameType === "who_of_us" && (
         <WhoOfUsReveal
           question={currentQ as WhoOfUsGameQuestion}
-          players={players}
+          players={participants}
           votes={currentVotes}
           revealStartedAt={room.reveal_started_at}
           revealDurationSec={revealDuration}
@@ -598,7 +600,7 @@ export default function PlayerPage() {
         <PredictionRevealPanel
           mode={predictionMode}
           question={currentQ as PredictionGameQuestion}
-          players={players}
+          players={participants}
           votes={currentVotes}
           revealStartedAt={room.reveal_started_at}
           revealDurationSec={revealDuration}
@@ -610,7 +612,7 @@ export default function PlayerPage() {
         <JaugeRevealPanel
           question={currentJaugeQuestion}
           targetPlayerId={jaugeGameState.currentTargetPlayerId}
-          players={players}
+          players={participants}
           ratings={currentJaugeRatings}
           anonymityMode={jaugeGameState.anonymityMode}
         />
@@ -619,7 +621,7 @@ export default function PlayerPage() {
       {room.status === "scoreboard" && predictionMode && (
         <PredictionScoreboardPanel
           mode={predictionMode}
-          players={players}
+          players={participants}
           votes={votes}
           currentQuestionId={currentQ?.id ?? null}
           scoreTarget={room.score_target}
@@ -629,7 +631,7 @@ export default function PlayerPage() {
       {intrusMode && room.status !== "lobby" && (
         <IntrusPlayFlow
           room={room}
-          participants={players}
+          participants={participants}
           me={me}
           votes={votes}
           refresh={refresh}
