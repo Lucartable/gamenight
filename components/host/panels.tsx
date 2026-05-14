@@ -46,13 +46,18 @@ export function HostCustomQuestionPanel({
   submitting,
   myQuestionCount,
   liveQuestionCount,
+  roomLiveQuestionCount,
+  playedLiveQuestionCount,
   maxQuestionsPerPlayer,
   expectedQuestionCount,
+  clearingQuestions,
   onDraftChange,
   onOptionAChange,
   onOptionBChange,
   onOptionsChange,
   onSubmit,
+  onClearPlayedQuestions,
+  onClearAllQuestions,
 }: {
   gameType: GameType;
   playerName: string;
@@ -63,13 +68,18 @@ export function HostCustomQuestionPanel({
   submitting: boolean;
   myQuestionCount: number;
   liveQuestionCount: number;
+  roomLiveQuestionCount: number;
+  playedLiveQuestionCount: number;
   maxQuestionsPerPlayer: number;
   expectedQuestionCount: number;
+  clearingQuestions: boolean;
   onDraftChange: (value: string) => void;
   onOptionAChange: (value: string) => void;
   onOptionBChange: (value: string) => void;
   onOptionsChange: (value: string) => void;
   onSubmit: () => void;
+  onClearPlayedQuestions: () => void;
+  onClearAllQuestions: () => void;
 }) {
   return (
     <section className="card mb-4 border-neon-cyan/30 bg-neon-cyan/10 p-5 animate-reveal-in">
@@ -125,6 +135,38 @@ export function HostCustomQuestionPanel({
       <p className="mt-2 text-center text-xs font-semibold text-white/45">
         {liveQuestionCount}/{expectedQuestionCount} question{expectedQuestionCount > 1 ? "s" : ""} attendue{expectedQuestionCount > 1 ? "s" : ""} si tout le monde contribue.
       </p>
+
+      <div className="mt-4 rounded-2xl border border-neon-pink/20 bg-black/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-neon-pink/80">Nettoyage de la room</div>
+            <p className="mt-1 text-sm font-semibold text-white/55">
+              {roomLiveQuestionCount} question{roomLiveQuestionCount > 1 ? "s" : ""} joueur{roomLiveQuestionCount > 1 ? "s" : ""} dans la room · {playedLiveQuestionCount} déjà jouée{playedLiveQuestionCount > 1 ? "s" : ""} pour ce jeu.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={clearingQuestions || playedLiveQuestionCount === 0}
+              onClick={onClearPlayedQuestions}
+              className="btn-ghost text-neon-yellow disabled:opacity-40"
+            >
+              Supprimer jouées
+            </button>
+            <button
+              type="button"
+              disabled={clearingQuestions || roomLiveQuestionCount === 0}
+              onClick={onClearAllQuestions}
+              className="btn-ghost text-neon-pink disabled:opacity-40"
+            >
+              Tout vider
+            </button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs font-semibold text-white/40">
+          Les questions système, sauvegardées et les packs ne sont jamais supprimés par cette action.
+        </p>
+      </div>
     </section>
   );
 }

@@ -27,7 +27,7 @@ export function labelStatus(status: string, gameLabel?: string): string {
     case "lobby":
       return "Lobby";
     case "question_active":
-      return gameLabel === "Mime" ? "Mime en cours" : "Vote en cours";
+      return gameLabel?.toLowerCase().includes("mime") ? "Mime en cours" : "Vote en cours";
     case "reveal_results":
       return "Révélation";
     case "scoreboard":
@@ -39,6 +39,35 @@ export function labelStatus(status: string, gameLabel?: string): string {
     default:
       return status;
   }
+}
+
+export function TvStatusStrip({
+  room,
+  playersCount,
+  gameLabel,
+  round,
+  totalQuestions,
+}: {
+  room: Room;
+  playersCount: number;
+  gameLabel?: string;
+  round: number;
+  totalQuestions: number;
+}) {
+  return (
+    <div className="tv-status-strip" aria-label="Statut TV">
+      <div className="tv-status-strip-brand">
+        <span className="app-navbar-brand-mark" aria-hidden="true">B</span>
+        <span>{gameLabel ?? "Badaboum"}</span>
+      </div>
+      <div className="tv-status-strip-meta">
+        <span>Code {room.code}</span>
+        <span>{playersCount} joueur{playersCount > 1 ? "s" : ""}</span>
+        <span>{labelStatus(room.status, gameLabel)}</span>
+        {round > 0 && <span>{Math.min(round, totalQuestions)} / {totalQuestions}</span>}
+      </div>
+    </div>
+  );
 }
 
 export function TvHostStage({

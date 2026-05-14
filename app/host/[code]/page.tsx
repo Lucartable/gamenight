@@ -39,6 +39,10 @@ import { getQuestionSourceSettings, type QuestionPoolItem } from "@/lib/question
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
 import {
+  filterJaugePlayerQuestionsAfterClear,
+  getPlayedLiveQuestionIdsForGame,
+} from "@/lib/customQuestionCleanup";
+import {
   buildMimeGameState,
   findNextMimeIndex,
   getArrivalOrder,
@@ -77,7 +81,7 @@ import {
   JaugeVoteScreen,
 } from "@/components/jaugeMode";
 import { IntrusHostFlow } from "@/components/intrusHostFlow";
-import { TvHostStage } from "@/components/tvHostStage";
+import { TvHostStage, TvStatusStrip } from "@/components/tvHostStage";
 import {
   CenteredMessage,
   GameSelectionView,
@@ -159,6 +163,7 @@ export default function HostPage() {
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [customQuestionCount, setCustomQuestionCount] = useState(String(DEFAULT_TOTAL_QUESTIONS));
   const [hostSelectedOption, setHostSelectedOption] = useState<Choice | null>(null);
@@ -186,6 +191,7 @@ export default function HostPage() {
   const [hostQuestionOptionB, setHostQuestionOptionB] = useState("");
   const [hostQuestionOptions, setHostQuestionOptions] = useState("");
   const [hostSubmittingQuestion, setHostSubmittingQuestion] = useState(false);
+  const [clearingLiveQuestions, setClearingLiveQuestions] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const transitionRef = useRef(false);
@@ -212,6 +218,11 @@ export default function HostPage() {
   const tvMode = isTvRoom(room);
   const participants = useMemo(() => getParticipants(players, room), [players, room]);
   const participantCount = participants.length;
+
+  useEffect(() => {
+    if (!tvMode || typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [room?.current_question_id, room?.scoreboard_started_at, room?.status, tvMode]);
 
   const gameType = room?.game_type ?? null;
   const selectedCategories = useMemo(
@@ -250,6 +261,7 @@ export default function HostPage() {
     () => (gameType ? customQuestions.filter((question) => question.game_type === gameType).length : 0),
     [customQuestions, gameType]
   );
+  const liveQuestionCountForRoom = customQuestions.length;
   const totalQuestions = room?.total_questions ?? DEFAULT_TOTAL_QUESTIONS;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
@@ -373,6 +385,16 @@ export default function HostPage() {
   const roundQuestionIds = useMemo(
     () => uniqueIds(room?.round_question_ids ?? []),
     [room?.round_question_ids]
+  );
+  const playedLiveQuestionIdsForGame = useMemo(
+    () =>
+      getPlayedLiveQuestionIdsForGame({
+        customQuestions,
+        gameType,
+        askedQuestionIds: askedForGameIds,
+        roundQuestionIds,
+      }),
+    [askedForGameIds, customQuestions, gameType, roundQuestionIds],
   );
   const blockedQuestionIds = useMemo(() => {
     if (!currentQ || askedForGameIds.includes(currentQ.id)) return askedForGameIds;
@@ -582,6 +604,7 @@ export default function HostPage() {
     transitionRef.current = true;
     setBusy(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await action();
       await refresh();
@@ -597,6 +620,7 @@ export default function HostPage() {
     if (!room || busy || room.status !== "lobby") return;
     setBusy(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       const { error } = await getSupabase().from("rooms").update(patch).eq("id", room.id);
       if (error) throw error;
@@ -1362,6 +1386,7 @@ export default function HostPage() {
 
   async function submitHostPlayerQuestion() {
     setActionError(null);
+    setActionNotice(null);
     if (!room || !gameType || !me || hostSubmittingQuestion) return;
     if (hostSubmittedQuestionCount >= questionSourceSettings.maxQuestionsPerPlayer) {
       setActionError("Tu as déjà proposé le maximum de questions pour ce jeu.");
@@ -1403,6 +1428,73 @@ export default function HostPage() {
       setActionError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
     } finally {
       setHostSubmittingQuestion(false);
+    }
+  }
+
+  async function clearLiveQuestions(scope: "all" | "played") {
+    setActionError(null);
+    setActionNotice(null);
+    if (!room || !gameType || clearingLiveQuestions) return;
+    const questionCount = scope === "all" ? customQuestions.length : playedLiveQuestionIdsForGame.length;
+
+    if (questionCount === 0) {
+      setActionNotice(
+        scope === "all"
+          ? "Aucune question joueur à vider dans cette room."
+          : "Aucune question joueur déjà jouée à supprimer.",
+      );
+      return;
+    }
+
+    const confirmed = confirm(
+      scope === "all"
+        ? `Supprimer les ${questionCount} question${questionCount > 1 ? "s" : ""} joueur${questionCount > 1 ? "s" : ""} de cette room ? Les questions système et la bibliothèque ne seront pas touchées.`
+        : `Supprimer les ${questionCount} question${questionCount > 1 ? "s" : ""} joueur${questionCount > 1 ? "s" : ""} déjà jouée${questionCount > 1 ? "s" : ""} ? Les questions non jouées restent disponibles.`,
+    );
+    if (!confirmed) return;
+
+    setClearingLiveQuestions(true);
+    try {
+      let query = getSupabase()
+        .from("custom_questions")
+        .delete()
+        .eq("room_id", room.id);
+      if (scope === "played") {
+        query = query.eq("game_type", gameType).in("local_question_id", playedLiveQuestionIdsForGame);
+      }
+      const { error } = await query;
+      if (error) throw error;
+
+      if (room.jauge_game_state) {
+        const nextPlayerQuestions = filterJaugePlayerQuestionsAfterClear({
+          playerQuestions: room.jauge_game_state.playerQuestions ?? [],
+          scope,
+          playedLiveQuestionIds: playedLiveQuestionIdsForGame,
+        });
+        if (nextPlayerQuestions.length !== (room.jauge_game_state.playerQuestions ?? []).length) {
+          const { error: roomError } = await getSupabase()
+            .from("rooms")
+            .update({
+              jauge_game_state: {
+                ...room.jauge_game_state,
+                playerQuestions: nextPlayerQuestions,
+              },
+            })
+            .eq("id", room.id);
+          if (roomError) throw roomError;
+        }
+      }
+
+      setActionNotice(
+        scope === "all"
+          ? "Questions joueurs vidées dans cette room. La bibliothèque n'a pas été modifiée."
+          : "Questions joueurs déjà jouées supprimées. Les questions restantes restent dans le mix.",
+      );
+      await refresh();
+    } catch (err) {
+      setActionError(describeError(err, "Impossible de vider les questions joueurs."));
+    } finally {
+      setClearingLiveQuestions(false);
     }
   }
 
@@ -1463,31 +1555,51 @@ export default function HostPage() {
     : jaugeMode
       ? jaugeGameState?.roundNumber ?? roundsPlayed
       : roundsPlayed;
+  const shouldShowTvStage =
+    tvMode &&
+    (room.status === "lobby" ||
+      (room.status === "question_active" && gameType !== "mime_expressions" && gameType !== "intrus"));
+  const shouldShowTvStatusStrip = tvMode && !shouldShowTvStage;
+  const phaseShellClass = tvMode && !shouldShowTvStage ? "tv-phase-shell" : "contents";
 
   return (
-    <main className={`game-stage mx-auto flex min-h-dvh ${tvMode ? "max-w-2xl px-4 py-4 lg:max-w-6xl lg:px-10 lg:py-8" : "max-w-2xl px-5 py-6"} flex-col`}>
-      <RoomHeader
-        code={room.code}
-        status={room.status}
-        gameLabel={gameDefinition?.shortLabel}
-        playersCount={players.length}
-        round={displayRound}
-        totalQuestions={totalQuestions}
-        onEnd={() => void finishGame(true)}
-        onToggleTransfer={() => setShowTransfer((value) => !value)}
-        canTransfer={otherPlayers.length > 0}
-      />
+    <main className={`game-stage ${tvMode ? "tv-game-stage mx-auto flex min-h-dvh w-full max-w-[min(100vw,1440px)] px-4 py-4 lg:px-8 lg:py-6" : "mx-auto flex min-h-dvh max-w-2xl px-5 py-6"} flex-col`}>
+      {!tvMode && (
+        <RoomHeader
+          code={room.code}
+          status={room.status}
+          gameLabel={gameDefinition?.shortLabel}
+          playersCount={players.length}
+          round={displayRound}
+          totalQuestions={totalQuestions}
+          onEnd={() => void finishGame(true)}
+          onToggleTransfer={() => setShowTransfer((value) => !value)}
+          canTransfer={otherPlayers.length > 0}
+        />
+      )}
 
-      <AdminStatusBar
-        userEmail={profileState.userEmail}
-        role={profileState.role}
-        canManageQuestions={profileState.canManageQuestions}
-        loading={profileState.loading}
-        compact
-        onSignOut={() => void profileState.signOut()}
-      />
+      {!tvMode && (
+        <AdminStatusBar
+          userEmail={profileState.userEmail}
+          role={profileState.role}
+          canManageQuestions={profileState.canManageQuestions}
+          loading={profileState.loading}
+          compact
+          onSignOut={() => void profileState.signOut()}
+        />
+      )}
 
-      {tvMode && (
+      {shouldShowTvStatusStrip && (
+        <TvStatusStrip
+          room={room}
+          playersCount={participants.length}
+          gameLabel={gameDefinition?.label}
+          round={displayRound}
+          totalQuestions={totalQuestions}
+        />
+      )}
+
+      {shouldShowTvStage && (
         <TvHostStage
           room={room}
           players={participants}
@@ -1507,7 +1619,7 @@ export default function HostPage() {
         />
       )}
 
-      {showTransfer && (
+      {!tvMode && showTransfer && (
         <TransferPanel
           players={otherPlayers}
           busy={busy}
@@ -1517,21 +1629,29 @@ export default function HostPage() {
       )}
 
       {actionError && (
-        <div className="card mb-3 border-neon-pink/60 bg-neon-pink/10 p-3 text-center text-neon-pink">
+        <div className={`${tvMode ? "tv-alert" : "card mb-3"} border-neon-pink/60 bg-neon-pink/10 p-3 text-center text-neon-pink`}>
           {actionError}
         </div>
       )}
 
-      <AdminDebugPanel
-        enabled={profileState.canManageQuestions}
-        room={room}
-        players={players}
-        votes={votes}
-        ratings={ratings}
-        currentQuestion={currentQ ?? currentJaugeQuestion ?? null}
-        availableCount={filteredAvailable.length}
-        diagnostics={questionPoolDiagnostics}
-      />
+      {actionNotice && (
+        <div className={`${tvMode ? "tv-alert" : "card mb-3"} border-neon-green/50 bg-neon-green/10 p-3 text-center text-neon-green`}>
+          {actionNotice}
+        </div>
+      )}
+
+      {!tvMode && (
+        <AdminDebugPanel
+          enabled={profileState.canManageQuestions}
+          room={room}
+          players={players}
+          votes={votes}
+          ratings={ratings}
+          currentQuestion={currentQ ?? currentJaugeQuestion ?? null}
+          availableCount={filteredAvailable.length}
+          diagnostics={questionPoolDiagnostics}
+        />
+      )}
 
       {room.status === "lobby" && gameType && questionSourceSettings.useLiveQuestions && me && (
         <HostCustomQuestionPanel
@@ -1544,20 +1664,26 @@ export default function HostPage() {
           submitting={hostSubmittingQuestion}
           myQuestionCount={hostSubmittedQuestionCount}
           liveQuestionCount={liveQuestionCountForGame}
+          roomLiveQuestionCount={liveQuestionCountForRoom}
+          playedLiveQuestionCount={playedLiveQuestionIdsForGame.length}
           maxQuestionsPerPlayer={questionSourceSettings.maxQuestionsPerPlayer}
           expectedQuestionCount={players.length * questionSourceSettings.maxQuestionsPerPlayer}
+          clearingQuestions={clearingLiveQuestions}
           onDraftChange={setHostQuestionDraft}
           onOptionAChange={setHostQuestionOptionA}
           onOptionBChange={setHostQuestionOptionB}
           onOptionsChange={setHostQuestionOptions}
           onSubmit={submitHostPlayerQuestion}
+          onClearPlayedQuestions={() => void clearLiveQuestions("played")}
+          onClearAllQuestions={() => void clearLiveQuestions("all")}
         />
       )}
 
-      {(room.status === "question_active" || room.status === "reveal_results") && currentQ && profileState.canManageQuestions && (
+      {!tvMode && (room.status === "question_active" || room.status === "reveal_results") && currentQ && profileState.canManageQuestions && (
         <SaveQuestionButton saving={savingQuestion} notice={saveNotice} onSave={saveCurrentQuestion} />
       )}
 
+      <section className={phaseShellClass}>
       {room.status === "lobby" && !gameType && (
         <GameSelectionView busy={busy} onChoose={chooseGame} />
       )}
@@ -1931,6 +2057,7 @@ export default function HostPage() {
           onEndGame={() => void finishGame(false)}
         />
       )}
+      </section>
 
       {isHostQuestionActive && validationEvents.length > 0 && (
         <ValidationParticles events={validationEvents} />
