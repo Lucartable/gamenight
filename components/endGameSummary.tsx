@@ -125,7 +125,7 @@ export function EndGameSummaryPanel({
   }, [summary.title]);
 
   return (
-    <main className={`summary-stage summary-mode-${summary.profile} ${isTv ? "tv-summary-stage" : ""} min-h-dvh overflow-hidden px-4 py-5 text-white`}>
+    <main className={`summary-stage summary-mode-${summary.profile} ${isTv ? "tv-summary-stage overflow-x-hidden" : "overflow-hidden"} min-h-dvh px-4 py-5 text-white`}>
       <div className="summary-scanlines" aria-hidden="true" />
       <div className="summary-flow mx-auto flex max-w-3xl flex-col gap-4">
         <SummaryHero summary={summary} visible={stage >= 1} />

@@ -1570,15 +1570,20 @@ export default function HostPage() {
     : jaugeMode
       ? jaugeGameState?.roundNumber ?? roundsPlayed
       : roundsPlayed;
-  const shouldShowTvStage =
-    tvMode &&
-    (room.status === "lobby" ||
-      (room.status === "question_active" && gameType !== "mime_expressions" && gameType !== "intrus"));
+  const isTvLobbyConfig = tvMode && room.status === "lobby";
+  const isTvGameActive = tvMode && room.status === "question_active" && gameType !== "mime_expressions" && gameType !== "intrus";
+  const shouldShowTvStage = isTvLobbyConfig || isTvGameActive;
   const shouldShowTvStatusStrip = tvMode && !shouldShowTvStage;
-  const phaseShellClass = tvMode && !shouldShowTvStage ? "tv-phase-shell" : "contents";
+  const phaseShellClass = tvMode
+    ? isTvLobbyConfig
+      ? "tv-lobby-config-panel"
+      : !shouldShowTvStage
+        ? "tv-phase-shell"
+        : "contents"
+    : "contents";
 
   return (
-    <main className={`game-stage ${tvMode ? "tv-game-stage mx-auto flex min-h-dvh w-full max-w-[min(100vw,1440px)] px-4 py-4 lg:px-8 lg:py-6" : "mx-auto flex min-h-dvh max-w-2xl px-5 py-6"} flex-col`}>
+    <main className={`game-stage ${tvMode ? `tv-game-stage ${isTvLobbyConfig ? "tv-lobby-config-stage" : "tv-play-stage"} mx-auto flex min-h-dvh w-full max-w-[min(100vw,1440px)] px-4 py-4 lg:px-8 lg:py-6` : "mx-auto flex min-h-dvh max-w-2xl px-5 py-6"} flex-col`}>
       {!tvMode && (
         <RoomHeader
           code={room.code}

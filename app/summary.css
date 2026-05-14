@@ -58,10 +58,10 @@
 }
 
 .tv-summary-stage {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
+  display: block;
+  overflow-y: auto;
   padding: clamp(1rem, 2vw, 2rem) !important;
+  scroll-padding-block: clamp(1rem, 2vw, 2rem);
 }
 
 .tv-summary-stage .summary-flow {
@@ -154,13 +154,10 @@
   }
 
   .tv-summary-stage .summary-panel:nth-child(3),
+  .tv-summary-stage .summary-panel:nth-child(4),
+  .tv-summary-stage .summary-panel:nth-child(5),
   .tv-summary-stage .summary-panel:nth-child(6) {
     padding: clamp(0.9rem, 1.15vw, 1.25rem) !important;
-  }
-
-  .tv-summary-stage .summary-panel:nth-child(4),
-  .tv-summary-stage .summary-panel:nth-child(5) {
-    display: none;
   }
 
   .tv-summary-stage .summary-panel:nth-child(6) {
@@ -169,12 +166,6 @@
 
   .tv-summary-stage .summary-score-row {
     padding: clamp(0.8rem, 1vw, 1rem) !important;
-  }
-
-  .tv-summary-stage .summary-score-row:nth-child(n + 7),
-  .tv-summary-stage .summary-heat-row:nth-child(n + 6),
-  .tv-summary-stage .summary-moment:nth-child(n + 4) {
-    display: none;
   }
 
   .tv-summary-stage .summary-award-card {

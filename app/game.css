@@ -71,6 +71,80 @@
 
 .tv-game-stage {
   gap: clamp(0.75rem, 1.4vw, 1.25rem);
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: auto;
+  scroll-padding-block: clamp(0.75rem, 2vh, 1.5rem);
+}
+
+.tv-lobby-config-stage {
+  align-items: stretch;
+}
+
+.tv-lobby-config-panel {
+  display: flex;
+  width: 100%;
+  max-width: min(100%, 1120px);
+  flex-direction: column;
+  gap: clamp(0.875rem, 1.35vw, 1.25rem);
+  margin-inline: auto;
+  padding-block-end: calc(1rem + env(safe-area-inset-bottom));
+}
+
+.tv-lobby-config-panel > .card,
+.tv-lobby-config-panel > section,
+.tv-lobby-config-panel > article {
+  width: 100%;
+}
+
+.tv-lobby-config-panel::before {
+  content: "Configuration hôte";
+  display: block;
+  width: fit-content;
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.08);
+  padding: 0.45rem 0.8rem;
+  color: #22d3ee;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tv-lobby-config-stage .tv-stage {
+  min-height: auto;
+}
+
+.tv-lobby-config-stage .tv-stage.mb-4 {
+  margin-bottom: 0;
+}
+
+.tv-lobby-config-stage .tv-topbar {
+  padding-block: clamp(0.75rem, 1.2vw, 1rem);
+}
+
+.tv-lobby-config-stage .tv-lobby-hero {
+  flex: initial;
+}
+
+.tv-lobby-config-stage .tv-code-card,
+.tv-lobby-config-stage .tv-players-panel {
+  padding: clamp(1rem, 1.6vw, 1.5rem);
+}
+
+.tv-lobby-config-stage .tv-code-qr img {
+  height: clamp(124px, 18vw, 190px);
+  width: clamp(124px, 18vw, 190px);
+}
+
+.tv-lobby-config-stage .tv-code-value {
+  font-size: clamp(2.25rem, 8vw, 4.4rem);
+  font-size: clamp(2.25rem, 13cqw, 4.4rem);
+}
+
+.tv-lobby-config-stage .tv-players-grid {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
 }
 
 .tv-phase-shell {
@@ -102,7 +176,7 @@
 .tv-reveal-card {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   margin-inline: auto;
   width: min(100%, 1200px);
   border-color: rgba(255, 255, 255, 0.16) !important;
@@ -270,8 +344,7 @@
 
 @media (min-width: 1024px) {
   .tv-game-stage {
-    max-height: 100dvh;
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .tv-phase-shell {
@@ -419,7 +492,7 @@
 
   .tv-jauge-details > div:first-child .grid {
     max-height: min(25dvh, 270px);
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .tv-mime-active,
@@ -473,7 +546,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
     max-height: min(28dvh, 300px);
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .tv-intrus-scoreboard {
