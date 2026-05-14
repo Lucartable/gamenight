@@ -62,7 +62,7 @@ export const IntrusCluesScreen = memo(function IntrusCluesScreen({
   const remaining = Math.max(0, state.playerOrder.length - state.currentClueIndex);
 
   return (
-    <section className="game-panel-enter flex flex-1 flex-col gap-3">
+    <section className={`game-panel-enter flex flex-1 flex-col gap-3 ${isTv ? "tv-reveal-card tv-intrus-screen tv-intrus-clues" : ""}`}>
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <div className="text-xs font-black uppercase tracking-wider text-neon-cyan">Manche {state.roundNumber}</div>
@@ -166,7 +166,7 @@ export const IntrusRevealCluesScreen = memo(function IntrusRevealCluesScreen({
   const myWord = me ? getWordForPlayer(state, me.id) : null;
 
   return (
-    <section className="game-panel-enter flex flex-1 flex-col gap-3">
+    <section className={`game-panel-enter flex flex-1 flex-col gap-3 ${isTv ? "tv-reveal-card tv-intrus-screen tv-intrus-reveal-clues" : ""}`}>
       <div className="card p-5 text-center">
         <div className="text-xs font-black uppercase tracking-[0.24em] text-neon-cyan">Indices révélés</div>
         <h2 className="mt-1 text-3xl font-black">Que disent les autres ?</h2>
@@ -216,7 +216,7 @@ export const IntrusVoteScreen = memo(function IntrusVoteScreen({
   const progress = totalVoters > 0 ? Math.min(100, Math.round((votesCount / totalVoters) * 100)) : 0;
 
   return (
-    <section className="game-panel-enter flex flex-1 flex-col gap-3">
+    <section className={`game-panel-enter flex flex-1 flex-col gap-3 ${isTv ? "tv-reveal-card tv-intrus-screen tv-intrus-vote" : ""}`}>
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <div className="text-xs font-black uppercase tracking-wider text-neon-pink">Vote en cours</div>
@@ -314,7 +314,7 @@ export const IntrusRevealFinalScreen = memo(function IntrusRevealFinalScreen({
   const [finaleDraft, setFinaleDraft] = useState("");
 
   return (
-    <section className="game-panel-enter flex flex-1 flex-col gap-3">
+    <section className={`game-panel-enter flex flex-1 flex-col gap-3 ${isTv ? "tv-reveal-card tv-intrus-screen tv-intrus-final" : ""}`}>
       <div className="card p-5 text-center">
         <div className="text-xs font-black uppercase tracking-[0.24em] text-neon-pink">Manche {state.roundNumber} · Reveal</div>
         <h2 className="mt-1 text-3xl font-black">
@@ -443,20 +443,22 @@ export const IntrusScoreboardSection = memo(function IntrusScoreboardSection({
   state,
   participants,
   votes = [],
+  isTv = false,
 }: {
   state: IntrusGameState | null;
   participants: Player[];
   votes?: Vote[];
+  isTv?: boolean;
 }) {
   const rows = useMemo(() => buildIntrusScoreboard(participants, state, votes), [participants, state, votes]);
   return (
-    <section className="card p-5">
+    <section className={`card p-5 ${isTv ? "tv-intrus-scoreboard" : ""}`}>
       <div className="mb-3 text-xs font-black uppercase tracking-wider text-white/55">Classement</div>
       <ul className="grid gap-2">
         {rows.map((row, index) => (
           <li
             key={row.player.id}
-            className={`flex items-center gap-3 rounded-2xl border p-3 ${
+            className={`tv-intrus-score-row flex items-center gap-3 rounded-2xl border p-3 ${
               index === 0 ? "border-neon-yellow/50 bg-neon-yellow/10" : "border-white/10 bg-white/5"
             }`}
           >

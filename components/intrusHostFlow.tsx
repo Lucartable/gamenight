@@ -386,7 +386,7 @@ export function IntrusHostFlow({
           )}
         </HostStartDock>
 
-        <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
+        <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} isTv={isTv} />
       </section>
     );
   }
@@ -454,7 +454,7 @@ export function IntrusHostFlow({
           onEnd={onEndGame}
         />
       )}
-      <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
+      <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} isTv={isTv} />
     </>
   );
 }

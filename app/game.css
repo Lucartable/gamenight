@@ -99,6 +99,85 @@
   border-radius: clamp(1.25rem, 2vw, 2rem);
 }
 
+.tv-reveal-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-inline: auto;
+  width: min(100%, 1200px);
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 62, 165, 0.16), transparent 34%),
+    radial-gradient(circle at 82% 8%, rgba(34, 211, 238, 0.13), transparent 36%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
+    rgba(9, 4, 16, 0.92) !important;
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.44),
+    0 0 70px rgba(34, 211, 238, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.tv-reveal-card::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.055) 0,
+      rgba(255, 255, 255, 0.055) 1px,
+      transparent 1px,
+      transparent 9px
+    );
+  opacity: 0.32;
+  mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);
+}
+
+.tv-reveal-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tv-reveal-question {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: clamp(1.2rem, 1.7vw, 1.75rem);
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 62, 165, 0.08), transparent 44%),
+    linear-gradient(225deg, rgba(34, 211, 238, 0.08), transparent 48%),
+    rgba(255, 255, 255, 0.055) !important;
+}
+
+.tv-reveal-meta {
+  width: min(100%, 620px);
+  margin-inline: auto;
+  opacity: 0.86;
+}
+
+.tv-host-controls {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+
+.tv-social-result-grid,
+.tv-social-ranking-grid,
+.tv-prediction-result-grid,
+.tv-scoreboard-grid,
+.tv-jauge-details {
+  min-height: 0;
+}
+
+.tv-result-card,
+.tv-ranking-card,
+.tv-prediction-result-bar,
+.tv-score-row,
+.tv-intrus-score-row {
+  transform: translateZ(0);
+}
+
 .tv-status-strip {
   display: flex;
   align-items: center;
@@ -190,6 +269,228 @@
 }
 
 @media (min-width: 1024px) {
+  .tv-game-stage {
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .tv-phase-shell {
+    padding-block: 0;
+  }
+
+  .tv-reveal-card {
+    min-height: min(74dvh, 800px);
+    padding: clamp(1.5rem, 2.25vw, 3rem) !important;
+  }
+
+  .tv-reveal-question {
+    margin-inline: auto;
+    max-width: 980px;
+    padding: clamp(1rem, 1.45vw, 1.6rem) !important;
+  }
+
+  .tv-reveal-question h2,
+  .tv-reveal-question .text-2xl,
+  .tv-reveal-question .text-3xl {
+    font-size: clamp(2rem, 3.35vw, 4rem) !important;
+    line-height: 1.02;
+  }
+
+  .tv-social-reveal {
+    justify-content: center;
+  }
+
+  .tv-social-result-grid {
+    align-items: stretch;
+    gap: clamp(1rem, 1.6vw, 1.75rem);
+  }
+
+  .tv-result-card {
+    display: flex;
+    min-height: min(36dvh, 340px);
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.2rem, 1.8vw, 2rem) !important;
+  }
+
+  .tv-result-card .text-base {
+    font-size: clamp(1.35rem, 2vw, 2.2rem);
+    line-height: 1.08;
+  }
+
+  .tv-result-card .text-4xl,
+  .tv-ranking-card .text-3xl,
+  .tv-prediction-result-bar .text-4xl {
+    font-size: clamp(3.2rem, 5.4vw, 6rem) !important;
+    line-height: 0.95;
+  }
+
+  .tv-social-ranking-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(0.8rem, 1.2vw, 1.25rem);
+  }
+
+  .tv-ranking-card {
+    padding: clamp(1rem, 1.35vw, 1.5rem) !important;
+  }
+
+  .tv-ranking-card:nth-child(n + 9) {
+    display: none;
+  }
+
+  .tv-prediction-reveal {
+    width: min(100%, 1280px);
+  }
+
+  .tv-prediction-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(0.85rem, 1.3vw, 1.35rem);
+  }
+
+  .tv-prediction-result-bar {
+    display: flex;
+    min-height: 175px;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1rem, 1.4vw, 1.5rem) !important;
+  }
+
+  .tv-prediction-result-bar .text-xl {
+    font-size: clamp(1.55rem, 2.15vw, 2.4rem);
+    line-height: 1.04;
+  }
+
+  .tv-winners-card {
+    margin-inline: auto;
+    width: min(100%, 960px);
+    padding: clamp(0.95rem, 1.25vw, 1.35rem) !important;
+  }
+
+  .tv-scoreboard-panel {
+    width: min(100%, 1220px);
+  }
+
+  .tv-scoreboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(0.75rem, 1vw, 1rem);
+  }
+
+  .tv-score-row {
+    min-height: 86px;
+    padding: clamp(0.85rem, 1.15vw, 1.25rem) !important;
+  }
+
+  .tv-score-row:first-child {
+    grid-column: 1 / -1;
+    min-height: 108px;
+    transform: translateZ(0) scale(1.012);
+  }
+
+  .tv-score-row:first-child .text-xl {
+    font-size: clamp(1.8rem, 2.4vw, 2.6rem);
+  }
+
+  .tv-score-row:first-child .text-3xl {
+    font-size: clamp(3rem, 4.5vw, 5.2rem);
+    line-height: 0.95;
+  }
+
+  .tv-jauge-reveal {
+    width: min(100%, 1300px);
+    gap: clamp(1rem, 1.35vw, 1.5rem);
+  }
+
+  .tv-jauge-reveal .jauge-reveal-hero {
+    padding: clamp(1.35rem, 2vw, 2.5rem) !important;
+  }
+
+  .tv-jauge-reveal .jauge-reveal-hero h1 {
+    font-size: clamp(2.2rem, 3.3vw, 4rem);
+  }
+
+  .tv-jauge-reveal .jauge-reveal-hero .text-7xl {
+    font-size: clamp(5rem, 8.5vw, 8.5rem) !important;
+  }
+
+  .tv-jauge-details {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 0.72fr) !important;
+  }
+
+  .tv-jauge-details > div:first-child .grid {
+    max-height: min(25dvh, 270px);
+    overflow: hidden;
+  }
+
+  .tv-mime-active,
+  .tv-mime-reveal {
+    width: min(100%, 1120px);
+  }
+
+  .tv-mime-rule {
+    margin-inline: auto;
+    width: min(100%, 760px);
+  }
+
+  .tv-mime-player,
+  .tv-mime-expression {
+    margin-inline: auto;
+    width: min(100%, 880px);
+    padding: clamp(1.25rem, 1.8vw, 2rem) !important;
+  }
+
+  .tv-mime-expression .text-4xl,
+  .tv-mime-player .text-3xl {
+    font-size: clamp(3rem, 5.2vw, 6rem) !important;
+    line-height: 0.95;
+  }
+
+  .tv-intrus-screen {
+    width: min(100%, 1180px);
+  }
+
+  .tv-intrus-screen > .card {
+    padding: clamp(1rem, 1.45vw, 1.65rem) !important;
+  }
+
+  .tv-intrus-final > .card:first-child,
+  .tv-intrus-clues > .card:nth-child(3),
+  .tv-intrus-reveal-clues > .card:first-child {
+    border-color: rgba(250, 204, 21, 0.28) !important;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.12), transparent 48%),
+      rgba(255, 255, 255, 0.065) !important;
+  }
+
+  .tv-intrus-final > .card:first-child h2,
+  .tv-intrus-reveal-clues > .card:first-child h2 {
+    font-size: clamp(3rem, 4.8vw, 5.4rem);
+    line-height: 0.95;
+  }
+
+  .tv-intrus-screen ul.card {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    max-height: min(28dvh, 300px);
+    overflow: hidden;
+  }
+
+  .tv-intrus-scoreboard {
+    width: min(100%, 1180px);
+    margin-inline: auto;
+  }
+
+  .tv-intrus-scoreboard ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .tv-intrus-score-row:first-child {
+    grid-column: 1 / -1;
+    min-height: 96px;
+  }
+
   .tv-phase-shell .text-7xl {
     font-size: clamp(4.5rem, 8vw, 8rem);
     line-height: 0.95;

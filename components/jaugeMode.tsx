@@ -196,6 +196,7 @@ interface JaugeRevealPanelProps {
   players: Player[];
   ratings: Rating[];
   anonymityMode: JaugeAnonymityMode;
+  isTv?: boolean;
   finalReveal?: boolean;
   controls?: ReactNode;
 }
@@ -206,6 +207,7 @@ export function JaugeRevealPanel({
   players,
   ratings,
   anonymityMode,
+  isTv = false,
   finalReveal = false,
   controls,
 }: JaugeRevealPanelProps) {
@@ -217,7 +219,7 @@ export function JaugeRevealPanel({
   const averageDisplay = (averageCount / 10).toFixed(1);
 
   return (
-    <section className="game-panel-enter flex flex-1 flex-col gap-4">
+    <section className={`game-panel-enter flex flex-1 flex-col gap-4 ${isTv ? "tv-reveal-card tv-jauge-reveal" : ""}`}>
       <div className="jauge-reveal-hero relative overflow-hidden rounded-[2rem] border border-white/10 bg-black/40 p-5 text-center shadow-2xl">
         <div className="jauge-reveal-wave" aria-hidden="true" />
         <div className="relative z-10">
@@ -236,7 +238,7 @@ export function JaugeRevealPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+      <div className="tv-jauge-details grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-4">
           <div className="mb-3 text-xs font-black uppercase tracking-wider text-white/45">Notes révélées</div>
           <div className="grid gap-2">
@@ -290,7 +292,7 @@ export function JaugeRevealPanel({
         </div>
       </div>
 
-      {controls}
+      {controls && <div className="tv-host-controls">{controls}</div>}
     </section>
   );
 }

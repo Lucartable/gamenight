@@ -1498,6 +1498,20 @@ export default function HostPage() {
     }
   }
 
+  useEffect(() => {
+    if (!tvMode) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }, [
+    intrusGameState?.phase,
+    mimeGameState?.roundNumber,
+    mimeGameState?.roundStatus,
+    room?.current_question_id,
+    room?.reveal_started_at,
+    room?.scoreboard_started_at,
+    room?.status,
+    tvMode,
+  ]);
+
   if (loading) return <CenteredMessage title="Chargement..." />;
   if (error || !room)
     return <CenteredMessage title="Salle introuvable" subtitle={error ?? undefined} />;
@@ -1522,6 +1536,7 @@ export default function HostPage() {
         jaugeGameState={jaugeGameState}
         intrusGameState={intrusGameState}
         isHost
+        isTv={tvMode}
         busy={busy}
         onBackToLobby={resetFinishedGameToLobby}
         onEnd={endRoomFromSummary}
@@ -1842,6 +1857,7 @@ export default function HostPage() {
           state={mimeGameState}
           currentMimePlayer={currentMimePlayer}
           isHostMime={me?.id === mimeGameState.currentMimePlayerId}
+          isTv={tvMode}
           orderedPlayers={mimePlayersInOrder}
           playersOutsideOrder={mimePlayersOutsideOrder}
           roundLeft={mimeRoundLeft}
@@ -1932,6 +1948,7 @@ export default function HostPage() {
           expression={currentQ as MimeExpressionQuestion}
           state={mimeGameState}
           currentMimePlayer={currentMimePlayer}
+          isTv={tvMode}
           orderedPlayers={mimePlayersInOrder}
           playersOutsideOrder={mimePlayersOutsideOrder}
           totalRounds={totalQuestions}
@@ -1951,6 +1968,7 @@ export default function HostPage() {
           revealLeft={revealLeft}
           autoplay={autoplay}
           isFinal={isFinalReveal || filteredAvailable.length === 0}
+          isTv={tvMode}
           busy={busy}
           onNext={goToNextQuestion}
           onEnd={() => void finishGame(false)}
@@ -1966,6 +1984,7 @@ export default function HostPage() {
           revealLeft={revealLeft}
           autoplay={autoplay}
           isFinal={isFinalReveal || filteredAvailable.length === 0}
+          isTv={tvMode}
           busy={busy}
           onNext={goToNextQuestion}
           onEnd={() => void finishGame(false)}
@@ -1979,6 +1998,7 @@ export default function HostPage() {
           question={currentQ as PredictionGameQuestion}
           players={players}
           votes={currentVotes}
+          isTv={tvMode}
           revealLeft={revealLeft}
           autoplay={autoplay}
           busy={busy}
@@ -2001,6 +2021,7 @@ export default function HostPage() {
           players={players}
           ratings={currentJaugeRatings}
           anonymityMode={jaugeGameState.anonymityMode}
+          isTv={tvMode}
           controls={
             <div className="grid gap-3 sm:grid-cols-2">
               <button
@@ -2031,6 +2052,7 @@ export default function HostPage() {
           mode={predictionMode}
           players={players}
           votes={votes}
+          isTv={tvMode}
           currentQuestionId={currentQ?.id ?? null}
           scoreTarget={room.score_target}
           autoplay={autoplay}

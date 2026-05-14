@@ -79,6 +79,7 @@ export function EndGameSummaryPanel({
   jaugeGameState,
   intrusGameState,
   isHost = false,
+  isTv = false,
   busy = false,
   onReplay,
   onBackToLobby,
@@ -94,6 +95,7 @@ export function EndGameSummaryPanel({
   jaugeGameState?: JaugeGameState | null;
   intrusGameState?: IntrusGameState | null;
   isHost?: boolean;
+  isTv?: boolean;
   busy?: boolean;
   onReplay?: () => void;
   onBackToLobby?: () => void;
@@ -123,9 +125,9 @@ export function EndGameSummaryPanel({
   }, [summary.title]);
 
   return (
-    <main className={`summary-stage summary-mode-${summary.profile} min-h-dvh overflow-hidden px-4 py-5 text-white`}>
+    <main className={`summary-stage summary-mode-${summary.profile} ${isTv ? "tv-summary-stage" : ""} min-h-dvh overflow-hidden px-4 py-5 text-white`}>
       <div className="summary-scanlines" aria-hidden="true" />
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="summary-flow mx-auto flex max-w-3xl flex-col gap-4">
         <SummaryHero summary={summary} visible={stage >= 1} />
         <LiveScoreboard summary={summary} visible={stage >= 2} />
         <SpotlightGrid summary={summary} visible={stage >= 3} />

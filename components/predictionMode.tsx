@@ -209,6 +209,7 @@ interface PredictionRevealPanelProps {
   question: PredictionGameQuestion;
   players: Player[];
   votes: Vote[];
+  isTv?: boolean;
   revealLeft?: number;
   revealStartedAt?: string | null;
   revealDurationSec?: number;
@@ -224,6 +225,7 @@ export function PredictionRevealPanel({
   question,
   players,
   votes,
+  isTv = false,
   revealLeft = 0,
   revealStartedAt = null,
   revealDurationSec = 0,
@@ -250,7 +252,7 @@ export function PredictionRevealPanel({
   }, [mode, question.id]);
 
   return (
-    <section className="card game-panel-enter relative flex flex-1 flex-col overflow-hidden p-5">
+    <section className={`card game-panel-enter relative flex flex-1 flex-col overflow-hidden p-5 ${isTv ? "tv-reveal-card tv-prediction-reveal" : ""}`}>
       {ready && result.winners.length > 0 && <MiniConfetti />}
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -258,7 +260,7 @@ export function PredictionRevealPanel({
         <Chip tone="neutral" size="sm">Résultats</Chip>
       </div>
 
-      <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+      <div className="tv-reveal-question mb-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
         <div className="text-xs font-bold uppercase tracking-wider text-white/50">
           {ready ? result.headline : "Analyse du chaos collectif..."}
         </div>
@@ -266,7 +268,7 @@ export function PredictionRevealPanel({
         <p className="mt-2 text-sm text-white/60">{result.subline}</p>
       </div>
 
-      <div className="grid gap-3">
+      <div className="tv-prediction-result-grid grid gap-3">
         {result.options.map((option, index) => (
           <PredictionResultBar
             key={option.option}
@@ -279,7 +281,7 @@ export function PredictionRevealPanel({
       </div>
 
       {ready && result.winners.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-4 animate-reveal-in">
+        <div className="tv-winners-card mt-4 rounded-2xl border border-neon-green/30 bg-neon-green/10 p-4 animate-reveal-in">
           <div className="text-xs font-bold uppercase tracking-wider text-neon-green">
             {mode === "majority" ? "Gagnants de la manche" : "Minorité valide"}
           </div>
@@ -294,7 +296,7 @@ export function PredictionRevealPanel({
         </div>
       )}
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+      <div className="tv-reveal-meta mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
         <div className="text-xs uppercase tracking-wider text-white/50">
           {result.totalVotes} vote{result.totalVotes > 1 ? "s" : ""} validé{result.totalVotes > 1 ? "s" : ""}
         </div>
@@ -308,7 +310,7 @@ export function PredictionRevealPanel({
       )}
 
       {!autoplay && showControls && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="tv-host-controls mt-4 grid gap-3 sm:grid-cols-2">
           <Button variant="primary" size="md" disabled={busy} onClick={onPrimary}>
             {primaryLabel ?? "Continuer"}
           </Button>
@@ -347,7 +349,7 @@ function PredictionResultBar({
 
   return (
     <div
-      className={`rounded-2xl border p-4 transition duration-500 animate-reveal-in ${
+      className={`tv-prediction-result-bar rounded-2xl border p-4 transition duration-500 animate-reveal-in ${
         option.isWinner ? "border-neon-green/60 bg-neon-green/10 shadow-glow-cyan" : "border-white/10 bg-white/5"
       }`}
       style={{ animationDelay: `${index * 80}ms` }}
@@ -394,6 +396,7 @@ interface PredictionScoreboardPanelProps {
   mode: PredictionGameType;
   players: Player[];
   votes: Vote[];
+  isTv?: boolean;
   currentQuestionId?: number | null;
   scoreTarget?: number | null;
   autoplay?: boolean;
@@ -409,6 +412,7 @@ export function PredictionScoreboardPanel({
   mode,
   players,
   votes,
+  isTv = false,
   currentQuestionId,
   scoreTarget,
   autoplay = false,
@@ -426,7 +430,7 @@ export function PredictionScoreboardPanel({
   const showControls = Boolean(onPrimary);
 
   return (
-    <section className="card game-panel-enter flex flex-1 flex-col p-5">
+    <section className={`card game-panel-enter flex flex-1 flex-col p-5 ${isTv ? "tv-reveal-card tv-scoreboard-panel" : ""}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-white/50">
@@ -442,14 +446,14 @@ export function PredictionScoreboardPanel({
         )}
       </div>
 
-      <div className="grid gap-3">
+      <div className="tv-scoreboard-grid grid gap-3">
         {rows.map((row, index) => (
           <ScoreRowCard key={row.player.id} row={row} rank={index + 1} leader={index === 0} />
         ))}
       </div>
 
       {autoplay && showControls && (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+        <div className="tv-reveal-meta mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
           <div className="text-xs uppercase tracking-wider text-white/50">
             {final ? "Fin automatique" : "Prochaine manche"}
           </div>
@@ -458,7 +462,7 @@ export function PredictionScoreboardPanel({
       )}
 
       {!autoplay && showControls && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="tv-host-controls mt-4 grid gap-3 sm:grid-cols-2">
           <Button variant="primary" size="md" disabled={busy} onClick={onPrimary}>
             {primaryLabel ?? "Continuer"}
           </Button>
@@ -476,7 +480,7 @@ export function PredictionScoreboardPanel({
 function ScoreRowCard({ row, rank, leader }: { row: PredictionScoreRow; rank: number; leader: boolean }) {
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl border p-4 transition animate-reveal-in ${
+      className={`tv-score-row flex items-center gap-3 rounded-2xl border p-4 transition animate-reveal-in ${
         leader ? "border-neon-yellow/60 bg-neon-yellow/10 shadow-glow" : "border-white/10 bg-white/5"
       }`}
       style={{ animationDelay: `${rank * 70}ms` }}

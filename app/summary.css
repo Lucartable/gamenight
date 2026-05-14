@@ -57,6 +57,22 @@
   backdrop-filter: blur(18px);
 }
 
+.tv-summary-stage {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: clamp(1rem, 2vw, 2rem) !important;
+}
+
+.tv-summary-stage .summary-flow {
+  width: min(100%, 1280px);
+  max-width: 1280px;
+}
+
+.tv-summary-stage .summary-panel {
+  border-radius: clamp(1.35rem, 2vw, 2.25rem);
+}
+
 .summary-title {
   background: linear-gradient(96deg, #facc15 0%, #ff3ea5 38%, #22d3ee 76%, #4ade80 100%);
   background-size: 180% 100%;
@@ -106,5 +122,66 @@
   }
   .summary-heat-row:nth-child(n + 7) {
     display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tv-summary-stage .summary-flow {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+    align-items: stretch;
+    gap: clamp(0.85rem, 1.2vw, 1.25rem);
+  }
+
+  .tv-summary-stage .summary-panel {
+    margin: 0;
+  }
+
+  .tv-summary-stage .summary-panel:nth-child(1) {
+    display: flex;
+    align-items: center;
+    min-height: 100%;
+    padding: clamp(1.5rem, 2.25vw, 2.5rem) !important;
+  }
+
+  .tv-summary-stage .summary-title {
+    font-size: clamp(4.2rem, 7vw, 8.5rem) !important;
+  }
+
+  .tv-summary-stage .summary-panel:nth-child(2) {
+    grid-row: span 2;
+    padding: clamp(1rem, 1.4vw, 1.6rem) !important;
+  }
+
+  .tv-summary-stage .summary-panel:nth-child(3),
+  .tv-summary-stage .summary-panel:nth-child(6) {
+    padding: clamp(0.9rem, 1.15vw, 1.25rem) !important;
+  }
+
+  .tv-summary-stage .summary-panel:nth-child(4),
+  .tv-summary-stage .summary-panel:nth-child(5) {
+    display: none;
+  }
+
+  .tv-summary-stage .summary-panel:nth-child(6) {
+    grid-column: 1 / -1;
+  }
+
+  .tv-summary-stage .summary-score-row {
+    padding: clamp(0.8rem, 1vw, 1rem) !important;
+  }
+
+  .tv-summary-stage .summary-score-row:nth-child(n + 7),
+  .tv-summary-stage .summary-heat-row:nth-child(n + 6),
+  .tv-summary-stage .summary-moment:nth-child(n + 4) {
+    display: none;
+  }
+
+  .tv-summary-stage .summary-award-card {
+    padding: clamp(0.85rem, 1.05vw, 1.15rem) !important;
+  }
+
+  .tv-summary-stage .summary-recap-line {
+    padding: 0.85rem 1rem !important;
   }
 }

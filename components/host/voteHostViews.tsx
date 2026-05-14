@@ -143,6 +143,7 @@ export function WhoWouldRevealView({
   revealLeft,
   autoplay,
   isFinal,
+  isTv = false,
   busy,
   onNext,
   onEnd,
@@ -154,6 +155,7 @@ export function WhoWouldRevealView({
   revealLeft: number;
   autoplay: boolean;
   isFinal: boolean;
+  isTv?: boolean;
   busy: boolean;
   onNext: () => void;
   onEnd: () => void;
@@ -174,13 +176,14 @@ export function WhoWouldRevealView({
       revealLeft={revealLeft}
       autoplay={autoplay}
       isFinal={isFinal}
+      isTv={isTv}
       busy={busy}
       onNext={onNext}
       onEnd={onEnd}
       onBackToLobby={onBackToLobby}
     >
-      {question.text && <h2 className="mb-3 text-center text-3xl font-black leading-tight">{question.text}</h2>}
-      <div className="grid flex-1 gap-3 sm:grid-cols-2">
+      {question.text && <h2 className="tv-reveal-question mb-3 text-center text-3xl font-black leading-tight">{question.text}</h2>}
+      <div className="tv-social-result-grid grid flex-1 gap-3 sm:grid-cols-2">
         <ResultCard
           accent="pink"
           label="Option A"
@@ -209,6 +212,7 @@ export function WhoOfUsRevealView({
   revealLeft,
   autoplay,
   isFinal,
+  isTv = false,
   busy,
   onNext,
   onEnd,
@@ -220,6 +224,7 @@ export function WhoOfUsRevealView({
   revealLeft: number;
   autoplay: boolean;
   isFinal: boolean;
+  isTv?: boolean;
   busy: boolean;
   onNext: () => void;
   onEnd: () => void;
@@ -235,17 +240,18 @@ export function WhoOfUsRevealView({
       revealLeft={revealLeft}
       autoplay={autoplay}
       isFinal={isFinal}
+      isTv={isTv}
       busy={busy}
       onNext={onNext}
       onEnd={onEnd}
       onBackToLobby={onBackToLobby}
     >
-      <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="tv-reveal-question mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="text-xs font-bold uppercase tracking-wider text-white/50">Question</div>
         <h2 className="mt-2 text-2xl font-black leading-tight">{question.text}</h2>
       </div>
 
-      <div className="grid gap-3">
+      <div className="tv-social-ranking-grid grid gap-3">
         {stats.ranking.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center text-white/60">
             Aucun vote reçu.
@@ -418,6 +424,7 @@ function RevealShell({
   revealLeft,
   autoplay,
   isFinal,
+  isTv = false,
   busy,
   onNext,
   onEnd,
@@ -429,6 +436,7 @@ function RevealShell({
   revealLeft: number;
   autoplay: boolean;
   isFinal: boolean;
+  isTv?: boolean;
   busy: boolean;
   onNext: () => void;
   onEnd: () => void;
@@ -436,7 +444,7 @@ function RevealShell({
   children: ReactNode;
 }) {
   return (
-    <section className="card game-panel-enter flex flex-1 flex-col p-5">
+    <section className={`card game-panel-enter flex flex-1 flex-col p-5 ${isTv ? "tv-reveal-card tv-social-reveal" : ""}`}>
       <div className="mb-4 flex items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="text-xs uppercase tracking-wider text-white/50">Résultats</span>
@@ -444,7 +452,7 @@ function RevealShell({
 
       {children}
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+      <div className="tv-reveal-meta mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
         <div className="text-xs uppercase tracking-wider text-white/50">
           {totalVotes} vote{totalVotes > 1 ? "s" : ""} validé{totalVotes > 1 ? "s" : ""}
         </div>
@@ -460,7 +468,7 @@ function RevealShell({
           {isFinal ? "Fin automatique en cours" : "Question suivante automatique"}
         </p>
       ) : (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="tv-host-controls mt-4 grid gap-3 sm:grid-cols-2">
           <button
             type="button"
             disabled={busy}
@@ -503,7 +511,7 @@ function ResultCard({
   const shownPercent = useCountUp(percent);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 animate-reveal-in">
+    <div className="tv-result-card rounded-2xl border border-white/10 bg-white/5 p-4 animate-reveal-in">
       <div className={`text-xs font-bold uppercase tracking-widest ${labelColor}`}>{label}</div>
       <div className="mt-2 text-base font-semibold text-white/90">{text}</div>
       <div className="mt-4 flex items-end justify-between gap-3">
@@ -529,7 +537,7 @@ function ResultCard({
 function RankingCard({ row, topCount }: { row: WhoOfUsRankingRow; topCount: number }) {
   const isTop = topCount > 0 && row.count === topCount;
   return (
-    <div className={`rounded-2xl border p-4 animate-reveal-in ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10 shadow-glow" : "border-white/10 bg-white/5"}`}>
+    <div className={`tv-ranking-card rounded-2xl border p-4 animate-reveal-in ${isTop ? "border-neon-yellow/60 bg-neon-yellow/10 shadow-glow" : "border-white/10 bg-white/5"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-2xl font-black">{row.targetName}</div>
