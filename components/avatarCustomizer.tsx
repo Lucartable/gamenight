@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AVATAR_BACKGROUNDS,
@@ -29,6 +29,26 @@ export function AvatarCustomizer({
 }) {
   const [open, setOpen] = useState(false);
   const [quickNonce, setQuickNonce] = useState(0);
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousPaddingRight = body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPaddingRight;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   const quickChoices = useMemo<AvatarConfig[]>(
     () =>

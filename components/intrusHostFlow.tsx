@@ -22,7 +22,7 @@ import {
   type IntrusRoundResult,
 } from "@/lib/intrusScoring";
 import { INTRUS_PAIR_CATEGORIES, type IntrusPairCategory } from "@/lib/intrusPairs";
-import { Button } from "@/components/ui";
+import { HostStartDock } from "@/components/host/config";
 import { getSupabase } from "@/lib/supabase";
 import { playSfx } from "@/lib/audio";
 import type {
@@ -370,25 +370,21 @@ export function IntrusHostFlow({
           </button>
         </div>
 
-        <div className="card p-5">
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            fullWidth
-            disabled={busy || participants.length < 3 || selectedCategories.length === 0}
-            onClick={() => void startGame()}
-            className="text-lg"
-          >
-            Lancer la partie
-          </Button>
+        <HostStartDock
+          title={participants.length >= 3 && selectedCategories.length > 0 ? "L'intrus est prêt" : "Configuration incomplète"}
+          subtitle={`${participants.length} joueur${participants.length > 1 ? "s" : ""} · ${selectedCategories.length} catégorie${selectedCategories.length > 1 ? "s" : ""} active${selectedCategories.length > 1 ? "s" : ""}`}
+          primaryLabel="Lancer la partie"
+          disabled={busy || participants.length < 3 || selectedCategories.length === 0}
+          busy={busy}
+          onStart={() => void startGame()}
+        >
           {participants.length < 3 && (
-            <p className="mt-3 text-center text-sm text-neon-yellow">Il faut au moins 3 joueurs pour lancer.</p>
+            <p className="text-sm font-bold text-neon-yellow">Il faut au moins 3 joueurs pour lancer.</p>
           )}
           {selectedCategories.length === 0 && (
-            <p className="mt-3 text-center text-sm text-neon-pink">Choisis au moins une catégorie.</p>
+            <p className="text-sm font-bold text-neon-pink">Choisis au moins une catégorie.</p>
           )}
-        </div>
+        </HostStartDock>
 
         <IntrusScoreboardSection state={intrusState} participants={participants} votes={votes} />
       </section>

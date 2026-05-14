@@ -4,6 +4,7 @@ import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import {
   ConfigButton,
   ConfigGroup,
+  HostStartDock,
   OrderModeButton,
   QuestionSourcePanel,
 } from "@/components/host/config";
@@ -349,21 +350,25 @@ export function MimeLobbyView({
         </div>
       </section>
 
-      <section className="card p-5">
-        <button type="button" onClick={onStart} disabled={!canStart} className="btn-primary w-full text-xl">
-          Valider et lancer la partie
-        </button>
+      <HostStartDock
+        title={canStart ? "La scène est prête" : "Mime pas encore prêt"}
+        subtitle={`${players.length} joueur${players.length > 1 ? "s" : ""} · ${availableCount} expression${availableCount > 1 ? "s" : ""} disponibles`}
+        primaryLabel="Valider et lancer"
+        disabled={!canStart}
+        busy={busy}
+        onStart={onStart}
+      >
         {!enoughPlayers && (
-          <p className="mt-3 text-center text-sm text-neon-yellow">
+          <p className="text-sm font-bold text-neon-yellow">
             Il faut au moins 2 joueurs pour lancer.
           </p>
         )}
         {availableCount === 0 && (
-          <p className="mt-3 text-center text-sm text-neon-pink">
+          <p className="text-sm font-bold text-neon-pink">
             Aucune expression disponible avec ces catégories.
           </p>
         )}
-      </section>
+      </HostStartDock>
     </>
   );
 }

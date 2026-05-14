@@ -4,6 +4,7 @@ import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import {
   ConfigButton,
   ConfigGroup,
+  HostStartDock,
   QuestionSourcePanel,
 } from "@/components/host/config";
 import {
@@ -278,21 +279,25 @@ export function LobbyView({
         )}
       </section>
 
-      <section className="card p-5">
-        <button onClick={onStart} disabled={!canStart} className="btn-primary w-full text-xl">
-          Relancer une partie
-        </button>
+      <HostStartDock
+        title={canStart ? "Tout est prêt" : "Configuration incomplète"}
+        subtitle={`${players.length} joueur${players.length > 1 ? "s" : ""} · ${availableCount}/${room.total_questions} question${room.total_questions > 1 ? "s" : ""} disponibles`}
+        primaryLabel="Relancer une partie"
+        disabled={!canStart}
+        busy={busy}
+        onStart={onStart}
+      >
         {!enoughPlayers && (
-          <p className="mt-3 text-center text-sm text-neon-yellow">
+          <p className="text-sm font-bold text-neon-yellow">
             Il faut au moins 2 joueurs pour lancer.
           </p>
         )}
         {!hasEnoughQuestions && (
-          <p className="mt-3 text-center text-sm text-neon-pink">
+          <p className="text-sm font-bold text-neon-pink">
             {questionPoolDiagnostics?.issue ?? "Réduis le nombre de questions ou ajoute plus de questions compatibles."}
           </p>
         )}
-      </section>
+      </HostStartDock>
     </>
   );
 }

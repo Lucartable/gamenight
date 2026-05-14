@@ -4,6 +4,7 @@ import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
 import {
   ConfigButton,
   ConfigGroup,
+  HostStartDock,
   OrderModeButton,
   QuestionSourcePanel,
 } from "@/components/host/config";
@@ -421,20 +422,24 @@ export function JaugeLobbyView({
         </button>
       </section>
 
-      <section className="card p-5">
-        <button type="button" onClick={onStart} disabled={!canStart} className="btn-primary w-full text-xl">
-          Valider et lancer la partie
-        </button>
-        {!enoughPlayers && <p className="mt-3 text-center text-sm text-neon-yellow">Il faut au moins 2 joueurs pour lancer.</p>}
+      <HostStartDock
+        title={canStart ? "Jauge prête" : "Jauge incomplète"}
+        subtitle={`${players.length} joueur${players.length > 1 ? "s" : ""} · ${availableCount}/${room.total_questions} question${room.total_questions > 1 ? "s" : ""} disponibles`}
+        primaryLabel="Valider et lancer"
+        disabled={!canStart}
+        busy={busy}
+        onStart={onStart}
+      >
+        {!enoughPlayers && <p className="text-sm font-bold text-neon-yellow">Il faut au moins 2 joueurs pour lancer.</p>}
         {!hasQuestions && (
-          <p className="mt-3 text-center text-sm text-neon-pink">
+          <p className="text-sm font-bold text-neon-pink">
             {questionPoolDiagnostics?.issue ??
               (effectiveQuestionMode === "players"
                 ? "Aucune question joueur/sauvegardée disponible."
                 : "Réduis le nombre de manches ou ajoute plus de questions.")}
           </p>
         )}
-      </section>
+      </HostStartDock>
     </>
   );
 }

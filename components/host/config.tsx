@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import { Button } from "@/components/ui";
 import type { QuestionSourceSettings } from "@/types/database";
 
 export function ConfigGroup({ label, children }: { label: string; children: ReactNode }) {
@@ -168,6 +169,47 @@ export function QuestionSourcePanel({
       <p className="mt-3 text-sm font-semibold text-white/55">
         En mix intelligent, les questions live/sauvegardées sont injectées en priorité, puis les questions système complètent les manches restantes.
       </p>
+    </section>
+  );
+}
+
+export function HostStartDock({
+  eyebrow = "Prêt à lancer",
+  title,
+  subtitle,
+  primaryLabel,
+  disabled,
+  busy,
+  onStart,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  subtitle: string;
+  primaryLabel: string;
+  disabled: boolean;
+  busy: boolean;
+  onStart: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="host-start-dock">
+      <div className="min-w-0">
+        <div className="text-[11px] font-black uppercase tracking-[0.22em] text-neon-cyan/80">{eyebrow}</div>
+        <h2 className="mt-1 text-xl font-black">{title}</h2>
+        <p className="mt-1 text-sm font-semibold text-white/55">{subtitle}</p>
+        {children && <div className="mt-3 grid gap-2">{children}</div>}
+      </div>
+      <Button
+        type="button"
+        variant="primary"
+        size="lg"
+        disabled={disabled}
+        onClick={onStart}
+        className="shrink-0 text-base sm:min-w-56"
+      >
+        {busy ? "Patiente..." : primaryLabel}
+      </Button>
     </section>
   );
 }
