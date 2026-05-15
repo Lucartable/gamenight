@@ -8,11 +8,12 @@ import type {
   Player,
   Room,
 } from "@/types/database";
+import { weightedRandomPlayer } from "./balancedRandom";
 import { findIntrusPairById, pickIntrusPair, type IntrusPairCategory } from "./intrusPairs";
 
 export const INTRUS_GAME_TYPE = "intrus" as const;
 
-export type IntrusOrderMode = "arrival" | "random" | "custom";
+export type IntrusOrderMode = "balanced" | "arrival" | "random" | "custom";
 
 export function isIntrusGame(gameType: GameType | null | undefined): gameType is typeof INTRUS_GAME_TYPE {
   return gameType === INTRUS_GAME_TYPE;
@@ -158,7 +159,7 @@ export function buildInitialIntrusState(args: BuildIntrusStateArgs): IntrusGameS
   if (!pair) return null;
   const order = buildOrder(args.participants, args.orderMode, args.customOrder ?? []);
   if (!order.length) return null;
-  const intrusPlayerId = order[Math.floor(Math.random() * order.length)] ?? "";
+  const intrusPlayerId = pickIntrusPlayer(order, args.orderMode, args.previousState?.history ?? [], 1);
   return {
     pairId: pair.id,
     mainWord: pair.mainWord,
@@ -191,7 +192,7 @@ export function buildNextIntrusRound(
   if (!pair) return null;
   const order = buildOrder(args.participants, args.orderMode, args.customOrder ?? []);
   if (!order.length) return null;
-  const intrusPlayerId = order[Math.floor(Math.random() * order.length)] ?? "";
+  const intrusPlayerId = pickIntrusPlayer(order, args.orderMode, previous.history, previous.roundNumber + 1);
   return {
     ...previous,
     pairId: pair.id,
@@ -215,10 +216,27 @@ function buildOrder(participants: Player[], orderMode: IntrusOrderMode, customOr
   const liveIds = new Set(participants.map((p) => p.id));
   const arrival = getArrivalOrder(participants);
   if (orderMode === "arrival") return arrival;
-  if (orderMode === "random") return shuffleIds(arrival);
+  if (orderMode === "random" || orderMode === "balanced") return shuffleIds(arrival);
   const known = customOrder.filter((id) => liveIds.has(id));
   const remaining = arrival.filter((id) => !known.includes(id));
   return [...known, ...remaining];
+}
+
+function pickIntrusPlayer(
+  order: string[],
+  orderMode: IntrusOrderMode,
+  history: IntrusRoundRecord[],
+  currentRound: number,
+): string {
+  if (!order.length) return "";
+  if (orderMode === "random") return order[Math.floor(Math.random() * order.length)] ?? "";
+  return weightedRandomPlayer(order, {
+    currentRound,
+    history: history.map((entry) => ({
+      roundNumber: entry.roundNumber,
+      playerIds: [entry.intrusPlayerId],
+    })),
+  }) ?? order[0] ?? "";
 }
 
 export function getWordForPlayer(state: IntrusGameState | null, playerId: string): string | null {

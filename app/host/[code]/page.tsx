@@ -40,6 +40,7 @@ import {
 import { getQuestionSourceSettings, type QuestionPoolItem } from "@/lib/questionPoolTypes";
 import { saveQuestionToLibrary } from "@/lib/saveQuestion";
 import { buildCustomQuestionSubmission, hasDuplicateCustomQuestion } from "@/lib/customQuestionSubmission";
+import { fairRandomPlayers, randomPlayers } from "@/lib/balancedRandom";
 import {
   filterJaugePlayerQuestionsAfterClear,
   getPlayedLiveQuestionIdsForGame,
@@ -55,6 +56,7 @@ import {
   getOrderedPlayers,
   getPlayersOutsideOrder,
   isMimePlayerCountMode,
+  isMimeOrderMode,
   isMimeQuestionCompatible,
   isMimeQuestionCompatibleWithRange,
   isMimeGame,
@@ -185,14 +187,14 @@ export default function HostPage() {
   const [hostSubmitting, setHostSubmitting] = useState(false);
   const [optimisticHostVote, setOptimisticHostVote] = useState<HostLocalVote | null>(null);
   const [optimisticHostRating, setOptimisticHostRating] = useState<LocalRating | null>(null);
-  const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("arrival");
+  const [mimeOrderMode, setMimeOrderMode] = useState<MimeOrderMode>("balanced");
   const [mimeSelectedMode, setMimeSelectedMode] = useState<MimeMode>("classic");
   const [mimePlayerCountMode, setMimePlayerCountMode] = useState<MimePlayerCountMode>("solo");
   const [mimePreparationDuration, setMimePreparationDuration] = useState(10);
   const [mimeCustomOrder, setMimeCustomOrder] = useState<string[]>([]);
   const [mimeRandomOrder, setMimeRandomOrder] = useState<string[]>([]);
   const [mimeHostPlayMode, setMimeHostPlayMode] = useState(true);
-  const [jaugeTargetMode, setJaugeTargetMode] = useState<JaugeTargetMode>("random");
+  const [jaugeTargetMode, setJaugeTargetMode] = useState<JaugeTargetMode>("balanced");
   const [jaugeQuestionMode, setJaugeQuestionMode] = useState<JaugeQuestionMode>("random");
   const [jaugeAnonymityMode, setJaugeAnonymityMode] = useState<JaugeAnonymityMode>("visible");
   const [jaugeCustomOrder, setJaugeCustomOrder] = useState<string[]>([]);
@@ -769,7 +771,7 @@ export default function HostPage() {
   function chooseGame(nextGameType: GameType) {
     if (nextGameType === "mime_expressions") {
       const arrivalOrder = getArrivalOrder(gamePlayers);
-      setMimeOrderMode("arrival");
+      setMimeOrderMode("balanced");
       setMimeCustomOrder(arrivalOrder);
       setMimeRandomOrder(shuffleIds(arrivalOrder));
       setMimeHostPlayMode(true);
@@ -778,7 +780,7 @@ export default function HostPage() {
     }
     if (nextGameType === "jauge") {
       const arrivalOrder = getArrivalOrder(gamePlayers);
-      setJaugeTargetMode("random");
+      setJaugeTargetMode("balanced");
       setJaugeQuestionMode("random");
       setJaugeAnonymityMode("visible");
       setJaugeCustomOrder(arrivalOrder);
@@ -1055,12 +1057,18 @@ export default function HostPage() {
     startIndex,
     excludeIds,
     mode,
+    selectionMode,
+    history,
+    roundNumber,
   }: {
     playerOrder: string[];
     startIndex: number;
     excludeIds: number[];
     mode: MimePlayerCountMode;
-  }): { mimePlayerCount: number; mimePlayerIds: string[]; expression: MimeExpressionQuestion & QuestionPoolItem } | null {
+    selectionMode: MimeOrderMode;
+    history: NonNullable<Room["mime_game_state"]>["mimeHistory"];
+    roundNumber: number;
+  }): { mimePlayerCount: number; mimePlayerIds: string[]; currentIndex: number; expression: MimeExpressionQuestion & QuestionPoolItem } | null {
     const range = getMimePlayerCountRange(mode, playerOrder.length);
     const counts = shuffleIds(
       Array.from({ length: range.max - range.min + 1 }, (_, index) => String(range.min + index))
@@ -1071,14 +1079,51 @@ export default function HostPage() {
         | (MimeExpressionQuestion & QuestionPoolItem)
         | undefined;
       if (!expression) continue;
+      const mimePlayerIds = pickMimePlayersForRound({
+        playerOrder,
+        startIndex,
+        count,
+        selectionMode,
+        history,
+        roundNumber,
+      });
       return {
         mimePlayerCount: count,
-        mimePlayerIds: getMimeRoundPlayerIds(playerOrder, startIndex, count),
+        mimePlayerIds,
+        currentIndex: Math.max(0, playerOrder.indexOf(mimePlayerIds[0] ?? playerOrder[startIndex] ?? "")),
         expression,
       };
     }
 
     return null;
+  }
+
+  function pickMimePlayersForRound({
+    playerOrder,
+    startIndex,
+    count,
+    selectionMode,
+    history,
+    roundNumber,
+  }: {
+    playerOrder: string[];
+    startIndex: number;
+    count: number;
+    selectionMode: MimeOrderMode;
+    history: NonNullable<Room["mime_game_state"]>["mimeHistory"];
+    roundNumber: number;
+  }): string[] {
+    if (selectionMode === "balanced") {
+      return fairRandomPlayers(playerOrder, count, {
+        currentRound: roundNumber,
+        history: history.map((entry) => ({
+          roundNumber: entry.roundNumber,
+          playerIds: entry.mimePlayerIds?.length ? entry.mimePlayerIds : [entry.mimePlayerId],
+        })),
+      });
+    }
+    if (selectionMode === "random") return randomPlayers(playerOrder, count);
+    return getMimeRoundPlayerIds(playerOrder, startIndex, count);
   }
 
   function buildMimeRoundState({
@@ -1089,15 +1134,17 @@ export default function HostPage() {
     usedExpressionIds,
     mimeHistory,
     hostPlayMode,
+    selectionMode,
     selectedMode,
   }: {
     liveOrder: string[];
     currentIndex: number;
-    setup: { mimePlayerCount: number; mimePlayerIds: string[]; expression: MimeExpressionQuestion & QuestionPoolItem };
+    setup: { mimePlayerCount: number; mimePlayerIds: string[]; currentIndex: number; expression: MimeExpressionQuestion & QuestionPoolItem };
     roundNumber: number;
     usedExpressionIds: number[];
     mimeHistory: NonNullable<Room["mime_game_state"]>["mimeHistory"];
     hostPlayMode: boolean;
+    selectionMode: MimeOrderMode;
     selectedMode: MimeMode;
   }) {
     const hasPreparation = mimePreparationDuration > 0 && setup.mimePlayerCount > 1;
@@ -1115,6 +1162,7 @@ export default function HostPage() {
       preparationStartedAt: hasPreparation ? new Date().toISOString() : null,
       roundStatus: hasPreparation ? "preparing" : "playing",
       hostPlayMode,
+      selectionMode,
       mimePlayerCountMode,
       mimeMode: selectedMode,
       mimeRuleFlavor: pickModeFlavor(selectedMode, Math.floor(Math.random() * 1000)) ?? undefined,
@@ -1133,6 +1181,9 @@ export default function HostPage() {
       startIndex: 0,
       excludeIds: blockedQuestionIds,
       mode: mimePlayerCountMode,
+      selectionMode: mimeOrderMode,
+      history: [],
+      roundNumber: 1,
     });
     if (!setup) {
       setActionError("Aucune expression compatible avec le nombre de mimeurs choisi.");
@@ -1162,7 +1213,7 @@ export default function HostPage() {
           scoreboard_started_at: null,
           mime_game_state: buildMimeRoundState({
             liveOrder,
-            currentIndex: 0,
+            currentIndex: setup.currentIndex,
             setup,
             roundNumber: 1,
             usedExpressionIds: [setup.expression.id],
@@ -1175,6 +1226,7 @@ export default function HostPage() {
               },
             ],
             hostPlayMode,
+            selectionMode: mimeOrderMode,
             selectedMode,
           }),
         })
@@ -1197,6 +1249,9 @@ export default function HostPage() {
       await finishGame(false);
       return;
     }
+    const selectionMode = isMimeOrderMode(mimeGameState.selectionMode)
+      ? mimeGameState.selectionMode
+      : mimeOrderMode;
     const nextIndex = findNextMimeIndex(mimeGameState, liveOrder);
     const setup = pickMimeRoundSetup({
       playerOrder: liveOrder,
@@ -1205,6 +1260,9 @@ export default function HostPage() {
       mode: isMimePlayerCountMode(mimeGameState.mimePlayerCountMode)
         ? mimeGameState.mimePlayerCountMode
         : mimePlayerCountMode,
+      selectionMode,
+      history: mimeGameState.mimeHistory,
+      roundNumber: mimeGameState.roundNumber + 1,
     });
     if (!setup) {
       await finishGame(false);
@@ -1246,7 +1304,7 @@ export default function HostPage() {
           scoreboard_started_at: null,
           mime_game_state: buildMimeGameState({
             playerOrder: liveOrder,
-            currentMimeIndex: nextIndex,
+            currentMimeIndex: setup.currentIndex,
             currentMimePlayerIds: setup.mimePlayerIds,
             mimePlayerCount: setup.mimePlayerCount,
             expressionId: setup.expression.id,
@@ -1258,6 +1316,7 @@ export default function HostPage() {
             preparationStartedAt: roundStatus === "preparing" ? now : null,
             roundStatus,
             hostPlayMode: mimeGameState.hostPlayMode,
+            selectionMode,
             mimePlayerCountMode: isMimePlayerCountMode(mimeGameState.mimePlayerCountMode)
               ? mimeGameState.mimePlayerCountMode
               : mimePlayerCountMode,
@@ -1917,7 +1976,9 @@ export default function HostPage() {
   const targetPlayers = gamePlayers;
   const isFinalReveal = room.status === "reveal_results" && roundsPlayed >= totalQuestions;
   const mimeLobbyOrder =
-    mimeOrderMode === "arrival"
+    mimeOrderMode === "balanced"
+      ? getArrivalOrder(gamePlayers)
+      : mimeOrderMode === "arrival"
       ? getArrivalOrder(gamePlayers)
       : mimeOrderMode === "random"
         ? prunePlayerOrder(mimeRandomOrder, gamePlayers)

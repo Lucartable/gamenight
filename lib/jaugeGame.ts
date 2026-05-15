@@ -8,6 +8,7 @@ import type {
   Rating,
   Room,
 } from "@/types/database";
+import { weightedRandomPlayer } from "./balancedRandom";
 import { getDefaultCategories, getQuestionsForGame, type JaugeGameQuestion } from "./gameQuestions";
 
 export const JAUGE_GAME_TYPE = "jauge" as const;
@@ -66,12 +67,14 @@ export function getJaugeGameState(value: Room["jauge_game_state"] | unknown): Ja
         .map((item) => normalizePlayerQuestion(item))
         .filter((item): item is JaugePlayerQuestion => Boolean(item))
     : [];
+  const targetHistory = normalizeTargetHistory(raw.targetHistory, currentTargetPlayerId, toInt(raw.roundNumber, 0));
 
   return {
-    targetMode: isTargetMode(raw.targetMode) ? raw.targetMode : "random",
+    targetMode: isTargetMode(raw.targetMode) ? raw.targetMode : "balanced",
     targetOrder,
     currentTargetIndex: clampIndex(currentTargetIndex, targetOrder.length),
     currentTargetPlayerId,
+    targetHistory,
     questionMode: isQuestionMode(raw.questionMode) ? raw.questionMode : "random",
     questionOrder,
     currentQuestionOrderIndex: toInt(raw.currentQuestionOrderIndex, 0),
@@ -115,7 +118,7 @@ export function buildInitialJaugeState({
   totalQuestions: number;
 }): { state: JaugeGameState; question: JaugeRoundQuestion } | null {
   const order = buildTargetOrder(players, targetMode, targetOrder, null);
-  const target = order[0];
+  const target = pickInitialTarget(order, targetMode);
   const questionOrder = buildQuestionOrder(selectedCategories, questionMode, playerQuestions, usedQuestionIds, totalQuestions);
   const question = pickJaugeQuestion({
     selectedCategories,
@@ -132,8 +135,9 @@ export function buildInitialJaugeState({
     state: {
       targetMode,
       targetOrder: order,
-      currentTargetIndex: 0,
+      currentTargetIndex: Math.max(0, order.indexOf(target)),
       currentTargetPlayerId: target,
+      targetHistory: [{ roundNumber: 1, targetPlayerId: target }],
       questionMode,
       questionOrder,
       currentQuestionOrderIndex: questionOrder.indexOf(question.id) >= 0 ? questionOrder.indexOf(question.id) : 0,
@@ -162,10 +166,8 @@ export function buildNextJaugeState({
   extraUsedQuestionIds: number[];
 }): { state: JaugeGameState; question: JaugeRoundQuestion } | null {
   const order = buildTargetOrder(players, previous.targetMode, previous.targetOrder, previous.currentTargetPlayerId);
-  const currentIndex = Math.max(0, order.indexOf(previous.currentTargetPlayerId));
-  const nextTargetIndex = previous.targetMode === "random"
-    ? pickLeastRecentTargetIndex(order, previous.currentTargetPlayerId)
-    : (currentIndex + 1) % Math.max(1, order.length);
+  const nextTargetId = pickNextTarget(order, previous);
+  const nextTargetIndex = Math.max(0, order.indexOf(nextTargetId));
   const usedQuestionIds = uniqueIds([...previous.usedQuestionIds, ...extraUsedQuestionIds]);
   const questionOrder = previous.questionOrder.length
     ? previous.questionOrder
@@ -187,7 +189,11 @@ export function buildNextJaugeState({
       ...previous,
       targetOrder: order,
       currentTargetIndex: nextTargetIndex,
-      currentTargetPlayerId: order[nextTargetIndex] ?? "",
+      currentTargetPlayerId: nextTargetId,
+      targetHistory: [
+        ...(previous.targetHistory ?? targetHistoryFromCurrent(previous)),
+        { roundNumber: previous.roundNumber + 1, targetPlayerId: nextTargetId },
+      ],
       questionOrder,
       currentQuestionOrderIndex: questionOrderIndex >= 0 ? questionOrderIndex : previous.currentQuestionOrderIndex + 1,
       currentQuestionText: question.text,
@@ -304,6 +310,30 @@ function buildTargetOrder(
   return merged.length ? merged : shuffleIds(arrival);
 }
 
+function pickInitialTarget(order: string[], targetMode: JaugeTargetMode): string | undefined {
+  if (!order.length) return undefined;
+  if (targetMode === "balanced") {
+    return weightedRandomPlayer(order, { currentRound: 1 }) ?? order[0];
+  }
+  return order[0];
+}
+
+function pickNextTarget(order: string[], previous: JaugeGameState): string {
+  if (!order.length) return "";
+  if (previous.targetMode === "balanced") {
+    return weightedRandomPlayer(order, {
+      currentRound: previous.roundNumber + 1,
+      history: (previous.targetHistory ?? targetHistoryFromCurrent(previous)).map((entry) => ({
+        roundNumber: entry.roundNumber,
+        playerIds: [entry.targetPlayerId],
+      })),
+    }) ?? order[0] ?? "";
+  }
+  const currentIndex = Math.max(0, order.indexOf(previous.currentTargetPlayerId));
+  if (previous.targetMode === "random") return order[pickRandomTargetIndex(order, previous.currentTargetPlayerId)] ?? order[0] ?? "";
+  return order[(currentIndex + 1) % Math.max(1, order.length)] ?? order[0] ?? "";
+}
+
 function buildQuestionOrder(
   selectedCategories: string[],
   questionMode: JaugeQuestionMode,
@@ -393,11 +423,40 @@ function buildJaugeComment(average: number, spread: number): string {
   return "Avis mitigé. Ça débattra sûrement après le reveal.";
 }
 
-function pickLeastRecentTargetIndex(order: string[], currentTargetPlayerId: string): number {
+function pickRandomTargetIndex(order: string[], currentTargetPlayerId: string): number {
   if (!order.length) return 0;
   if (order.length === 1) return 0;
   const options = order.map((id, index) => ({ id, index })).filter((item) => item.id !== currentTargetPlayerId);
   return options[Math.floor(Math.random() * options.length)]?.index ?? 0;
+}
+
+function targetHistoryFromCurrent(state: JaugeGameState): NonNullable<JaugeGameState["targetHistory"]> {
+  return state.currentTargetPlayerId && state.roundNumber > 0
+    ? [{ roundNumber: state.roundNumber, targetPlayerId: state.currentTargetPlayerId }]
+    : [];
+}
+
+function normalizeTargetHistory(
+  value: unknown,
+  currentTargetPlayerId: string,
+  roundNumber: number,
+): NonNullable<JaugeGameState["targetHistory"]> {
+  if (!Array.isArray(value)) {
+    return currentTargetPlayerId && roundNumber > 0
+      ? [{ roundNumber, targetPlayerId: currentTargetPlayerId }]
+      : [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const raw = entry as { roundNumber?: unknown; targetPlayerId?: unknown };
+      const targetPlayerId = typeof raw.targetPlayerId === "string" ? raw.targetPlayerId : "";
+      const normalizedRound = toInt(raw.roundNumber, 0);
+      return targetPlayerId && normalizedRound > 0
+        ? { roundNumber: normalizedRound, targetPlayerId }
+        : null;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 }
 
 export function shuffleIds<T>(ids: T[]): T[] {
@@ -441,7 +500,7 @@ function toInt(value: unknown, fallback: number): number {
 }
 
 function isTargetMode(value: unknown): value is JaugeTargetMode {
-  return value === "random" || value === "arrival" || value === "custom";
+  return value === "balanced" || value === "random" || value === "arrival" || value === "custom";
 }
 
 function isQuestionMode(value: unknown): value is JaugeQuestionMode {

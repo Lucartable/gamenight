@@ -250,12 +250,19 @@ export function JaugeLobbyView({
 
       <section className="card mb-4 p-5">
         <h2 className="mb-4 text-lg font-bold">Cible à noter</h2>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-4">
+          <OrderModeButton
+            active={targetMode === "balanced"}
+            disabled={busy}
+            title="Équilibré"
+            subtitle="Priorise les moins ciblés"
+            onClick={() => onTargetModeChange("balanced")}
+          />
           <OrderModeButton
             active={targetMode === "random"}
             disabled={busy}
-            title="Aléatoire"
-            subtitle="Évite les répétitions"
+            title="Aléatoire pur"
+            subtitle="Sans mémoire"
             onClick={() => onTargetModeChange("random")}
           />
           <OrderModeButton

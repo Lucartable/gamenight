@@ -2,7 +2,7 @@ import type { GameType, MimeGameState, MimeRoundStatus, Player, Room } from "@/t
 import type { MimeExpressionQuestion } from "./gameQuestions";
 import { isMimeMode, type MimeMode } from "./mimeModes";
 
-export type MimeOrderMode = "arrival" | "random" | "custom";
+export type MimeOrderMode = "balanced" | "arrival" | "random" | "custom";
 export type MimePlayerCountMode = "solo" | "duo" | "trio" | "quartet" | "random_1_2" | "random_1_3" | "random_1_4" | "random_2_4";
 
 export const MIME_PLAYER_COUNT_MODES: Array<{
@@ -70,6 +70,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
   const preparationStartedAt = typeof raw.preparationStartedAt === "string" ? raw.preparationStartedAt : null;
   const roundStatus = isMimeRoundStatus(raw.roundStatus) ? raw.roundStatus : "waiting";
   const hostPlayMode = raw.hostPlayMode === true;
+  const selectionMode = isMimeOrderMode(raw.selectionMode) ? raw.selectionMode : undefined;
   const mimePlayerCountMode = isMimePlayerCountMode(raw.mimePlayerCountMode) ? raw.mimePlayerCountMode : "solo";
   const mimeMode = isMimeMode(raw.mimeMode) ? raw.mimeMode : "classic";
   const mimeRuleFlavor = typeof raw.mimeRuleFlavor === "string" ? raw.mimeRuleFlavor : undefined;
@@ -91,6 +92,7 @@ export function getMimeGameState(value: Room["mime_game_state"] | unknown): Mime
     preparationStartedAt,
     roundStatus,
     hostPlayMode,
+    selectionMode,
     mimePlayerCountMode,
     mimeMode,
     mimeRuleFlavor,
@@ -158,6 +160,7 @@ export function buildMimeGameState({
   preparationStartedAt,
   roundStatus,
   hostPlayMode,
+  selectionMode,
   mimePlayerCountMode,
   mimeMode,
   mimeRuleFlavor,
@@ -175,6 +178,7 @@ export function buildMimeGameState({
   preparationStartedAt?: string | null;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+  selectionMode?: MimeOrderMode;
   mimePlayerCountMode?: MimePlayerCountMode;
   mimeMode?: MimeMode;
   mimeRuleFlavor?: string;
@@ -204,6 +208,7 @@ export function buildMimeGameState({
     preparationStartedAt: preparationStartedAt ?? null,
     roundStatus,
     hostPlayMode,
+    selectionMode,
     mimePlayerCountMode: mimePlayerCountMode ?? "solo",
     mimeMode: mimeMode ?? "classic",
     mimeRuleFlavor,
@@ -267,6 +272,10 @@ export function isMimeQuestionCompatibleWithRange(
 
 export function isMimePlayerCountMode(value: unknown): value is MimePlayerCountMode {
   return value === "solo" || value === "duo" || value === "trio" || value === "quartet" || value === "random_1_2" || value === "random_1_3" || value === "random_1_4" || value === "random_2_4";
+}
+
+export function isMimeOrderMode(value: unknown): value is MimeOrderMode {
+  return value === "balanced" || value === "arrival" || value === "random" || value === "custom";
 }
 
 function clampIndex(index: number, length: number): number {

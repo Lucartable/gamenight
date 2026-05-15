@@ -331,7 +331,14 @@ export function MimeLobbyView({
 
       <section className="card mb-4 p-5">
         <h2 className="mb-4 text-lg font-bold">Ordre de passage</h2>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-4">
+          <OrderModeButton
+            active={orderMode === "balanced"}
+            disabled={busy}
+            title="Équilibré"
+            subtitle="Favorise ceux qui ont peu mimé"
+            onClick={() => onOrderModeChange("balanced")}
+          />
           <OrderModeButton
             active={orderMode === "arrival"}
             disabled={busy}
@@ -342,8 +349,8 @@ export function MimeLobbyView({
           <OrderModeButton
             active={orderMode === "random"}
             disabled={busy}
-            title="Aléatoire"
-            subtitle="Mélangé au lancement"
+            title="Aléatoire pur"
+            subtitle="Tirage sans pondération"
             onClick={() => onOrderModeChange("random")}
           />
           <OrderModeButton

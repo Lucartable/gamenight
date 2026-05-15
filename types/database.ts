@@ -6,7 +6,7 @@ export type IntrusMode = "unconscious" | "conscious";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
 export type MimeRoundStatus = "waiting" | "preparing" | "playing" | "ended" | "revealed";
-export type JaugeTargetMode = "random" | "arrival" | "custom";
+export type JaugeTargetMode = "balanced" | "random" | "arrival" | "custom";
 export type JaugeQuestionMode = "random" | "fixed" | "players";
 export type JaugeAnonymityMode = "visible" | "round_anonymous" | "final_reveal" | "anonymous";
 export type UserRole = "player" | "trusted" | "admin";
@@ -54,6 +54,7 @@ export interface MimeGameState {
   preparationStartedAt: string | null;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+  selectionMode?: string;
   mimePlayerCountMode?: string;
   mimeMode?: string;
   mimeRuleFlavor?: string;
@@ -71,6 +72,7 @@ export interface JaugeGameState {
   targetOrder: string[];
   currentTargetIndex: number;
   currentTargetPlayerId: string;
+  targetHistory?: JaugeTargetRecord[];
   questionMode: JaugeQuestionMode;
   questionOrder: number[];
   currentQuestionOrderIndex: number;
@@ -83,6 +85,11 @@ export interface JaugeGameState {
   autoJaugeMode: boolean;
   allowPlayerQuestions: boolean;
   playerQuestions: JaugePlayerQuestion[];
+}
+
+export interface JaugeTargetRecord {
+  roundNumber: number;
+  targetPlayerId: string;
 }
 
 export interface JaugePlayerQuestion {

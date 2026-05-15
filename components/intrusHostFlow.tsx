@@ -68,7 +68,7 @@ export function IntrusHostFlow({
   const isLobby = room.status === "lobby";
 
   // Config lobby
-  const [orderMode, setOrderMode] = useState<IntrusOrderMode>("random");
+  const [orderMode, setOrderMode] = useState<IntrusOrderMode>("balanced");
   const [mode, setMode] = useState<IntrusMode>("unconscious");
   const [clueDuration, setClueDuration] = useState(15);
   const [voteDuration, setVoteDuration] = useState(25);
@@ -321,8 +321,8 @@ export function IntrusHostFlow({
 
         <div className="card p-5">
           <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-white/55">Ordre de parole</h3>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(["random", "arrival", "custom"] as IntrusOrderMode[]).map((m) => (
+          <div className="grid gap-2 sm:grid-cols-4">
+            {(["balanced", "random", "arrival", "custom"] as IntrusOrderMode[]).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -334,10 +334,10 @@ export function IntrusHostFlow({
                 }`}
               >
                 <div className="text-sm font-black">
-                  {m === "random" ? "Aléatoire" : m === "arrival" ? "Ordre d'arrivée" : "Personnalisé"}
+                  {m === "balanced" ? "Équilibré" : m === "random" ? "Aléatoire pur" : m === "arrival" ? "Ordre d'arrivée" : "Personnalisé"}
                 </div>
                 <div className="text-xs font-semibold text-white/55">
-                  {m === "random" ? "Mélangé à chaque manche." : m === "arrival" ? "Selon l'entrée dans la room." : "Tu définis l'ordre (à la même que d'arrivée)."}
+                  {m === "balanced" ? "L'intrus tourne plus juste." : m === "random" ? "Sans mémoire." : m === "arrival" ? "Selon l'entrée dans la room." : "Tu définis l'ordre (à la même que d'arrivée)."}
                 </div>
               </button>
             ))}

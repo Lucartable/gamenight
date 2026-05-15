@@ -63,6 +63,7 @@ export function getJaugeLobbyOrder(
   randomOrder: string[],
   customOrder: string[],
 ): string[] {
+  if (mode === "balanced") return getArrivalOrder(players);
   if (mode === "arrival") return getArrivalOrder(players);
   if (mode === "custom") return mergePlayerOrder(customOrder, players);
   const arrivalOrder = getArrivalOrder(players);
