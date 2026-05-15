@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AdminDebugPanel } from "@/components/adminDebugPanel";
+import { BirthdayEmote } from "@/components/birthdayMode";
 import { ValidationParticles } from "@/components/validationParticles";
 import { SaveQuestionButton } from "@/components/saveQuestionButton";
 import { playSfx, primeAudio } from "@/lib/audio";
@@ -2509,6 +2510,8 @@ export default function HostPage() {
       {isHostQuestionActive && validationEvents.length > 0 && (
         <ValidationParticles events={validationEvents} />
       )}
+
+      <BirthdayEmote roomId={room.id} senderName={me?.name ?? "TV"} placement={tvMode ? "tv" : "default"} />
     </main>
   );
 }

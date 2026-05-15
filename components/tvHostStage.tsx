@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { BirthdayBanner } from "./birthdayMode";
 import { PlayerAvatar } from "./playerAvatar";
 import type { GameType, Player, Room } from "@/types/database";
 
@@ -68,7 +69,10 @@ export function TvStatusStrip({
     <div className="tv-status-strip" aria-label="Statut TV">
       <div className="tv-status-strip-brand">
         <span className="app-navbar-brand-mark" aria-hidden="true">B</span>
-        <span>{gameLabel ?? "Badaboum"}</span>
+        <div className="tv-status-strip-title">
+          <span>{gameLabel ?? "Badaboum"}</span>
+          <BirthdayBanner variant="compact" className="tv-status-strip-birthday" />
+        </div>
       </div>
       <div className="tv-status-strip-meta">
         <span>Code {room.code}</span>
@@ -156,6 +160,7 @@ export function TvHostStage({
           <div>
             <div className="tv-topbar-eyebrow">Mode TV · Badaboum</div>
             <div className="tv-topbar-title">{gameLabel ?? "Sélection du jeu"}</div>
+            <BirthdayBanner variant="tv" />
           </div>
         </div>
         <div className="tv-topbar-meta">

@@ -1,0 +1,291 @@
+.birthday-banner {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(250, 204, 21, 0.24);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(255, 62, 165, 0.08)),
+    rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 900;
+  line-height: 1.1;
+  text-wrap: balance;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.birthday-banner-hero {
+  margin-top: -0.15rem;
+  padding: 0.42rem 0.78rem;
+  font-size: 0.84rem;
+}
+
+.birthday-banner-compact {
+  margin-top: 0.45rem;
+  padding: 0.32rem 0.62rem;
+  font-size: 0.72rem;
+}
+
+.birthday-banner-tv {
+  margin-top: 0.22rem;
+  padding: 0.35rem 0.7rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(0.72rem, 1vw, 0.9rem);
+}
+
+.tv-status-strip-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.tv-status-strip-birthday {
+  margin-top: 0;
+  padding-block: 0.25rem;
+}
+
+.birthday-emote-root {
+  position: fixed;
+  right: max(0.85rem, env(safe-area-inset-right));
+  bottom: calc(0.85rem + env(safe-area-inset-bottom));
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+
+.birthday-emote-button,
+.birthday-emote-cooldown {
+  pointer-events: auto;
+}
+
+.birthday-emote-button {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border: 1px solid rgba(250, 204, 21, 0.32);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.15), rgba(255, 62, 165, 0.14)),
+    rgba(12, 7, 20, 0.84);
+  padding: 0.58rem 0.78rem;
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 1000;
+  line-height: 1;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px);
+  transform: translateZ(0);
+  transition:
+    border-color 160ms ease,
+    filter 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.birthday-emote-button:hover,
+.birthday-emote-button:focus-visible {
+  border-color: rgba(250, 204, 21, 0.58);
+  filter: brightness(1.08);
+  transform: translate3d(0, -1px, 0);
+}
+
+.birthday-emote-button:active {
+  transform: scale(0.96);
+}
+
+.birthday-emote-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.birthday-emote-cooldown {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(5, 3, 16, 0.74);
+  padding: 0.42rem 0.52rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  backdrop-filter: blur(12px);
+}
+
+.birthday-pop-layer {
+  position: absolute;
+  right: 0;
+  bottom: 3.2rem;
+  width: min(78vw, 19rem);
+  min-height: 6rem;
+  pointer-events: none;
+}
+
+.birthday-pop {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: max-content;
+  max-width: min(78vw, 19rem);
+  animation: birthdayFloat 1.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.birthday-pop-message {
+  display: inline-flex;
+  border: 1px solid rgba(250, 204, 21, 0.34);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.16), rgba(255, 62, 165, 0.16)),
+    rgba(9, 4, 15, 0.92);
+  padding: 0.62rem 0.82rem;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 1000;
+  line-height: 1.15;
+  text-align: center;
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.28),
+    0 0 22px rgba(250, 204, 21, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.birthday-confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 0.58rem;
+  width: 0.32rem;
+  border-radius: 0.12rem;
+  background: var(--birthday-confetti-color, #facc15);
+  opacity: 0;
+  animation: birthdayConfetti 820ms ease-out both;
+}
+
+.birthday-confetti-1 {
+  --birthday-confetti-color: #facc15;
+  --birthday-x: -4.1rem;
+  --birthday-y: -2.35rem;
+  --birthday-r: -38deg;
+}
+
+.birthday-confetti-2 {
+  --birthday-confetti-color: #22d3ee;
+  --birthday-x: -2.4rem;
+  --birthday-y: -3rem;
+  --birthday-r: 26deg;
+  animation-delay: 55ms;
+}
+
+.birthday-confetti-3 {
+  --birthday-confetti-color: #ff3ea5;
+  --birthday-x: -0.55rem;
+  --birthday-y: -3.25rem;
+  --birthday-r: 64deg;
+  animation-delay: 25ms;
+}
+
+.birthday-confetti-4 {
+  --birthday-confetti-color: #4ade80;
+  --birthday-x: 1.4rem;
+  --birthday-y: -3rem;
+  --birthday-r: -24deg;
+  animation-delay: 70ms;
+}
+
+.birthday-confetti-5 {
+  --birthday-confetti-color: #a855f7;
+  --birthday-x: 3.2rem;
+  --birthday-y: -2.25rem;
+  --birthday-r: 48deg;
+  animation-delay: 35ms;
+}
+
+.birthday-confetti-6 {
+  --birthday-confetti-color: #ffffff;
+  --birthday-x: 4.2rem;
+  --birthday-y: -1rem;
+  --birthday-r: -62deg;
+  animation-delay: 90ms;
+}
+
+.birthday-emote-root.is-tv {
+  right: max(1.1rem, env(safe-area-inset-right));
+  bottom: calc(1.1rem + env(safe-area-inset-bottom));
+}
+
+.birthday-emote-root.is-tv .birthday-emote-button {
+  min-height: 2.75rem;
+  padding-inline: 0.9rem;
+  font-size: 0.96rem;
+}
+
+@keyframes birthdayFloat {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0.45rem, 0) scale(0.94);
+  }
+  14% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -2.1rem, 0) scale(0.98);
+  }
+}
+
+@keyframes birthdayConfetti {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg) scale(0.75);
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(-50% + var(--birthday-x)), calc(-50% + var(--birthday-y)), 0) rotate(var(--birthday-r)) scale(1);
+  }
+}
+
+@media (max-width: 520px) {
+  .birthday-emote-root {
+    right: max(0.65rem, env(safe-area-inset-right));
+    bottom: calc(0.65rem + env(safe-area-inset-bottom));
+  }
+
+  .birthday-emote-button {
+    min-height: 2.35rem;
+    padding: 0.5rem 0.64rem;
+    font-size: 0.82rem;
+  }
+
+  .birthday-emote-cooldown {
+    display: none;
+  }
+
+  .birthday-pop-message {
+    font-size: 0.82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .birthday-pop,
+  .birthday-confetti {
+    animation-duration: 1ms !important;
+  }
+}

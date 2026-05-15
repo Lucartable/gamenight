@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AdminStatusBar } from "@/components/adminStatus";
 import { AudioToggle } from "@/components/audioToggle";
+import { BirthdayBanner, BirthdayEmote } from "@/components/birthdayMode";
 import { JoinPrompt } from "@/components/joinPrompt";
 import { PlayerAvatar } from "@/components/playerAvatar";
 import { PlayersLobbyGrid } from "@/components/playersLobbyGrid";
@@ -701,6 +702,8 @@ export default function PlayerPage() {
       {isQuestionActive && validationEvents.length > 0 && (
         <ValidationParticles events={validationEvents} />
       )}
+
+      <BirthdayEmote roomId={room.id} senderName={me.name} />
     </main>
   );
 }
@@ -722,6 +725,7 @@ function PlayerHeader({
         <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neon-cyan">Salle</div>
         <div className="text-xl font-black tracking-[0.18em] tabular-nums">{code}</div>
         {gameLabel && <div className="mt-1 text-xs font-bold text-white/65">{gameLabel}</div>}
+        <BirthdayBanner variant="compact" />
       </div>
       <div className="flex items-center gap-2">
         <AudioToggle compact />

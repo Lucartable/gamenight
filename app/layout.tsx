@@ -4,6 +4,7 @@ import "./globals.css";
 import "./animations.css";
 import "./game.css";
 import "./home.css";
+import "./birthday.css";
 import "./jauge.css";
 import "./summary.css";
 import "./ui.css";

@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioToggle } from "@/components/audioToggle";
+import { BirthdayBanner } from "@/components/birthdayMode";
 import { labelStatus } from "@/components/tvHostStage";
 import { Button } from "@/components/ui";
 import { GAME_DEFINITIONS } from "@/lib/gameQuestions";
@@ -76,6 +77,7 @@ export function RoomHeader({
             {gameLabel && ` · ${gameLabel}`}
             {round > 0 && ` · ${Math.min(round, totalQuestions)} / ${totalQuestions}`}
           </div>
+          <BirthdayBanner variant="compact" />
         </div>
         <div className="flex flex-col items-end gap-2">
           <AudioToggle compact />

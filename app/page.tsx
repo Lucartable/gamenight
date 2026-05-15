@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { AvatarCustomizer } from "@/components/avatarCustomizer";
 import { AudioToggle } from "@/components/audioToggle";
+import { BirthdayBanner } from "@/components/birthdayMode";
 import { Button, Card, Chip, Input, Section } from "@/components/ui";
 import { createRandomAvatarConfig, normalizeAvatarConfig, type AvatarConfig } from "@/lib/avatar";
 import { playSfx, primeAudio } from "@/lib/audio";
@@ -495,6 +496,7 @@ function HomeHero({ adminConnected, adminLabel }: { adminConnected: boolean; adm
       <div className="relative z-10 flex flex-col items-center gap-3">
         <Chip tone="cyan" size="sm">Party games — calibrés soirée</Chip>
         <h1 className="text-brand text-5xl font-black leading-none sm:text-6xl">Badaboum</h1>
+        <BirthdayBanner variant="hero" />
         <p className="mx-auto max-w-xs text-sm font-semibold text-white/70">
           Votes, mimes, accusations amicales et bilans qui restent dans les mémoires.
         </p>

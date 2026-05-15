@@ -16,7 +16,8 @@ export type SfxName =
   | "avatarPick"
   | "swoosh"
   | "wrong"
-  | "tick";
+  | "tick"
+  | "birthday";
 
 interface ToneSpec {
   freq: number;
@@ -126,6 +127,15 @@ const SFX_LIBRARY: Record<SfxName, SfxSpec> = {
     spacingMs: 60,
   },
   tick: { voices: [{ freq: 1500, durationMs: 35, type: "square", gain: 0.1, attackMs: 1, releaseMs: 30 }] },
+  birthday: {
+    voices: [
+      { freq: 784, durationMs: 70, type: "triangle", gain: 0.16, attackMs: 3, releaseMs: 62 },
+      { freq: 1175, durationMs: 90, type: "sine", gain: 0.15, attackMs: 4, releaseMs: 80 },
+      { freq: 1568, durationMs: 120, type: "triangle", gain: 0.12, attackMs: 5, releaseMs: 110, noise: 0.04 },
+    ],
+    spacingMs: 34,
+    gain: 0.75,
+  },
 };
 
 interface AudioState {
@@ -157,6 +167,7 @@ const MIN_SPACING_MS: Partial<Record<SfxName, number>> = {
   tick: 60,
   scoreUp: 90,
   urgent: 220,
+  birthday: 900,
 };
 
 function ensureContext(): AudioContext | null {
