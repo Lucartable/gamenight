@@ -11,6 +11,7 @@ const MIME_COUNT_PRESETS = [
   { label: "Duo", detail: "2 mimeurs", min: 2, max: 2 },
   { label: "Trio", detail: "3 mimeurs", min: 3, max: 3 },
   { label: "4 joueurs", detail: "Quatuor", min: 4, max: 4 },
+  { label: "1 à 4", detail: "Flexible", min: 1, max: 4 },
   { label: "2 à 4", detail: "Flexible", min: 2, max: 4 },
 ];
 

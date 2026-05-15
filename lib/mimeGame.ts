@@ -3,7 +3,7 @@ import type { MimeExpressionQuestion } from "./gameQuestions";
 import { isMimeMode, type MimeMode } from "./mimeModes";
 
 export type MimeOrderMode = "arrival" | "random" | "custom";
-export type MimePlayerCountMode = "solo" | "duo" | "trio" | "quartet" | "random_1_2" | "random_1_3" | "random_2_4";
+export type MimePlayerCountMode = "solo" | "duo" | "trio" | "quartet" | "random_1_2" | "random_1_3" | "random_1_4" | "random_2_4";
 
 export const MIME_PLAYER_COUNT_MODES: Array<{
   id: MimePlayerCountMode;
@@ -18,6 +18,7 @@ export const MIME_PLAYER_COUNT_MODES: Array<{
   { id: "quartet", label: "Quatuor", detail: "4 mimeurs", min: 4, max: 4 },
   { id: "random_1_2", label: "Aléa 1-2", detail: "Solo ou duo", min: 1, max: 2 },
   { id: "random_1_3", label: "Aléa 1-3", detail: "Solo, duo ou trio", min: 1, max: 3 },
+  { id: "random_1_4", label: "Aléa 1-4", detail: "Solo à quatuor", min: 1, max: 4 },
   { id: "random_2_4", label: "Aléa 2-4", detail: "Duo à quatuor", min: 2, max: 4 },
 ];
 
@@ -265,7 +266,7 @@ export function isMimeQuestionCompatibleWithRange(
 }
 
 export function isMimePlayerCountMode(value: unknown): value is MimePlayerCountMode {
-  return value === "solo" || value === "duo" || value === "trio" || value === "quartet" || value === "random_1_2" || value === "random_1_3" || value === "random_2_4";
+  return value === "solo" || value === "duo" || value === "trio" || value === "quartet" || value === "random_1_2" || value === "random_1_3" || value === "random_1_4" || value === "random_2_4";
 }
 
 function clampIndex(index: number, length: number): number {

@@ -102,6 +102,21 @@ describe("question content invariants", () => {
     expect(MIME_MODES.length).toBeGreaterThanOrEqual(9);
   });
 
+  it("mime multi-joueurs: banques strictes duo, trio et quatuor", () => {
+    const counts = new Map<number, number>();
+    for (const expression of MIME_EXPRESSIONS) {
+      const min = expression.mimePlayerCountMin ?? 1;
+      const max = expression.mimePlayerCountMax ?? 1;
+      if (min === 1 && max === 1) continue;
+      expect(max, `scene ${expression.id} doit avoir une banque stricte`).toBe(min);
+      counts.set(min, (counts.get(min) ?? 0) + 1);
+    }
+
+    expect(counts.get(2)).toBe(70);
+    expect(counts.get(3)).toBe(70);
+    expect(counts.get(4)).toBe(70);
+  });
+
   it("jauge: ids uniques, texte non vide, catégorie valide, format À quel point", () => {
     const ids = new Set<number>();
     const normalized = new Set<string>();

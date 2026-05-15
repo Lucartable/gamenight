@@ -14,6 +14,7 @@ describe("Mime multi-joueurs", () => {
     expect(pickMimePlayerCount("duo", 6, () => 0.2)).toBe(2);
     expect(pickMimePlayerCount("random_1_3", 6, () => 0)).toBe(1);
     expect(pickMimePlayerCount("random_1_3", 6, () => 0.99)).toBe(3);
+    expect(pickMimePlayerCount("random_1_4", 6, () => 0.99)).toBe(4);
     expect(pickMimePlayerCount("random_2_4", 2, () => 0.99)).toBe(2);
   });
 
