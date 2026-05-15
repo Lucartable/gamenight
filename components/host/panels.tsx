@@ -207,14 +207,17 @@ export function HostCustomQuestionPanel({
         )}
       </div>
 
-      <button
+      <Button
         type="button"
         disabled={submitting || myQuestionCount >= maxQuestionsPerPlayer}
         onClick={onSubmit}
-        className="btn-secondary mt-3 w-full"
+        variant="secondary"
+        size="lg"
+        fullWidth
+        className="mt-3"
       >
         {submitting ? "Ajout..." : myQuestionCount >= maxQuestionsPerPlayer ? "Limite atteinte" : "Ajouter ma question"}
-      </button>
+      </Button>
       <p className="mt-2 text-center text-xs font-semibold text-white/45">
         {liveQuestionCount}/{expectedQuestionCount} question{expectedQuestionCount > 1 ? "s" : ""} attendue{expectedQuestionCount > 1 ? "s" : ""} si tout le monde contribue.
       </p>
@@ -228,22 +231,25 @@ export function HostCustomQuestionPanel({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
               disabled={clearingQuestions || playedLiveQuestionCount === 0}
               onClick={onClearPlayedQuestions}
-              className="btn-ghost text-neon-yellow disabled:opacity-40"
+              variant="ghost"
+              size="sm"
+              className="text-neon-yellow"
             >
               Supprimer jouées
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={clearingQuestions || roomLiveQuestionCount === 0}
               onClick={onClearAllQuestions}
-              className="btn-ghost text-neon-pink disabled:opacity-40"
+              variant="danger"
+              size="sm"
             >
               Tout vider
-            </button>
+            </Button>
           </div>
         </div>
         <p className="mt-2 text-xs font-semibold text-white/40">

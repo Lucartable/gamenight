@@ -447,6 +447,48 @@ describe("QuestionPoolEngine", () => {
     expect(diagnostics.sources.packValid).toBe(2);
   });
 
+  it("ignore les questions sauvegardees ou pack desactivees", () => {
+    const activePackQuestion = savedQuestion({
+      id: -301,
+      gameType: "majority",
+      text: "Question pack active ?",
+      payload: { options: ["A", "B"] },
+    });
+    const inactivePackQuestion = savedQuestion({
+      id: -302,
+      gameType: "majority",
+      text: "Question pack desactivee ?",
+      payload: { options: ["A", "B"], active: false },
+    });
+    const inactiveSavedQuestion = savedQuestion({
+      id: -201,
+      gameType: "majority",
+      text: "Question sauvegardee desactivee ?",
+      payload: { options: ["A", "B"], active: false },
+    });
+
+    const { plan, diagnostics } = buildQuestionPlanWithDiagnostics({
+      gameType: "majority",
+      selectedCategories: [],
+      totalQuestions: 3,
+      excludeIds: [],
+      liveQuestions: [],
+      packQuestions: [activePackQuestion, inactivePackQuestion],
+      savedQuestions: [inactiveSavedQuestion],
+      settings: settings("all_mix", {
+        usePackQuestions: true,
+        selectedPackIds: ["pack-1"],
+      }),
+      random: () => 0,
+    });
+
+    expect(plan.some((question) => question.id === -301)).toBe(true);
+    expect(plan.some((question) => question.id === -302)).toBe(false);
+    expect(plan.some((question) => question.id === -201)).toBe(false);
+    expect(diagnostics.sources.packValid).toBe(1);
+    expect(diagnostics.sources.savedValid).toBe(0);
+  });
+
   it("valide la priorite joueurs sur chaque jeu compatible avec les questions live", () => {
     const compatibleGameTypes: GameType[] = ["who_would", "who_of_us", "majority", "minority", "jauge", "mime_expressions"];
 

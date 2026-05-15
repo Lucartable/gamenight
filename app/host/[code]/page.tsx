@@ -256,6 +256,10 @@ export default function HostPage() {
       }),
     [packItems, questionSourceSettings.selectedPackIds, savedQuestions],
   );
+  const selectedCompatiblePackQuestionCount = useMemo(
+    () => (gameType ? selectedPackQuestions.filter((question) => question.game_type === gameType).length : 0),
+    [gameType, selectedPackQuestions],
+  );
   const packChoices = useMemo(() => {
     const gameByQuestionId = new Map(questionIndex.map((question) => [question.id, question.game_type]));
     return packs.map((pack) => {
@@ -1886,7 +1890,7 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
-          packQuestionCount={selectedPackQuestions.length}
+          packQuestionCount={selectedCompatiblePackQuestionCount}
           packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
@@ -1968,7 +1972,7 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
-          packQuestionCount={selectedPackQuestions.length}
+          packQuestionCount={selectedCompatiblePackQuestionCount}
           packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
@@ -2002,7 +2006,7 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
-          packQuestionCount={selectedPackQuestions.length}
+          packQuestionCount={selectedCompatiblePackQuestionCount}
           packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}

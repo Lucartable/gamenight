@@ -87,6 +87,7 @@ export function customQuestionToPoolItem(question: CustomQuestion): QuestionPool
 }
 
 export function savedQuestionToPoolItem(question: SavedCustomQuestion, source: Extract<QuestionSource, "saved" | "pack"> = "saved"): QuestionPoolItem | null {
+  if (question.payload.active === false) return null;
   return payloadToQuestion({
     id: question.local_question_id,
     gameType: question.game_type,

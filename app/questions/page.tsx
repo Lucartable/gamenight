@@ -21,6 +21,7 @@ const GAME_LABELS: Record<GameType, string> = {
 };
 
 const GAME_OPTIONS = Object.keys(GAME_LABELS) as GameType[];
+const QUESTION_ENGINE_GAME_OPTIONS = GAME_OPTIONS.filter((gameType) => gameType !== "intrus");
 
 export default function SavedQuestionsPage() {
   const profile = useProfile();
@@ -238,6 +239,25 @@ export default function SavedQuestionsPage() {
     setBusyId(null);
     if (insertError) {
       setError(insertError.message);
+      return;
+    }
+    await refresh();
+  }
+
+  async function toggleQuestionActive(question: SavedCustomQuestion) {
+    const active = questionIsActive(question);
+    setBusyId(question.id);
+    setError(null);
+    const { error: updateError } = await getSupabase()
+      .from("saved_custom_questions")
+      .update({
+        payload: { ...question.payload, active: !active },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", question.id);
+    setBusyId(null);
+    if (updateError) {
+      setError(updateError.message);
       return;
     }
     await refresh();
@@ -558,10 +578,13 @@ export default function SavedQuestionsPage() {
                           setNewQuestionOptions("");
                         }}
                       >
-                        {GAME_OPTIONS.map((gameType) => (
+                        {QUESTION_ENGINE_GAME_OPTIONS.map((gameType) => (
                           <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
                         ))}
                       </select>
+                      <p className="text-xs font-semibold text-white/45">
+                        L&apos;Intrus utilise pour l&apos;instant sa banque de paires dédiée, séparée de cette bibliothèque de questions.
+                      </p>
                       <textarea
                         className="input min-h-24 resize-none"
                         value={newQuestionText}
@@ -725,7 +748,10 @@ export default function SavedQuestionsPage() {
                           </div>
                         ) : (
                           <>
-                            <h2 className="mt-2 text-base font-black leading-snug sm:text-lg">{question.question_text}</h2>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <h2 className="min-w-0 flex-1 text-base font-black leading-snug sm:text-lg">{question.question_text}</h2>
+                              {!questionIsActive(question) && <Chip tone="pink" size="sm">Inactive</Chip>}
+                            </div>
                             <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
                               {question.category}
                             </p>
@@ -762,6 +788,14 @@ export default function SavedQuestionsPage() {
                             onClick={() => void duplicateQuestion(question)}
                           >
                             Dupliquer
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busyId === question.id}
+                            onClick={() => void toggleQuestionActive(question)}
+                          >
+                            {questionIsActive(question) ? "Désactiver" : "Activer"}
                           </Button>
                           {activePackQuestionIds.has(question.id) ? (
                             <Button
@@ -826,7 +860,7 @@ export default function SavedQuestionsPage() {
                       onChange={(event) => setPackGame(event.target.value as GameType | "all")}
                     >
                       <option value="all">Multi-jeux</option>
-                      {GAME_OPTIONS.map((gameType) => (
+                      {QUESTION_ENGINE_GAME_OPTIONS.map((gameType) => (
                         <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
                       ))}
                     </select>
@@ -919,7 +953,7 @@ export default function SavedQuestionsPage() {
                             onChange={(event) => setEditPackGame(event.target.value as GameType | "all")}
                           >
                             <option value="all">Multi-jeux</option>
-                            {GAME_OPTIONS.map((gameType) => (
+                            {QUESTION_ENGINE_GAME_OPTIONS.map((gameType) => (
                               <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
                             ))}
                           </select>
@@ -1013,6 +1047,10 @@ function formatPackDistribution(questions: SavedCustomQuestion[]): Array<{ gameT
 
 function questionHasEditablePayload(question: SavedCustomQuestion): boolean {
   return question.game_type === "who_would" || question.game_type === "majority" || question.game_type === "minority";
+}
+
+function questionIsActive(question: SavedCustomQuestion): boolean {
+  return question.payload.active !== false;
 }
 
 function questionNeedsOptions(gameType: GameType): boolean {

@@ -46,7 +46,7 @@ create table public.rooms (
   created_by_guest_id text,
   created_by_user_id uuid references auth.users(id) on delete set null,
   game_type text
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   status text not null default 'lobby'
     check (status in ('lobby','question_active','reveal_results','scoreboard','end_game_summary','ended')),
   current_question_id integer,
@@ -73,6 +73,7 @@ create table public.rooms (
   current_question_snapshot jsonb,
   mime_game_state jsonb,
   jauge_game_state jsonb,
+  intrus_game_state jsonb,
   last_activity_at timestamptz not null default now(),
   expires_at timestamptz,
   created_at timestamptz not null default now()
@@ -182,7 +183,7 @@ create table public.votes (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   voter_player_id uuid not null references public.players(id) on delete cascade,
   question_id integer not null,
   selected_option text,
@@ -199,6 +200,8 @@ create table public.votes (
     (game_type = 'mime_expressions' and selected_option is null and selected_player_id is null)
     or
     (game_type = 'jauge' and selected_option is null and selected_player_id is null)
+    or
+    (game_type = 'intrus' and selected_option is null and selected_player_id is not null)
   )
 );
 
@@ -281,7 +284,7 @@ create table public.custom_questions (
   room_id uuid not null references public.rooms(id) on delete cascade,
   author_player_id uuid not null references public.players(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   local_question_id integer not null,
   question_text text not null,
   category text not null default 'joueurs',
@@ -326,13 +329,13 @@ create table public.saved_custom_questions (
   id uuid primary key default gen_random_uuid(),
   host_user_id uuid not null references auth.users(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   local_question_id integer not null,
   question_text text not null,
   category text not null default 'sauvegardees',
   payload jsonb not null default '{}',
   source_game text not null
-    check (source_game in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (source_game in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   original_author_id uuid references public.players(id) on delete set null,
   original_room_id uuid references public.rooms(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -349,7 +352,7 @@ create table public.question_packs (
   name text not null,
   description text,
   game_type text
-    check (game_type is null or game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type is null or game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   is_public boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -367,7 +370,7 @@ create table public.asked_questions (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   game_type text not null
-    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge')),
+    check (game_type in ('who_would','who_of_us','majority','minority','mime_expressions','jauge','intrus')),
   question_id integer not null,
   asked_at timestamptz not null default now(),
   unique (room_id, game_type, question_id)
