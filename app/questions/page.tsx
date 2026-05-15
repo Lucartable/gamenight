@@ -564,8 +564,8 @@ export default function SavedQuestionsPage() {
         )}
 
         {!profile.loading && profile.canManageQuestions && (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-            <section className="space-y-4">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+            <section className="min-w-0 space-y-4">
               {showCreateQuestion && (
                 <Card padding="lg" className="animate-slideUp">
                   <Section eyebrow="Nouvelle question" title="Ajouter à la bibliothèque" spacing="tight">
@@ -710,10 +710,10 @@ export default function SavedQuestionsPage() {
                   <Card
                     key={question.id}
                     padding="md"
-                    className="library-card animate-slideUp"
+                    className="library-card max-w-full overflow-hidden animate-slideUp"
                     style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                       <label className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white/45">
                         <input
                           type="checkbox"
@@ -749,7 +749,7 @@ export default function SavedQuestionsPage() {
                         ) : (
                           <>
                             <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <h2 className="min-w-0 flex-1 text-base font-black leading-snug sm:text-lg">{question.question_text}</h2>
+                              <h2 className="min-w-0 flex-1 break-words text-base font-black leading-snug sm:text-lg">{question.question_text}</h2>
                               {!questionIsActive(question) && <Chip tone="pink" size="sm">Inactive</Chip>}
                             </div>
                             <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
@@ -761,7 +761,7 @@ export default function SavedQuestionsPage() {
                       <Chip tone="neutral" size="sm">{question.source_game}</Chip>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex w-full flex-wrap gap-2">
                       {editingId === question.id ? (
                         <>
                           <Button
@@ -821,7 +821,7 @@ export default function SavedQuestionsPage() {
                             size="sm"
                             disabled={busyId === question.id}
                             onClick={() => void deleteQuestion(question.id)}
-                            className="ml-auto"
+                            className="sm:ml-auto"
                           >
                             Supprimer
                           </Button>
@@ -843,7 +843,7 @@ export default function SavedQuestionsPage() {
               </div>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="min-w-0 space-y-4">
               <Card padding="md" className="animate-slideUp">
                 <Section eyebrow="Packs" title="Créer un pack" spacing="tight">
                   <form onSubmit={createPack} className="mt-1 space-y-3">
@@ -886,15 +886,15 @@ export default function SavedQuestionsPage() {
                   ))}
                 </select>
                 {activePack && (
-                  <div className="mt-3 rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-3">
-                    <div className="flex items-start justify-between gap-3">
+                  <div className="mt-3 max-w-full overflow-hidden rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-black">{activePack.name}</div>
+                        <div className="break-words text-sm font-black">{activePack.name}</div>
                         {activePack.description && (
-                          <p className="mt-1 text-xs font-semibold text-white/55">{activePack.description}</p>
+                          <p className="mt-1 break-words text-xs font-semibold text-white/55">{activePack.description}</p>
                         )}
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => startPackEdit(activePack)}>
+                      <Button variant="ghost" size="sm" onClick={() => startPackEdit(activePack)} className="w-full sm:w-auto">
                         Modifier
                       </Button>
                     </div>
@@ -912,16 +912,18 @@ export default function SavedQuestionsPage() {
                       {activePackQuestions.slice(0, 6).map((question) => (
                         <div
                           key={question.id}
-                          className="flex items-center justify-between gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold"
+                          className="grid max-w-full gap-2 overflow-hidden rounded-xl border border-white/8 bg-black/25 px-3 py-2 text-xs font-bold sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                         >
-                          <span className="truncate">{question.question_text}</span>
-                          <button
+                          <span className="min-w-0 whitespace-normal break-words leading-snug text-white/85">{question.question_text}</span>
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => void removeFromPack(question.id)}
-                            className="focus-ring text-neon-pink hover:underline"
+                            className="justify-self-start text-neon-pink sm:justify-self-end"
                           >
                             Retirer
-                          </button>
+                          </Button>
                         </div>
                       ))}
                       {activePackQuestions.length === 0 && (

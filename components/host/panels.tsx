@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { PlayerAvatar } from "@/components/playerAvatar";
 import { Button } from "@/components/ui";
 import type { GameType, Player } from "@/types/database";
@@ -87,15 +88,38 @@ export function EndSessionModal({
   onEndWithoutSummary: () => void;
   onClose: () => void;
 }) {
-  return (
-    <section className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-5 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="end-session-title">
-      <div className="surface-card-elev w-full max-w-lg rounded-[2rem] border border-neon-pink/25 p-5 shadow-glow-pink">
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <section
+      className="fixed inset-0 z-[999] flex min-h-dvh items-center justify-center overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-sm animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="end-session-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="surface-card-elev max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-neon-pink/25 p-5 shadow-glow-pink animate-pop">
         <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="text-xs font-black uppercase tracking-[0.22em] text-neon-pink">Fin de soirée</div>
-            <h2 id="end-session-title" className="mt-1 text-2xl font-black">Que veux-tu faire ?</h2>
+            <h2 id="end-session-title" className="mt-1 text-2xl font-black">Terminer la soirée</h2>
             <p className="mt-1 text-sm font-semibold text-white/55">
-              Tu peux afficher le bilan pour conclure, ou fermer directement la room et revenir à l’accueil.
+              Voulez-vous afficher le bilan de la soirée avant de quitter ?
             </p>
           </div>
           <Button type="button" variant="icon" size="sm" onClick={onClose} aria-label="Annuler la fin de soirée">
@@ -115,7 +139,8 @@ export function EndSessionModal({
           </Button>
         </div>
       </div>
-    </section>
+    </section>,
+    document.body,
   );
 }
 
