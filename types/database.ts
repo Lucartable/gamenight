@@ -17,7 +17,9 @@ export interface QuestionSourceSettings {
   mode: QuestionSourceMode;
   useSystemQuestions: boolean;
   useLiveQuestions: boolean;
+  usePackQuestions: boolean;
   useSavedQuestions: boolean;
+  selectedPackIds: string[];
   maxQuestionsPerPlayer: number;
   authorVisibility: QuestionAuthorVisibility;
 }
@@ -25,7 +27,7 @@ export interface QuestionSourceSettings {
 export interface QuestionSnapshot {
   id: number;
   gameType: GameType;
-  source: "system" | "live" | "saved";
+  source: "system" | "live" | "pack" | "saved";
   category: string;
   text?: string;
   optionA?: string;

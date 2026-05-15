@@ -6,6 +6,7 @@ import {
   ConfigGroup,
   HostStartDock,
   QuestionSourcePanel,
+  type QuestionPackChoice,
 } from "@/components/host/config";
 import {
   getGameCategories,
@@ -43,9 +44,12 @@ export function LobbyView({
   questionSourceSettings,
   canUseSavedQuestions,
   savedQuestionCount,
+  packQuestionCount,
+  packChoices,
   liveQuestionCount,
   questionPoolDiagnostics,
   onQuestionSourceSettingsChange,
+  onTogglePack,
   onStart,
   onChangeGame,
 }: {
@@ -65,9 +69,12 @@ export function LobbyView({
   questionSourceSettings: QuestionSourceSettings;
   canUseSavedQuestions: boolean;
   savedQuestionCount: number;
+  packQuestionCount: number;
+  packChoices: QuestionPackChoice[];
   liveQuestionCount: number;
   questionPoolDiagnostics: QuestionPoolDiagnostics | null;
   onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
+  onTogglePack: (packId: string) => void;
   onStart: () => void;
   onChangeGame: () => void;
 }) {
@@ -94,11 +101,14 @@ export function LobbyView({
         settings={questionSourceSettings}
         canUseSavedQuestions={canUseSavedQuestions}
         savedQuestionCount={savedQuestionCount}
+        packQuestionCount={packQuestionCount}
+        packChoices={packChoices}
         liveQuestionCount={liveQuestionCount}
         validLiveQuestionCount={questionPoolDiagnostics?.sources.liveValid ?? liveQuestionCount}
         totalQuestions={room.total_questions}
         onUseAllLiveQuestions={(count) => onUpdateConfig({ total_questions: count })}
         onChange={onQuestionSourceSettingsChange}
+        onTogglePack={onTogglePack}
       />
 
       <section className="card mb-4 p-5">

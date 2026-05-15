@@ -393,6 +393,60 @@ describe("QuestionPoolEngine", () => {
     expect(plan.filter((question) => question.source === "system")).toHaveLength(0);
   });
 
+  it("priorise live puis packs puis sauvegardees puis systeme en all_mix", () => {
+    const liveQuestions = validLiveQuestions("majority", 2);
+    const packQuestions = [
+      savedQuestion({
+        id: -301,
+        gameType: "majority",
+        text: "Question pack prioritaire 1 ?",
+        payload: { options: ["A", "B"] },
+      }),
+      savedQuestion({
+        id: -302,
+        gameType: "majority",
+        text: "Question pack prioritaire 2 ?",
+        payload: { options: ["A", "B"] },
+      }),
+    ];
+    const savedQuestions = [
+      savedQuestion({
+        id: -201,
+        gameType: "majority",
+        text: "Question sauvegardee retenue ?",
+        payload: { options: ["A", "B"] },
+      }),
+      savedQuestion({
+        id: -202,
+        gameType: "majority",
+        text: "Question sauvegardee non retenue ?",
+        payload: { options: ["A", "B"] },
+      }),
+    ];
+
+    const { plan, diagnostics } = buildQuestionPlanWithDiagnostics({
+      gameType: "majority",
+      selectedCategories: [],
+      totalQuestions: 5,
+      excludeIds: [],
+      liveQuestions,
+      packQuestions,
+      savedQuestions,
+      settings: settings("all_mix", {
+        usePackQuestions: true,
+        selectedPackIds: ["pack-1"],
+      }),
+      random: () => 0,
+    });
+
+    expect(plan).toHaveLength(5);
+    expect(plan.filter((question) => question.source === "live")).toHaveLength(2);
+    expect(plan.filter((question) => question.source === "pack")).toHaveLength(2);
+    expect(plan.filter((question) => question.source === "saved")).toHaveLength(1);
+    expect(plan.filter((question) => question.source === "system")).toHaveLength(0);
+    expect(diagnostics.sources.packValid).toBe(2);
+  });
+
   it("valide la priorite joueurs sur chaque jeu compatible avec les questions live", () => {
     const compatibleGameTypes: GameType[] = ["who_would", "who_of_us", "majority", "minority", "jauge", "mime_expressions"];
 

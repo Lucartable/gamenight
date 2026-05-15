@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { PlayerAvatar } from "@/components/playerAvatar";
+import { Button } from "@/components/ui";
 import type { GameType, Player } from "@/types/database";
 
 export function TransferPanel({
@@ -13,25 +16,105 @@ export function TransferPanel({
   onPick: (p: Player) => void;
   onClose: () => void;
 }) {
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+
   return (
-    <section className="card mb-4 border-neon-cyan/40 bg-neon-cyan/5 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold">Passer le rôle d&apos;hôte</h2>
-        <button onClick={onClose} className="btn-ghost">✕</button>
+    <section className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-5 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="transfer-host-title">
+      <div className="surface-card-elev w-full max-w-lg rounded-[2rem] border border-neon-cyan/25 p-5 shadow-glow-cyan">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-neon-cyan">Transfert hôte</div>
+            <h2 id="transfer-host-title" className="mt-1 text-2xl font-black">Donner les commandes</h2>
+            <p className="mt-1 text-sm font-semibold text-white/55">
+              Choisis un joueur, puis confirme. Le changement est synchronisé en realtime.
+            </p>
+          </div>
+          <Button type="button" variant="icon" size="sm" onClick={onClose} aria-label="Fermer le transfert">
+            ×
+          </Button>
+        </div>
+
+        {!selectedPlayer ? (
+          <ul className="grid gap-2">
+            {players.map((player) => (
+              <li key={player.id}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setSelectedPlayer(player)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:-translate-y-0.5 hover:border-neon-cyan/60 hover:bg-neon-cyan/10 disabled:opacity-50"
+                >
+                  <PlayerAvatar player={player} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-black">{player.name}</span>
+                    <span className="block text-xs font-bold uppercase tracking-wider text-white/40">Peut devenir hôte</span>
+                  </span>
+                  <span className="text-neon-cyan">→</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-[1.5rem] border border-neon-cyan/25 bg-neon-cyan/10 p-4 text-center">
+            <PlayerAvatar player={selectedPlayer} size="lg" />
+            <h3 className="mt-3 text-xl font-black">Transférer à {selectedPlayer.name} ?</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm font-semibold text-white/60">
+              Tu perdras les contrôles hôte sur cet écran. {selectedPlayer.name} pourra lancer, révéler et terminer la soirée.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => setSelectedPlayer(null)}>
+                Retour
+              </Button>
+              <Button type="button" variant="primary" disabled={busy} onClick={() => onPick(selectedPlayer)} leading="👑">
+                Confirmer
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
-      <ul className="space-y-2">
-        {players.map((p) => (
-          <li key={p.id}>
-            <button
-              disabled={busy}
-              onClick={() => onPick(p)}
-              className="w-full rounded-2xl border border-white/10 bg-bg-soft p-3 text-left transition hover:border-neon-cyan/60 disabled:opacity-50"
-            >
-              👑 Donner le rôle à <b className="text-neon-cyan">{p.name}</b>
-            </button>
-          </li>
-        ))}
-      </ul>
+    </section>
+  );
+}
+
+export function EndSessionModal({
+  busy,
+  onShowSummary,
+  onEndWithoutSummary,
+  onClose,
+}: {
+  busy: boolean;
+  onShowSummary: () => void;
+  onEndWithoutSummary: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 py-5 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="end-session-title">
+      <div className="surface-card-elev w-full max-w-lg rounded-[2rem] border border-neon-pink/25 p-5 shadow-glow-pink">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-neon-pink">Fin de soirée</div>
+            <h2 id="end-session-title" className="mt-1 text-2xl font-black">Que veux-tu faire ?</h2>
+            <p className="mt-1 text-sm font-semibold text-white/55">
+              Tu peux afficher le bilan pour conclure, ou fermer directement la room et revenir à l’accueil.
+            </p>
+          </div>
+          <Button type="button" variant="icon" size="sm" onClick={onClose} aria-label="Annuler la fin de soirée">
+            ×
+          </Button>
+        </div>
+
+        <div className="grid gap-3">
+          <Button type="button" variant="primary" size="lg" disabled={busy} onClick={onShowSummary} leading="🏆">
+            Afficher le bilan
+          </Button>
+          <Button type="button" variant="danger" size="lg" disabled={busy} onClick={onEndWithoutSummary} leading="⏻">
+            Terminer sans bilan
+          </Button>
+          <Button type="button" variant="secondary" size="lg" disabled={busy} onClick={onClose}>
+            Annuler
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }

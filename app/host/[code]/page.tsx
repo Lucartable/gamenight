@@ -25,6 +25,7 @@ import {
 } from "@/lib/gameQuestions";
 import { useProfile } from "@/lib/useProfile";
 import { useSavedQuestions } from "@/lib/useSavedQuestions";
+import { getSelectedPackQuestions, useQuestionPacks } from "@/lib/useQuestionPacks";
 import {
   buildQuestionPlan,
   buildQuestionPlanWithDiagnostics,
@@ -88,6 +89,7 @@ import {
   RoomHeader,
 } from "@/components/host/hostShell";
 import {
+  EndSessionModal,
   HostCustomQuestionPanel,
   TransferPanel,
 } from "@/components/host/panels";
@@ -160,11 +162,13 @@ export default function HostPage() {
   const { room, players, votes, ratings, customQuestions, askedQuestions, loading, error, refresh } = useRoom(code);
   const profileState = useProfile();
   const { savedQuestions, refresh: refreshSavedQuestions } = useSavedQuestions(room?.game_type, profileState.canManageQuestions);
+  const { packs, packItems, questionIndex } = useQuestionPacks(profileState.canManageQuestions);
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const [customQuestionCount, setCustomQuestionCount] = useState(String(DEFAULT_TOTAL_QUESTIONS));
   const [hostSelectedOption, setHostSelectedOption] = useState<Choice | null>(null);
   const [hostSelectedPlayerId, setHostSelectedPlayerId] = useState<string | null>(null);
@@ -243,6 +247,33 @@ export default function HostPage() {
     () => getQuestionSourceSettings(room?.question_source_settings),
     [room?.question_source_settings]
   );
+  const selectedPackQuestions = useMemo(
+    () =>
+      getSelectedPackQuestions({
+        selectedPackIds: questionSourceSettings.selectedPackIds,
+        packItems,
+        savedQuestions,
+      }),
+    [packItems, questionSourceSettings.selectedPackIds, savedQuestions],
+  );
+  const packChoices = useMemo(() => {
+    const gameByQuestionId = new Map(questionIndex.map((question) => [question.id, question.game_type]));
+    return packs.map((pack) => {
+      const gameCounts: Partial<Record<GameType, number>> = {};
+      for (const item of packItems) {
+        if (item.pack_id !== pack.id) continue;
+        const itemGameType = gameByQuestionId.get(item.saved_question_id);
+        if (!itemGameType) continue;
+        gameCounts[itemGameType] = (gameCounts[itemGameType] ?? 0) + 1;
+      }
+      return {
+        id: pack.id,
+        name: pack.name,
+        compatibleCount: gameType ? gameCounts[gameType] ?? 0 : 0,
+        gameCounts,
+      };
+    });
+  }, [gameType, packItems, packs, questionIndex]);
   const currentSnapshotQuestion = useMemo(
     () => {
       const snapshot = questionFromSnapshot(room?.current_question_snapshot);
@@ -331,6 +362,7 @@ export default function HostPage() {
         totalQuestions,
         excludeIds: [],
         liveQuestions: customQuestions,
+        packQuestions: selectedPackQuestions,
         savedQuestions,
         settings: externalSettings,
       })
@@ -340,10 +372,10 @@ export default function HostPage() {
           text: question.text,
           authorPlayerId: question.authorPlayerId ?? question.savedQuestionId ?? "saved",
           category: question.category,
-          source: question.source === "saved" ? "saved" as const : "live" as const,
+          source: question.source === "saved" || question.source === "pack" ? "saved" as const : "live" as const,
         }));
     },
-    [customQuestions, questionSourceSettings, savedQuestions, selectedCategories, totalQuestions]
+    [customQuestions, questionSourceSettings, savedQuestions, selectedCategories, selectedPackQuestions, totalQuestions]
   );
 
   useEffect(() => {
@@ -422,10 +454,11 @@ export default function HostPage() {
       totalQuestions,
       excludeIds: blockedQuestionIds,
       liveQuestions: customQuestions,
+      packQuestions: selectedPackQuestions,
       savedQuestions,
       settings: questionSourceSettings,
     });
-  }, [blockedQuestionIds, customQuestions, gameType, questionSourceSettings, savedQuestions, selectedCategories, totalQuestions]);
+  }, [blockedQuestionIds, customQuestions, gameType, questionSourceSettings, savedQuestions, selectedCategories, selectedPackQuestions, totalQuestions]);
   const filteredAvailable = useMemo(() => {
     if (!gameType) return [];
     return questionPlanResult?.plan ?? [];
@@ -703,6 +736,21 @@ export default function HostPage() {
     });
   }
 
+  function toggleQuestionPack(packId: string) {
+    const selected = new Set(questionSourceSettings.selectedPackIds);
+    if (selected.has(packId)) selected.delete(packId);
+    else selected.add(packId);
+    const nextSelectedPackIds = [...selected];
+    void updateConfig({
+      question_source_settings: {
+        ...questionSourceSettings,
+        mode: "smart_mix",
+        usePackQuestions: nextSelectedPackIds.length > 0,
+        selectedPackIds: nextSelectedPackIds,
+      },
+    });
+  }
+
   function toggleCategory(category: GameCategory) {
     const next = selectedCategories.includes(category)
       ? selectedCategories.filter((item) => item !== category)
@@ -766,6 +814,7 @@ export default function HostPage() {
         totalQuestions,
         excludeIds: blockedQuestionIds,
         liveQuestions: customQuestions,
+        packQuestions: selectedPackQuestions,
         savedQuestions,
         settings: questionSourceSettings,
       })
@@ -919,6 +968,7 @@ export default function HostPage() {
         totalQuestions,
         excludeIds: blockedQuestionIds,
         liveQuestions: customQuestions,
+        packQuestions: selectedPackQuestions,
         savedQuestions,
         settings: questionSourceSettings,
       })
@@ -993,6 +1043,7 @@ export default function HostPage() {
         totalQuestions,
         excludeIds: uniqueIds([...blockedQuestionIds, ...mimeGameState.usedExpressionIds]),
         liveQuestions: customQuestions,
+        packQuestions: selectedPackQuestions,
         savedQuestions,
         settings: questionSourceSettings,
       })
@@ -1255,9 +1306,14 @@ export default function HostPage() {
     });
   }
 
+  function requestEndSession() {
+    setShowEndSessionModal(true);
+  }
+
   async function finishGame(requireConfirm: boolean) {
     if (!room) return;
     if (requireConfirm && !confirm("Afficher le Bilan de soirée ?")) return;
+    setShowEndSessionModal(false);
     await runTransition(async () => {
       const { error } = await getSupabase()
         .from("rooms")
@@ -1268,6 +1324,30 @@ export default function HostPage() {
         .eq("id", room.id);
       if (error) throw error;
     });
+  }
+
+  async function endRoomWithoutSummary() {
+    if (!room) return;
+    setShowEndSessionModal(false);
+    await runTransition(async () => {
+      const { error } = await getSupabase()
+        .from("rooms")
+        .update({
+          status: "ended",
+          current_question_id: null,
+          current_question_snapshot: null,
+          round_question_ids: [],
+          question_started_at: null,
+          reveal_started_at: null,
+          scoreboard_started_at: null,
+          mime_game_state: null,
+          jauge_game_state: null,
+          intrus_game_state: null,
+        })
+        .eq("id", room.id);
+      if (error) throw error;
+    });
+    router.push("/");
   }
 
   async function resetFinishedGameToLobby() {
@@ -1330,7 +1410,6 @@ export default function HostPage() {
 
   async function transferHostTo(player: Player) {
     if (!room || busy) return;
-    if (!confirm(`Passer le rôle d'hôte à ${player.name} ?`)) return;
     await runTransition(async () => {
       const supabase = getSupabase();
       const { error: currentHostError } = await supabase
@@ -1655,7 +1734,7 @@ export default function HostPage() {
           playersCount={players.length}
           round={displayRound}
           totalQuestions={totalQuestions}
-          onEnd={() => void finishGame(true)}
+          onEnd={requestEndSession}
           onToggleTransfer={() => setShowTransfer((value) => !value)}
           canTransfer={otherPlayers.length > 0}
         />
@@ -1679,6 +1758,10 @@ export default function HostPage() {
           gameLabel={gameDefinition?.label}
           round={displayRound}
           totalQuestions={totalQuestions}
+          busy={busy}
+          onBackToLobby={resetToLobby}
+          onChangeGame={returnToGameSelection}
+          onEnd={requestEndSession}
         />
       )}
 
@@ -1697,7 +1780,9 @@ export default function HostPage() {
           isJauge={Boolean(jaugeMode)}
           onRevealNow={jaugeMode ? revealJaugeNow : revealNow}
           onNext={goToNextQuestion}
-          onEnd={() => void finishGame(false)}
+          onBackToLobby={resetToLobby}
+          onChangeGame={returnToGameSelection}
+          onEnd={requestEndSession}
           busy={busy}
         />
       )}
@@ -1801,9 +1886,12 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
+          packQuestionCount={selectedPackQuestions.length}
+          packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
+          onTogglePack={toggleQuestionPack}
           onStart={() => void startMimeGame(mimeLobbyOrder, mimeHostPlayMode, mimeSelectedMode)}
           selectedMode={mimeSelectedMode}
           onSelectedModeChange={setMimeSelectedMode}
@@ -1880,6 +1968,8 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
+          packQuestionCount={selectedPackQuestions.length}
+          packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => {
@@ -1888,6 +1978,7 @@ export default function HostPage() {
             patchJaugeLobbyState({ questionMode: nextMode });
             void updateConfig({ question_source_settings: next });
           }}
+          onTogglePack={toggleQuestionPack}
           onStart={() => void startJaugeGame(jaugeLobbyOrder)}
           onChangeGame={changeGame}
         />
@@ -1911,9 +2002,12 @@ export default function HostPage() {
           questionSourceSettings={questionSourceSettings}
           canUseSavedQuestions={profileState.canManageQuestions}
           savedQuestionCount={savedQuestions.length}
+          packQuestionCount={selectedPackQuestions.length}
+          packChoices={packChoices}
           liveQuestionCount={liveQuestionCountForGame}
           questionPoolDiagnostics={questionPoolDiagnostics}
           onQuestionSourceSettingsChange={(next) => void updateConfig({ question_source_settings: next })}
+          onTogglePack={toggleQuestionPack}
           onStart={goToNextQuestion}
           onChangeGame={changeGame}
         />
@@ -1934,7 +2028,7 @@ export default function HostPage() {
           onReveal={revealMimeExpression}
           onRestart={restartMimeRound}
           onNext={() => void goToNextMimeRound()}
-          onEnd={() => void finishGame(false)}
+          onEnd={requestEndSession}
           onAddPlayer={addPlayerToMimeOrder}
         />
       )}
@@ -2023,7 +2117,7 @@ export default function HostPage() {
           busy={busy}
           onRestart={restartMimeRound}
           onNext={() => void goToNextMimeRound()}
-          onEnd={() => void finishGame(false)}
+          onEnd={requestEndSession}
           onAddPlayer={addPlayerToMimeOrder}
         />
       )}
@@ -2039,7 +2133,7 @@ export default function HostPage() {
           isTv={tvMode}
           busy={busy}
           onNext={goToNextQuestion}
-          onEnd={() => void finishGame(false)}
+          onEnd={requestEndSession}
           onBackToLobby={resetToLobby}
         />
       )}
@@ -2055,7 +2149,7 @@ export default function HostPage() {
           isTv={tvMode}
           busy={busy}
           onNext={goToNextQuestion}
-          onEnd={() => void finishGame(false)}
+          onEnd={requestEndSession}
           onBackToLobby={resetToLobby}
         />
       )}
@@ -2146,10 +2240,19 @@ export default function HostPage() {
           refresh={refresh}
           onBackToLobby={() => void resetToLobby()}
           onChangeGame={() => void returnToGameSelection()}
-          onEndGame={() => void finishGame(false)}
+          onEndGame={requestEndSession}
         />
       )}
       </section>
+
+      {showEndSessionModal && (
+        <EndSessionModal
+          busy={busy}
+          onShowSummary={() => void finishGame(false)}
+          onEndWithoutSummary={() => void endRoomWithoutSummary()}
+          onClose={() => setShowEndSessionModal(false)}
+        />
+      )}
 
       {isHostQuestionActive && validationEvents.length > 0 && (
         <ValidationParticles events={validationEvents} />

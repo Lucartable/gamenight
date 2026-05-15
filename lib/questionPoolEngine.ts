@@ -22,6 +22,7 @@ export function buildQuestionPlan({
   totalQuestions,
   excludeIds,
   liveQuestions,
+  packQuestions = [],
   savedQuestions,
   settings,
   random,
@@ -31,6 +32,7 @@ export function buildQuestionPlan({
   totalQuestions: number;
   excludeIds: number[];
   liveQuestions: CustomQuestion[];
+  packQuestions?: SavedCustomQuestion[];
   savedQuestions: SavedCustomQuestion[];
   settings: QuestionSourceSettings;
   random?: () => number;
@@ -41,6 +43,7 @@ export function buildQuestionPlan({
     totalQuestions,
     excludeIds,
     liveQuestions,
+    packQuestions,
     savedQuestions,
     settings,
     random,
@@ -53,6 +56,7 @@ export function buildQuestionPlanWithDiagnostics({
   totalQuestions,
   excludeIds,
   liveQuestions,
+  packQuestions = [],
   savedQuestions,
   settings,
   random = Math.random,
@@ -62,6 +66,7 @@ export function buildQuestionPlanWithDiagnostics({
   totalQuestions: number;
   excludeIds: number[];
   liveQuestions: CustomQuestion[];
+  packQuestions?: SavedCustomQuestion[];
   savedQuestions: SavedCustomQuestion[];
   settings: QuestionSourceSettings;
   random?: () => number;
@@ -77,12 +82,19 @@ export function buildQuestionPlanWithDiagnostics({
   const rawLiveQuestions = sourceSettings.useLiveQuestions
     ? liveQuestions.filter((question) => question.game_type === gameType && isCustomCategoryAllowed(question.category, categories) && !excluded.has(question.local_question_id))
     : [];
+  const rawPackQuestions = sourceSettings.usePackQuestions
+    ? packQuestions.filter((question) => question.game_type === gameType && isCustomCategoryAllowed(question.category, categories) && !excluded.has(question.local_question_id))
+    : [];
   const rawSavedQuestions = sourceSettings.useSavedQuestions
     ? savedQuestions.filter((question) => question.game_type === gameType && isCustomCategoryAllowed(question.category, categories) && !excluded.has(question.local_question_id))
     : [];
   const systemQuestions = rawSystemQuestions.filter((question) => validateGameQuestion(question, gameType));
   const live = rawLiveQuestions
     .map((question) => customQuestionToPoolItem(question))
+    .filter((question): question is QuestionPoolItem => Boolean(question))
+    .filter((question) => validateGameQuestion(question, gameType));
+  const packs = rawPackQuestions
+    .map((question) => savedQuestionToPoolItem(question, "pack"))
     .filter((question): question is QuestionPoolItem => Boolean(question))
     .filter((question) => validateGameQuestion(question, gameType));
   const saved = rawSavedQuestions
@@ -92,6 +104,7 @@ export function buildQuestionPlanWithDiagnostics({
 
   const systemPool = shuffle(dedupeQuestions(systemQuestions), random);
   const livePool = shuffle(dedupeQuestions(live), random);
+  const packPool = shuffle(dedupeQuestions(packs), random);
   const savedPool = shuffle(dedupeQuestions(saved), random);
 
   let plan: QuestionPoolItem[];
@@ -103,9 +116,12 @@ export function buildQuestionPlanWithDiagnostics({
     plan = savedPool.slice(0, totalQuestions);
   } else {
     const selectedLive = sourceSettings.useLiveQuestions ? livePool.slice(0, totalQuestions) : [];
-    const withSaved = sourceSettings.useSavedQuestions
-      ? appendUniqueQuestions(selectedLive, savedPool, totalQuestions)
+    const withPacks = sourceSettings.usePackQuestions
+      ? appendUniqueQuestions(selectedLive, packPool, totalQuestions)
       : selectedLive;
+    const withSaved = sourceSettings.useSavedQuestions
+      ? appendUniqueQuestions(withPacks, savedPool, totalQuestions)
+      : withPacks;
     const withSystem = sourceSettings.useSystemQuestions
       ? appendUniqueQuestions(withSaved, systemPool, totalQuestions)
       : withSaved;
@@ -113,8 +129,8 @@ export function buildQuestionPlanWithDiagnostics({
   }
 
   const rejected =
-    rawSystemQuestions.length + rawLiveQuestions.length + rawSavedQuestions.length -
-    (systemQuestions.length + live.length + saved.length);
+    rawSystemQuestions.length + rawLiveQuestions.length + rawPackQuestions.length + rawSavedQuestions.length -
+    (systemQuestions.length + live.length + packs.length + saved.length);
   const diagnostics: QuestionPoolDiagnostics = {
     gameType,
     mode: sourceSettings.mode,
@@ -123,14 +139,16 @@ export function buildQuestionPlanWithDiagnostics({
     sources: {
       systemRaw: rawSystemQuestions.length,
       liveRaw: rawLiveQuestions.length,
+      packRaw: rawPackQuestions.length,
       savedRaw: rawSavedQuestions.length,
       systemValid: systemQuestions.length,
       liveValid: live.length,
+      packValid: packs.length,
       savedValid: saved.length,
       rejected,
       final: plan.length,
     },
-    issue: buildQuestionPoolIssue({ settings: sourceSettings, plan, live, saved, systemQuestions, totalQuestions }),
+    issue: buildQuestionPoolIssue({ settings: sourceSettings, plan, live, packs, saved, systemQuestions, totalQuestions }),
   };
   debugQuestionPool(diagnostics);
   return { plan, diagnostics };
@@ -141,10 +159,10 @@ export function pickNextQuestionFromPlan(plan: QuestionPoolItem[]): QuestionPool
 }
 
 function resolveSourceSettings(settings: QuestionSourceSettings): QuestionSourceSettings {
-  if (settings.mode === "system_only") return { ...settings, useSystemQuestions: true, useLiveQuestions: false, useSavedQuestions: false };
-  if (settings.mode === "players_only") return { ...settings, useSystemQuestions: false, useLiveQuestions: true, useSavedQuestions: false };
-  if (settings.mode === "saved_only") return { ...settings, useSystemQuestions: false, useLiveQuestions: false, useSavedQuestions: true };
-  if (settings.mode === "all_mix") return { ...settings, useSystemQuestions: true, useLiveQuestions: true, useSavedQuestions: true };
+  if (settings.mode === "system_only") return { ...settings, useSystemQuestions: true, useLiveQuestions: false, usePackQuestions: false, useSavedQuestions: false };
+  if (settings.mode === "players_only") return { ...settings, useSystemQuestions: false, useLiveQuestions: true, usePackQuestions: false, useSavedQuestions: false };
+  if (settings.mode === "saved_only") return { ...settings, useSystemQuestions: false, useLiveQuestions: false, usePackQuestions: false, useSavedQuestions: true };
+  if (settings.mode === "all_mix") return { ...settings, useSystemQuestions: true, useLiveQuestions: true, usePackQuestions: settings.usePackQuestions, useSavedQuestions: true };
   return settings;
 }
 
@@ -156,6 +174,7 @@ function buildQuestionPoolIssue({
   settings,
   plan,
   live,
+  packs,
   saved,
   systemQuestions,
   totalQuestions,
@@ -163,6 +182,7 @@ function buildQuestionPoolIssue({
   settings: QuestionSourceSettings;
   plan: QuestionPoolItem[];
   live: QuestionPoolItem[];
+  packs: QuestionPoolItem[];
   saved: QuestionPoolItem[];
   systemQuestions: QuestionPoolItem[];
   totalQuestions: number;
@@ -177,6 +197,9 @@ function buildQuestionPoolIssue({
   if (settings.mode === "players_only") return live.length ? null : "Aucune question joueur valide pour ce jeu.";
   if (settings.mode === "saved_only") return saved.length ? null : "Aucune question sauvegardée valide pour ce jeu.";
   if (settings.mode === "system_only") return systemQuestions.length ? null : "Aucune question système disponible avec ces catégories.";
+  if (settings.usePackQuestions && settings.selectedPackIds.length > 0 && packs.length === 0) {
+    return "Aucune question de pack compatible pour ce jeu.";
+  }
   return "Aucune question disponible avec cette configuration.";
 }
 

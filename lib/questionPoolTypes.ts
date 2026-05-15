@@ -1,7 +1,7 @@
 import type { GameQuestion } from "./gameQuestions";
 import type { GameType, QuestionSourceSettings, Room } from "@/types/database";
 
-export type QuestionSource = "system" | "live" | "saved";
+export type QuestionSource = "system" | "live" | "pack" | "saved";
 
 export type QuestionPoolItem = GameQuestion & {
   source: QuestionSource;
@@ -17,9 +17,11 @@ export interface QuestionPoolDiagnostics {
   sources: {
     systemRaw: number;
     liveRaw: number;
+    packRaw: number;
     savedRaw: number;
     systemValid: number;
     liveValid: number;
+    packValid: number;
     savedValid: number;
     rejected: number;
     final: number;
@@ -31,7 +33,9 @@ export const DEFAULT_QUESTION_SOURCE_SETTINGS: QuestionSourceSettings = {
   mode: "system_only",
   useSystemQuestions: true,
   useLiveQuestions: false,
+  usePackQuestions: false,
   useSavedQuestions: false,
+  selectedPackIds: [],
   maxQuestionsPerPlayer: 3,
   authorVisibility: "hidden",
 };
@@ -45,7 +49,11 @@ export function getQuestionSourceSettings(value: Room["question_source_settings"
       : DEFAULT_QUESTION_SOURCE_SETTINGS.mode,
     useSystemQuestions: raw.useSystemQuestions !== false,
     useLiveQuestions: raw.useLiveQuestions === true,
+    usePackQuestions: raw.usePackQuestions === true,
     useSavedQuestions: raw.useSavedQuestions === true,
+    selectedPackIds: Array.isArray(raw.selectedPackIds)
+      ? raw.selectedPackIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [],
     maxQuestionsPerPlayer: clampInt(raw.maxQuestionsPerPlayer, 1, 20, DEFAULT_QUESTION_SOURCE_SETTINGS.maxQuestionsPerPlayer),
     authorVisibility: raw.authorVisibility === "visible" || raw.authorVisibility === "final_reveal" || raw.authorVisibility === "hidden"
       ? raw.authorVisibility

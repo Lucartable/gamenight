@@ -18,6 +18,8 @@ export interface TvHostStageProps {
   isJauge: boolean;
   onRevealNow: () => void;
   onNext: () => Promise<void> | void;
+  onBackToLobby: () => Promise<void> | void;
+  onChangeGame: () => Promise<void> | void;
   onEnd: () => void;
   busy: boolean;
 }
@@ -47,12 +49,20 @@ export function TvStatusStrip({
   gameLabel,
   round,
   totalQuestions,
+  busy = false,
+  onBackToLobby,
+  onChangeGame,
+  onEnd,
 }: {
   room: Room;
   playersCount: number;
   gameLabel?: string;
   round: number;
   totalQuestions: number;
+  busy?: boolean;
+  onBackToLobby?: () => Promise<void> | void;
+  onChangeGame?: () => Promise<void> | void;
+  onEnd?: () => void;
 }) {
   return (
     <div className="tv-status-strip" aria-label="Statut TV">
@@ -66,6 +76,25 @@ export function TvStatusStrip({
         <span>{labelStatus(room.status, gameLabel)}</span>
         {round > 0 && <span>{Math.min(round, totalQuestions)} / {totalQuestions}</span>}
       </div>
+      {(onBackToLobby || onChangeGame || onEnd) && (
+        <div className="tv-status-strip-actions">
+          {onBackToLobby && room.status !== "lobby" && (
+            <button type="button" disabled={busy} onClick={() => void onBackToLobby()} className="tv-host-toolbar-button">
+              Lobby
+            </button>
+          )}
+          {onChangeGame && (
+            <button type="button" disabled={busy} onClick={() => void onChangeGame()} className="tv-host-toolbar-button">
+              Changer
+            </button>
+          )}
+          {onEnd && (
+            <button type="button" disabled={busy} onClick={onEnd} className="tv-host-toolbar-button is-danger">
+              Terminer
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -84,6 +113,8 @@ export function TvHostStage({
   isJauge,
   onRevealNow,
   onNext,
+  onBackToLobby,
+  onChangeGame,
   onEnd,
   busy,
 }: TvHostStageProps) {
@@ -133,6 +164,19 @@ export function TvHostStage({
             {players.length} joueur{players.length > 1 ? "s" : ""}
           </span>
           <span>{labelStatus(room.status, gameLabel)}</span>
+        </div>
+        <div className="tv-topbar-actions">
+          {room.status !== "lobby" && (
+            <button type="button" disabled={busy} onClick={() => void onBackToLobby()} className="tv-host-toolbar-button">
+              Lobby
+            </button>
+          )}
+          <button type="button" disabled={busy} onClick={() => void onChangeGame()} className="tv-host-toolbar-button">
+            Changer
+          </button>
+          <button type="button" disabled={busy} onClick={onEnd} className="tv-host-toolbar-button is-danger">
+            Terminer
+          </button>
         </div>
       </div>
 

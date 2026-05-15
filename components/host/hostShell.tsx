@@ -2,6 +2,7 @@
 
 import { AudioToggle } from "@/components/audioToggle";
 import { labelStatus } from "@/components/tvHostStage";
+import { Button } from "@/components/ui";
 import { GAME_DEFINITIONS } from "@/lib/gameQuestions";
 import type { GameType } from "@/types/database";
 
@@ -78,13 +79,15 @@ export function RoomHeader({
         </div>
         <div className="flex flex-col items-end gap-2">
           <AudioToggle compact />
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-2 sm:flex-row">
             {canTransfer && (
-              <button onClick={onToggleTransfer} className="btn-ghost text-neon-cyan">
-                👑 Transférer
-              </button>
+              <Button type="button" variant="secondary" size="sm" onClick={onToggleTransfer} leading="👑">
+                Donner les commandes
+              </Button>
             )}
-            <button onClick={onEnd} className="btn-ghost text-neon-pink">Finir</button>
+            <Button type="button" variant="danger" size="sm" onClick={onEnd} leading="⏻">
+              Terminer la soirée
+            </Button>
           </div>
         </div>
       </div>

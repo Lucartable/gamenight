@@ -7,6 +7,7 @@ import { Button, Card, Chip, Input, Section } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase";
 import { useProfile } from "@/lib/useProfile";
 import { useSavedQuestions } from "@/lib/useSavedQuestions";
+import { generateLocalQuestionId } from "@/lib/questionPoolTransform";
 import type { GameType, QuestionPack, QuestionPackItem, SavedCustomQuestion } from "@/types/database";
 
 const GAME_LABELS: Record<GameType, string> = {
@@ -37,9 +38,22 @@ export default function SavedQuestionsPage() {
   const [packs, setPacks] = useState<QuestionPack[]>([]);
   const [packItems, setPackItems] = useState<QuestionPackItem[]>([]);
   const [packName, setPackName] = useState("");
+  const [packDescription, setPackDescription] = useState("");
   const [packGame, setPackGame] = useState<GameType | "all">("all");
   const [activePackId, setActivePackId] = useState("");
+  const [editingPackId, setEditingPackId] = useState<string | null>(null);
+  const [editPackName, setEditPackName] = useState("");
+  const [editPackDescription, setEditPackDescription] = useState("");
+  const [editPackGame, setEditPackGame] = useState<GameType | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showCreateQuestion, setShowCreateQuestion] = useState(false);
+  const [newGameType, setNewGameType] = useState<GameType>("who_of_us");
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionCategory, setNewQuestionCategory] = useState("sauvegardees");
+  const [newQuestionOptions, setNewQuestionOptions] = useState("");
+  const [newQuestionPackId, setNewQuestionPackId] = useState("");
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(() => new Set());
+  const [bulkCategory, setBulkCategory] = useState("");
 
   const filteredQuestions = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -61,7 +75,6 @@ export default function SavedQuestionsPage() {
     () => savedQuestions.filter((question) => activePackQuestionIds.has(question.id)),
     [activePackQuestionIds, savedQuestions]
   );
-
   const refreshPacks = useCallback(async () => {
     const supabase = getSupabase();
     const [{ data: nextPacks }, { data: nextItems }] = await Promise.all([
@@ -101,6 +114,7 @@ export default function SavedQuestionsPage() {
     const { error: insertError } = await getSupabase().from("question_packs").insert({
       owner_user_id: profile.userId,
       name: packName.trim(),
+      description: packDescription.trim() || null,
       game_type: packGame === "all" ? null : packGame,
     });
     if (insertError) {
@@ -108,7 +122,59 @@ export default function SavedQuestionsPage() {
       return;
     }
     setPackName("");
+    setPackDescription("");
     await refreshPacks();
+  }
+
+  async function createQuestion(e: FormEvent) {
+    e.preventDefault();
+    if (!profile.userId) return;
+    setError(null);
+    const category = newQuestionCategory.trim() || "sauvegardees";
+    const payload = buildPayloadForGame(newGameType, newQuestionOptions);
+    const text = newQuestionText.trim() || payloadToFallbackText(newGameType, payload);
+    if (!payload || text.length < 4) {
+      setError("Question incomplète ou options invalides pour ce jeu.");
+      return;
+    }
+
+    setBusyId("new-question");
+    const { data: insertedQuestion, error: insertError } = await getSupabase().from("saved_custom_questions").insert({
+      host_user_id: profile.userId,
+      game_type: newGameType,
+      local_question_id: generateLocalQuestionId("saved"),
+      question_text: text,
+      category,
+      payload,
+      source_game: newGameType,
+      original_author_id: null,
+      original_room_id: null,
+    }).select("id").single();
+    setBusyId(null);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    const insertedQuestionId = typeof insertedQuestion?.id === "string" ? insertedQuestion.id : null;
+    if (newQuestionPackId && insertedQuestionId) {
+      const position = packItems.filter((item) => item.pack_id === newQuestionPackId).length;
+      const { error: packInsertError } = await getSupabase()
+        .from("question_pack_items")
+        .upsert({ pack_id: newQuestionPackId, saved_question_id: insertedQuestionId, position }, { onConflict: "pack_id,saved_question_id" });
+      if (packInsertError) {
+        setError(packInsertError.message);
+        await refresh();
+        return;
+      }
+    }
+
+    setNewQuestionText("");
+    setNewQuestionOptions("");
+    setNewQuestionCategory("sauvegardees");
+    setNewQuestionPackId("");
+    setShowCreateQuestion(false);
+    await Promise.all([refresh(), refreshPacks()]);
   }
 
   function startEdit(question: SavedCustomQuestion) {
@@ -152,6 +218,123 @@ export default function SavedQuestionsPage() {
       return;
     }
     await Promise.all([refresh(), refreshPacks()]);
+  }
+
+  async function duplicateQuestion(question: SavedCustomQuestion) {
+    if (!profile.userId) return;
+    setBusyId(question.id);
+    setError(null);
+    const { error: insertError } = await getSupabase().from("saved_custom_questions").insert({
+      host_user_id: profile.userId,
+      game_type: question.game_type,
+      local_question_id: generateLocalQuestionId("saved"),
+      question_text: `${question.question_text} (copie)`,
+      category: question.category,
+      payload: question.payload,
+      source_game: question.source_game,
+      original_author_id: question.original_author_id,
+      original_room_id: question.original_room_id,
+    });
+    setBusyId(null);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+    await refresh();
+  }
+
+  function toggleSelectedQuestion(questionId: string) {
+    setSelectedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
+  }
+
+  async function deleteSelectedQuestions() {
+    const ids = [...selectedQuestionIds];
+    if (!ids.length) return;
+    if (!confirm(`Supprimer ${ids.length} question${ids.length > 1 ? "s" : ""} de la bibliothèque ?`)) return;
+    setBusyId("bulk-delete");
+    setError(null);
+    const { error: deleteError } = await getSupabase().from("saved_custom_questions").delete().in("id", ids);
+    setBusyId(null);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    setSelectedQuestionIds(new Set());
+    await Promise.all([refresh(), refreshPacks()]);
+  }
+
+  async function addSelectedToPack() {
+    if (!activePackId || selectedQuestionIds.size === 0) return;
+    const existingCount = packItems.filter((item) => item.pack_id === activePackId).length;
+    const rows = [...selectedQuestionIds].map((questionId, index) => ({
+      pack_id: activePackId,
+      saved_question_id: questionId,
+      position: existingCount + index,
+    }));
+    setBusyId("bulk-pack");
+    setError(null);
+    const { error: upsertError } = await getSupabase()
+      .from("question_pack_items")
+      .upsert(rows, { onConflict: "pack_id,saved_question_id" });
+    setBusyId(null);
+    if (upsertError) {
+      setError(upsertError.message);
+      return;
+    }
+    await refreshPacks();
+  }
+
+  async function removeSelectedFromPack() {
+    if (!activePackId || selectedQuestionIds.size === 0) return;
+    setBusyId("bulk-remove-pack");
+    setError(null);
+    const { error: deleteError } = await getSupabase()
+      .from("question_pack_items")
+      .delete()
+      .eq("pack_id", activePackId)
+      .in("saved_question_id", [...selectedQuestionIds]);
+    setBusyId(null);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    await refreshPacks();
+  }
+
+  async function updateSelectedCategory() {
+    const category = bulkCategory.trim();
+    if (!category || selectedQuestionIds.size === 0) return;
+    setBusyId("bulk-category");
+    setError(null);
+    const { error: updateError } = await getSupabase()
+      .from("saved_custom_questions")
+      .update({ category, updated_at: new Date().toISOString() })
+      .in("id", [...selectedQuestionIds]);
+    setBusyId(null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setBulkCategory("");
+    await refresh();
+  }
+
+  function exportSelectedQuestions() {
+    const ids = new Set(selectedQuestionIds);
+    const rows = savedQuestions.filter((question) => ids.has(question.id));
+    if (!rows.length) return;
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `badaboum-questions-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(href);
   }
 
   async function addToPack(questionId: string) {
@@ -200,6 +383,77 @@ export default function SavedQuestionsPage() {
     await refreshPacks();
   }
 
+  function startPackEdit(pack: QuestionPack) {
+    setEditingPackId(pack.id);
+    setEditPackName(pack.name);
+    setEditPackDescription(pack.description ?? "");
+    setEditPackGame(pack.game_type ?? "all");
+  }
+
+  async function savePackEdit() {
+    if (!editingPackId || !editPackName.trim()) return;
+    setBusyId(editingPackId);
+    setError(null);
+    const { error: updateError } = await getSupabase()
+      .from("question_packs")
+      .update({
+        name: editPackName.trim(),
+        description: editPackDescription.trim() || null,
+        game_type: editPackGame === "all" ? null : editPackGame,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", editingPackId);
+    setBusyId(null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setEditingPackId(null);
+    await refreshPacks();
+  }
+
+  async function duplicatePack(pack: QuestionPack) {
+    if (!profile.userId) return;
+    setBusyId(`duplicate-pack-${pack.id}`);
+    setError(null);
+    const { data: insertedPack, error: insertError } = await getSupabase()
+      .from("question_packs")
+      .insert({
+        owner_user_id: profile.userId,
+        name: `${pack.name} (copie)`,
+        description: pack.description,
+        game_type: pack.game_type,
+      })
+      .select("id")
+      .single();
+    if (insertError) {
+      setBusyId(null);
+      setError(insertError.message);
+      return;
+    }
+    const newPackId = typeof insertedPack?.id === "string" ? insertedPack.id : null;
+    if (newPackId) {
+      const rows = packItems
+        .filter((item) => item.pack_id === pack.id)
+        .map((item) => ({
+          pack_id: newPackId,
+          saved_question_id: item.saved_question_id,
+          position: item.position,
+        }));
+      if (rows.length) {
+        const { error: copyError } = await getSupabase().from("question_pack_items").insert(rows);
+        if (copyError) {
+          setBusyId(null);
+          setError(copyError.message);
+          return;
+        }
+      }
+      setActivePackId(newPackId);
+    }
+    setBusyId(null);
+    await refreshPacks();
+  }
+
   const gameFilterChips: Array<{ value: GameType | "all"; label: string; tone: "neutral" | "pink" | "cyan" | "yellow" | "green" | "purple" }> = [
     { value: "all", label: "Tous", tone: "neutral" },
     { value: "who_would", label: "Tu préfères", tone: "pink" },
@@ -237,6 +491,11 @@ export default function SavedQuestionsPage() {
             >
               ← Accueil
             </Link>
+            {profile.canManageQuestions && (
+              <Button type="button" variant="primary" size="md" onClick={() => setShowCreateQuestion((value) => !value)} leading="+">
+                Ajouter une question
+              </Button>
+            )}
           </div>
         </Card>
 
@@ -287,6 +546,66 @@ export default function SavedQuestionsPage() {
         {!profile.loading && profile.canManageQuestions && (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
             <section className="space-y-4">
+              {showCreateQuestion && (
+                <Card padding="lg" className="animate-slideUp">
+                  <Section eyebrow="Nouvelle question" title="Ajouter à la bibliothèque" spacing="tight">
+                    <form onSubmit={createQuestion} className="mt-4 grid gap-3">
+                      <select
+                        className="input"
+                        value={newGameType}
+                        onChange={(event) => {
+                          setNewGameType(event.target.value as GameType);
+                          setNewQuestionOptions("");
+                        }}
+                      >
+                        {GAME_OPTIONS.map((gameType) => (
+                          <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
+                        ))}
+                      </select>
+                      <textarea
+                        className="input min-h-24 resize-none"
+                        value={newQuestionText}
+                        onChange={(event) => setNewQuestionText(event.target.value)}
+                        placeholder={newGameType === "who_would" ? "Question / contexte (optionnel)" : "Texte de la question"}
+                      />
+                      <Input
+                        value={newQuestionCategory}
+                        onChange={(event) => setNewQuestionCategory(event.target.value)}
+                        placeholder="Catégorie"
+                      />
+                      <select
+                        className="input"
+                        value={newQuestionPackId}
+                        onChange={(event) => setNewQuestionPackId(event.target.value)}
+                      >
+                        <option value="">Ne pas ajouter à un pack</option>
+                        {packs.map((pack) => (
+                          <option key={pack.id} value={pack.id}>
+                            Ajouter à : {pack.name}
+                          </option>
+                        ))}
+                      </select>
+                      {questionNeedsOptions(newGameType) && (
+                        <textarea
+                          className="input min-h-24 resize-none"
+                          value={newQuestionOptions}
+                          onChange={(event) => setNewQuestionOptions(event.target.value)}
+                          placeholder={newGameType === "who_would" ? "Option A\nOption B" : "Options, une par ligne (2 à 8)"}
+                        />
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="submit" variant="primary" disabled={busyId === "new-question"}>
+                          Créer
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => setShowCreateQuestion(false)}>
+                          Annuler
+                        </Button>
+                      </div>
+                    </form>
+                  </Section>
+                </Card>
+              )}
+
               <Card padding="md" className="animate-slideUp">
                 <Input
                   value={query}
@@ -325,6 +644,44 @@ export default function SavedQuestionsPage() {
                 </p>
               )}
 
+              {selectedQuestionIds.size > 0 && (
+                <Card padding="md" className="sticky top-3 z-20 animate-slideUp border-neon-cyan/35 bg-neon-cyan/10">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-black">
+                      {selectedQuestionIds.size} sélectionnée{selectedQuestionIds.size > 1 ? "s" : ""}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="secondary" size="sm" disabled={!activePackId || busyId === "bulk-pack"} onClick={() => void addSelectedToPack()}>
+                        Ajouter au pack actif
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={!activePackId || busyId === "bulk-remove-pack"} onClick={() => void removeSelectedFromPack()}>
+                        Retirer du pack actif
+                      </Button>
+                      <div className="flex min-w-48 flex-1 gap-2">
+                        <Input
+                          value={bulkCategory}
+                          onChange={(event) => setBulkCategory(event.target.value)}
+                          placeholder="Nouvelle catégorie"
+                          className="min-w-0"
+                        />
+                        <Button variant="secondary" size="sm" disabled={!bulkCategory.trim() || busyId === "bulk-category"} onClick={() => void updateSelectedCategory()}>
+                          Appliquer
+                        </Button>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={exportSelectedQuestions}>
+                        Export JSON
+                      </Button>
+                      <Button variant="danger" size="sm" disabled={busyId === "bulk-delete"} onClick={() => void deleteSelectedQuestions()}>
+                        Supprimer
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedQuestionIds(new Set())}>
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               <div className="grid gap-3">
                 {filteredQuestions.map((question, index) => (
                   <Card
@@ -334,6 +691,15 @@ export default function SavedQuestionsPage() {
                     style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
+                      <label className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white/45">
+                        <input
+                          type="checkbox"
+                          checked={selectedQuestionIds.has(question.id)}
+                          onChange={() => toggleSelectedQuestion(question.id)}
+                          className="accent-cyan-400"
+                        />
+                        Select
+                      </label>
                       <div className="min-w-0 flex-1">
                         <Chip tone="cyan" size="sm">{GAME_LABELS[question.game_type]}</Chip>
                         {editingId === question.id ? (
@@ -389,6 +755,14 @@ export default function SavedQuestionsPage() {
                           <Button variant="secondary" size="sm" onClick={() => startEdit(question)}>
                             Modifier
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busyId === question.id}
+                            onClick={() => void duplicateQuestion(question)}
+                          >
+                            Dupliquer
+                          </Button>
                           {activePackQuestionIds.has(question.id) ? (
                             <Button
                               variant="ghost"
@@ -440,6 +814,12 @@ export default function SavedQuestionsPage() {
                 <Section eyebrow="Packs" title="Créer un pack" spacing="tight">
                   <form onSubmit={createPack} className="mt-1 space-y-3">
                     <Input value={packName} onChange={(event) => setPackName(event.target.value)} placeholder="Nom du pack" />
+                    <textarea
+                      className="input min-h-20 resize-none"
+                      value={packDescription}
+                      onChange={(event) => setPackDescription(event.target.value)}
+                      placeholder="Description courte (optionnel)"
+                    />
                     <select
                       className="input"
                       value={packGame}
@@ -473,9 +853,26 @@ export default function SavedQuestionsPage() {
                 </select>
                 {activePack && (
                   <div className="mt-3 rounded-2xl border border-neon-cyan/30 bg-neon-cyan/10 p-3">
-                    <div className="text-sm font-black">{activePack.name}</div>
-                    <div className="mt-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
-                      {activePackQuestions.length} question{activePackQuestions.length > 1 ? "s" : ""}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-black">{activePack.name}</div>
+                        {activePack.description && (
+                          <p className="mt-1 text-xs font-semibold text-white/55">{activePack.description}</p>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => startPackEdit(activePack)}>
+                        Modifier
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {formatPackDistribution(activePackQuestions).map(({ gameType, count }) => (
+                        <span key={gameType} className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black text-white/60">
+                          {GAME_LABELS[gameType]} {count}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
+                      {activePackQuestions.length} question{activePackQuestions.length > 1 ? "s" : ""} · {activePack.game_type ? GAME_LABELS[activePack.game_type] : "multi-jeux"}
                     </div>
                     <div className="mt-3 grid gap-2">
                       {activePackQuestions.slice(0, 6).map((question) => (
@@ -507,22 +904,70 @@ export default function SavedQuestionsPage() {
                       key={pack.id}
                       className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-black">{pack.name}</div>
-                          <div className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
-                            {pack.game_type ? GAME_LABELS[pack.game_type] : "Multi-jeux"} · {countPackItems(packItems, pack.id)}
+                      {editingPackId === pack.id ? (
+                        <div className="space-y-2">
+                          <Input value={editPackName} onChange={(event) => setEditPackName(event.target.value)} placeholder="Nom du pack" />
+                          <textarea
+                            className="input min-h-20 resize-none"
+                            value={editPackDescription}
+                            onChange={(event) => setEditPackDescription(event.target.value)}
+                            placeholder="Description"
+                          />
+                          <select
+                            className="input"
+                            value={editPackGame}
+                            onChange={(event) => setEditPackGame(event.target.value as GameType | "all")}
+                          >
+                            <option value="all">Multi-jeux</option>
+                            {GAME_OPTIONS.map((gameType) => (
+                              <option key={gameType} value={gameType}>{GAME_LABELS[gameType]}</option>
+                            ))}
+                          </select>
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="primary" size="sm" disabled={busyId === pack.id} onClick={() => void savePackEdit()}>
+                              Enregistrer
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setEditingPackId(null)}>
+                              Annuler
+                            </Button>
                           </div>
                         </div>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          disabled={busyId === pack.id}
-                          onClick={() => void deletePack(pack.id)}
-                        >
-                          Suppr.
-                        </Button>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setActivePackId(pack.id)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <div className="truncate text-sm font-black">{pack.name}</div>
+                            <div className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
+                              {pack.game_type ? GAME_LABELS[pack.game_type] : "Multi-jeux"} · {countPackItems(packItems, pack.id)}
+                            </div>
+                            {pack.description && <p className="mt-1 line-clamp-2 text-xs font-semibold text-white/45">{pack.description}</p>}
+                          </button>
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            <Button variant="ghost" size="sm" onClick={() => startPackEdit(pack)}>
+                              Modif.
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busyId === `duplicate-pack-${pack.id}`}
+                              onClick={() => void duplicatePack(pack)}
+                            >
+                              Copier
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              disabled={busyId === pack.id}
+                              onClick={() => void deletePack(pack.id)}
+                            >
+                              Suppr.
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {packs.length === 0 && (
@@ -558,8 +1003,43 @@ function countPackItems(items: QuestionPackItem[], packId: string) {
   return items.filter((item) => item.pack_id === packId).length;
 }
 
+function formatPackDistribution(questions: SavedCustomQuestion[]): Array<{ gameType: GameType; count: number }> {
+  const counts = new Map<GameType, number>();
+  for (const question of questions) counts.set(question.game_type, (counts.get(question.game_type) ?? 0) + 1);
+  return GAME_OPTIONS
+    .map((gameType) => ({ gameType, count: counts.get(gameType) ?? 0 }))
+    .filter((item) => item.count > 0);
+}
+
 function questionHasEditablePayload(question: SavedCustomQuestion): boolean {
   return question.game_type === "who_would" || question.game_type === "majority" || question.game_type === "minority";
+}
+
+function questionNeedsOptions(gameType: GameType): boolean {
+  return gameType === "who_would" || gameType === "majority" || gameType === "minority";
+}
+
+function buildPayloadForGame(gameType: GameType, payloadText: string): Record<string, unknown> | null {
+  if (gameType === "who_would") {
+    const [optionA, optionB] = payloadText.split(/\n/).map((option) => option.trim()).filter(Boolean);
+    if (!optionA || !optionB) return null;
+    return { optionA, optionB };
+  }
+  if (gameType === "majority" || gameType === "minority") {
+    const options = payloadText.split(/\n|,/).map((option) => option.trim()).filter(Boolean).slice(0, 8);
+    if (options.length < 2) return null;
+    return { options };
+  }
+  return {};
+}
+
+function payloadToFallbackText(gameType: GameType, payload: Record<string, unknown> | null): string {
+  if (gameType === "who_would" && payload) {
+    const optionA = typeof payload.optionA === "string" ? payload.optionA : "";
+    const optionB = typeof payload.optionB === "string" ? payload.optionB : "";
+    return optionA && optionB ? `${optionA} / ${optionB}` : "";
+  }
+  return "";
 }
 
 function payloadOptionsToText(question: SavedCustomQuestion): string {

@@ -7,6 +7,7 @@ import {
   HostStartDock,
   OrderModeButton,
   QuestionSourcePanel,
+  type QuestionPackChoice,
 } from "@/components/host/config";
 import {
   getGameCategories,
@@ -64,9 +65,12 @@ export function JaugeLobbyView({
   questionSourceSettings,
   canUseSavedQuestions,
   savedQuestionCount,
+  packQuestionCount,
+  packChoices,
   liveQuestionCount,
   questionPoolDiagnostics,
   onQuestionSourceSettingsChange,
+  onTogglePack,
   onStart,
   onChangeGame,
 }: {
@@ -100,9 +104,12 @@ export function JaugeLobbyView({
   questionSourceSettings: QuestionSourceSettings;
   canUseSavedQuestions: boolean;
   savedQuestionCount: number;
+  packQuestionCount: number;
+  packChoices: QuestionPackChoice[];
   liveQuestionCount: number;
   questionPoolDiagnostics: QuestionPoolDiagnostics | null;
   onQuestionSourceSettingsChange: (settings: QuestionSourceSettings) => void;
+  onTogglePack: (packId: string) => void;
   onStart: () => void;
   onChangeGame: () => void;
 }) {
@@ -226,11 +233,14 @@ export function JaugeLobbyView({
         settings={questionSourceSettings}
         canUseSavedQuestions={canUseSavedQuestions}
         savedQuestionCount={savedQuestionCount}
+        packQuestionCount={packQuestionCount}
+        packChoices={packChoices}
         liveQuestionCount={playerQuestionCount}
         validLiveQuestionCount={questionPoolDiagnostics?.sources.liveValid ?? liveQuestionCount}
         totalQuestions={room.total_questions}
         onUseAllLiveQuestions={(count) => onUpdateConfig({ total_questions: count })}
         onChange={onQuestionSourceSettingsChange}
+        onTogglePack={onTogglePack}
       />
       {questionPoolDiagnostics?.issue && (
         <p className="mb-4 rounded-2xl border border-neon-yellow/30 bg-neon-yellow/10 p-3 text-sm font-bold text-neon-yellow">

@@ -2,7 +2,14 @@
 
 import { type ReactNode } from "react";
 import { Button } from "@/components/ui";
-import type { QuestionSourceSettings } from "@/types/database";
+import type { GameType, QuestionSourceSettings } from "@/types/database";
+
+export interface QuestionPackChoice {
+  id: string;
+  name: string;
+  compatibleCount: number;
+  gameCounts: Partial<Record<GameType, number>>;
+}
 
 export function ConfigGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -102,20 +109,26 @@ export function QuestionSourcePanel({
   settings,
   canUseSavedQuestions,
   savedQuestionCount,
+  packQuestionCount,
+  packChoices = [],
   liveQuestionCount,
   validLiveQuestionCount,
   totalQuestions,
   onChange,
   onUseAllLiveQuestions,
+  onTogglePack,
 }: {
   settings: QuestionSourceSettings;
   canUseSavedQuestions: boolean;
   savedQuestionCount: number;
+  packQuestionCount?: number;
+  packChoices?: QuestionPackChoice[];
   liveQuestionCount: number;
   validLiveQuestionCount?: number;
   totalQuestions?: number;
   onChange: (settings: QuestionSourceSettings) => void;
   onUseAllLiveQuestions?: (count: number) => void;
+  onTogglePack?: (packId: string) => void;
 }) {
   const patch = (next: Partial<QuestionSourceSettings>) => onChange({ ...settings, ...next });
   const coverageLiveCount = validLiveQuestionCount ?? liveQuestionCount;
@@ -145,14 +158,21 @@ export function QuestionSourcePanel({
         <ConfigButton active={settings.mode === "smart_mix"} disabled={false} onClick={() => patch({ mode: "smart_mix", useSystemQuestions: true, useLiveQuestions: true })}>
           Mix système + joueurs
         </ConfigButton>
-        <ConfigButton active={settings.mode === "all_mix"} disabled={!canUseSavedQuestions} onClick={() => patch({ mode: "all_mix", useSystemQuestions: true, useLiveQuestions: true, useSavedQuestions: true })}>
+        <ConfigButton active={settings.mode === "all_mix"} disabled={!canUseSavedQuestions} onClick={() => patch({ mode: "all_mix", useSystemQuestions: true, useLiveQuestions: true, usePackQuestions: settings.usePackQuestions, useSavedQuestions: true })}>
           Tout mixer
         </ConfigButton>
       </ConfigGroup>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-4">
         <SourceToggle active={settings.useSystemQuestions} label="Questions système" detail="Base Badaboum" onClick={() => patch({ mode: "smart_mix", useSystemQuestions: !settings.useSystemQuestions })} />
         <SourceToggle active={settings.useLiveQuestions} label="Questions live" detail={`${liveQuestionCount} proposée${liveQuestionCount > 1 ? "s" : ""}`} onClick={() => patch({ mode: "smart_mix", useLiveQuestions: !settings.useLiveQuestions })} />
+        <SourceToggle
+          active={settings.usePackQuestions}
+          label="Packs"
+          detail={canUseSavedQuestions ? `${packQuestionCount ?? 0} compatible${(packQuestionCount ?? 0) > 1 ? "s" : ""}` : "Trusted/admin"}
+          disabled={!canUseSavedQuestions}
+          onClick={() => patch({ mode: "smart_mix", usePackQuestions: !settings.usePackQuestions })}
+        />
         <SourceToggle
           active={settings.useSavedQuestions}
           label="Sauvegardées"
@@ -161,6 +181,43 @@ export function QuestionSourcePanel({
           onClick={() => patch({ mode: "smart_mix", useSavedQuestions: !settings.useSavedQuestions })}
         />
       </div>
+
+      {canUseSavedQuestions && settings.usePackQuestions && packChoices.length > 0 && (
+        <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="mb-3 text-xs font-black uppercase tracking-wider text-white/45">Packs sélectionnés</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {packChoices.map((pack) => {
+              const active = settings.selectedPackIds.includes(pack.id);
+              return (
+                <button
+                  key={pack.id}
+                  type="button"
+                  onClick={() => onTogglePack?.(pack.id)}
+                  className={`rounded-2xl border p-3 text-left transition ${
+                    active
+                      ? "border-neon-cyan/60 bg-neon-cyan/10 shadow-glow-cyan"
+                      : "border-white/10 bg-white/5 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-black">{pack.name}</span>
+                    <span className="rounded-full border border-white/10 bg-black/25 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white/55">
+                      {pack.compatibleCount} compatible{pack.compatibleCount > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {Object.entries(pack.gameCounts).map(([game, count]) => (
+                      <span key={game} className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold text-white/55">
+                        {game} {count}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {showLiveCoverage && (
         <div className={`mt-3 rounded-2xl border p-4 ${
@@ -211,7 +268,7 @@ export function QuestionSourcePanel({
       </ConfigGroup>
 
       <p className="mt-3 text-sm font-semibold text-white/55">
-        En mix intelligent, les questions live de la room passent avant tout, puis les sauvegardées, puis les questions système complètent les manches restantes.
+        En mix intelligent, les questions live passent avant tout, puis les packs sélectionnés, puis les sauvegardées, puis le système complète.
       </p>
     </section>
   );

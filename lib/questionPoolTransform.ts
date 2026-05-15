@@ -86,14 +86,14 @@ export function customQuestionToPoolItem(question: CustomQuestion): QuestionPool
   });
 }
 
-export function savedQuestionToPoolItem(question: SavedCustomQuestion): QuestionPoolItem | null {
+export function savedQuestionToPoolItem(question: SavedCustomQuestion, source: Extract<QuestionSource, "saved" | "pack"> = "saved"): QuestionPoolItem | null {
   return payloadToQuestion({
     id: question.local_question_id,
     gameType: question.game_type,
     category: question.category,
     text: question.question_text,
     payload: question.payload,
-    source: "saved",
+    source,
     authorPlayerId: question.original_author_id,
     savedQuestionId: question.id,
   });

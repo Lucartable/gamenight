@@ -1033,6 +1033,13 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+.tv-topbar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (min-width: 960px) {
   .tv-topbar-meta { font-size: 14px; gap: 14px; }
 }

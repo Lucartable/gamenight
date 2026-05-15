@@ -329,6 +329,13 @@
   font-weight: 800;
 }
 
+.tv-status-strip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .tv-alert {
   border-radius: 1.25rem;
   border-width: 1px;
