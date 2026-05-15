@@ -73,6 +73,8 @@ export interface MimeExpressionQuestion {
   gameType: "mime_expressions";
   category: MimeExpressionCategory;
   text: string;
+  mimePlayerCountMin?: number;
+  mimePlayerCountMax?: number;
 }
 
 export interface JaugeGameQuestion {

@@ -79,6 +79,9 @@ describe("question content invariants", () => {
       ids.add(expression.id);
       expect(expression.text.trim().length).toBeGreaterThan(2);
       expect(validCategories.has(expression.category)).toBe(true);
+      expect(expression.mimePlayerCountMin ?? 1).toBeGreaterThanOrEqual(1);
+      expect(expression.mimePlayerCountMax ?? 1).toBeGreaterThanOrEqual(expression.mimePlayerCountMin ?? 1);
+      expect(expression.mimePlayerCountMax ?? 1).toBeLessThanOrEqual(12);
       const fingerprint = normalize(expression.text);
       expect(normalized.has(fingerprint), `duplicate mime: ${expression.text}`).toBe(false);
       normalized.add(fingerprint);

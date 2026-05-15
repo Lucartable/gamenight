@@ -14,8 +14,11 @@ import {
   type GameCategory,
 } from "@/lib/gameQuestions";
 import {
+  MIME_PLAYER_COUNT_MODES,
+  getMimePlayerCountModeMeta,
   getOrderedPlayers,
   mergePlayerOrder,
+  type MimePlayerCountMode,
   type MimeOrderMode,
 } from "@/lib/mimeGame";
 import {
@@ -68,6 +71,10 @@ export function MimeLobbyView({
   onChangeGame,
   selectedMode,
   onSelectedModeChange,
+  mimePlayerCountMode,
+  onMimePlayerCountModeChange,
+  preparationDuration,
+  onPreparationDurationChange,
 }: {
   players: Player[];
   availableCount: number;
@@ -101,9 +108,15 @@ export function MimeLobbyView({
   onChangeGame: () => void;
   selectedMode: MimeMode;
   onSelectedModeChange: (mode: MimeMode) => void;
+  mimePlayerCountMode: MimePlayerCountMode;
+  onMimePlayerCountModeChange: (mode: MimePlayerCountMode) => void;
+  preparationDuration: number;
+  onPreparationDurationChange: (duration: number) => void;
 }) {
   const enoughPlayers = players.length >= 2;
-  const canStart = enoughPlayers && finalOrder.length >= 2 && availableCount > 0 && !busy;
+  const mimeCountMeta = getMimePlayerCountModeMeta(mimePlayerCountMode);
+  const enoughMimePlayers = finalOrder.length >= mimeCountMeta.min;
+  const canStart = enoughPlayers && enoughMimePlayers && finalOrder.length >= 2 && availableCount > 0 && !busy;
   const categories = getGameCategories("mime_expressions");
   const orderedPlayers = getOrderedPlayers(finalOrder, players);
   const customPlayers = getOrderedPlayers(mergePlayerOrder(customOrder, players), players);
@@ -197,6 +210,37 @@ export function MimeLobbyView({
               onClick={() => onUpdateConfig({ vote_duration_sec: duration })}
             >
               {duration}s
+            </ConfigButton>
+          ))}
+        </ConfigGroup>
+
+        <ConfigGroup label="Mimeurs simultanés">
+          {MIME_PLAYER_COUNT_MODES.map((mode) => {
+            const active = mimePlayerCountMode === mode.id;
+            const disabled = busy || players.length < mode.min;
+            return (
+              <ConfigButton
+                key={mode.id}
+                active={active}
+                disabled={disabled}
+                onClick={() => onMimePlayerCountModeChange(mode.id)}
+              >
+                <span className="block leading-tight">{mode.label}</span>
+                <span className="block text-[10px] font-bold normal-case tracking-normal opacity-70">{mode.detail}</span>
+              </ConfigButton>
+            );
+          })}
+        </ConfigGroup>
+
+        <ConfigGroup label="Préparation">
+          {[0, 5, 10, 15, 20].map((duration) => (
+            <ConfigButton
+              key={duration}
+              active={preparationDuration === duration}
+              disabled={busy}
+              onClick={() => onPreparationDurationChange(duration)}
+            >
+              {duration === 0 ? "Sans" : `${duration}s`}
             </ConfigButton>
           ))}
         </ConfigGroup>
@@ -374,6 +418,11 @@ export function MimeLobbyView({
         {!enoughPlayers && (
           <p className="text-sm font-bold text-neon-yellow">
             Il faut au moins 2 joueurs pour lancer.
+          </p>
+        )}
+        {enoughPlayers && !enoughMimePlayers && (
+          <p className="text-sm font-bold text-neon-yellow">
+            Le mode {mimeCountMeta.label} demande au moins {mimeCountMeta.min} mimeurs dans l'ordre.
           </p>
         )}
         {availableCount === 0 && (

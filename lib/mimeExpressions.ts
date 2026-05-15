@@ -28,6 +28,8 @@ export interface MimeExpression {
   id: number;
   category: MimeExpressionCategory;
   text: string;
+  mimePlayerCountMin?: number;
+  mimePlayerCountMax?: number;
 }
 
 export const MIME_EXPRESSION_CATEGORIES: MimeExpressionCategoryMeta[] = [
@@ -2158,6 +2160,33 @@ function normalizeMimeText(value: string): string {
     .trim();
 }
 
+const MULTI_MIME_EXPRESSIONS: MimeExpression[] = [
+  { id: 41001, category: "scenes", text: "Un braquage raté dans une supérette", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41002, category: "absurde_wtf", text: "Des pingouins coincés dans un ascenseur", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41003, category: "scenes", text: "Une émission de cuisine qui part complètement en vrille", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41004, category: "absurde_wtf", text: "Titanic, mais dans un Lidl", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41005, category: "internet_brainrot", text: "Une team d'influenceurs qui découvre un bouton interdit", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41006, category: "scenes", text: "Deux policiers qui arrêtent un magicien", mimePlayerCountMin: 2, mimePlayerCountMax: 2 },
+  { id: 41007, category: "scenes", text: "Un mariage où tout le monde cache une catastrophe", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41008, category: "absurde_wtf", text: "Une équipe de super-héros qui rate totalement sa mission", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41009, category: "animaux", text: "Une meute de chiens qui prépare un cambriolage", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41010, category: "beauf_france_profonde", text: "Un barbecue familial qui devient un tribunal", mimePlayerCountMin: 2, mimePlayerCountMax: 5 },
+  { id: 41011, category: "horreur_cursed", text: "Une séance de spiritisme dans un open space", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41012, category: "chant_musique", text: "Un groupe de rock qui joue sans aucun instrument", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41013, category: "scenes", text: "Une équipe de chirurgiens qui improvise totalement", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41014, category: "absurde_wtf", text: "Des meubles IKEA qui se rebellent pendant le montage", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41015, category: "internet_brainrot", text: "Un live Twitch où le chat contrôle tout", mimePlayerCountMin: 2, mimePlayerCountMax: 5 },
+  { id: 41016, category: "imitations", text: "Un jury de talent show beaucoup trop dramatique", mimePlayerCountMin: 3, mimePlayerCountMax: 4 },
+  { id: 41017, category: "scenes", text: "Une mission d'espionnage dans une boulangerie", mimePlayerCountMin: 2, mimePlayerCountMax: 4 },
+  { id: 41018, category: "animaux", text: "Des chats qui organisent une réunion de copropriété", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41019, category: "absurde_wtf", text: "Une apocalypse zombie pendant un contrôle de maths", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41020, category: "scenes", text: "Deux agents secrets qui ne savent pas lequel est l'autre", mimePlayerCountMin: 2, mimePlayerCountMax: 2 },
+  { id: 41021, category: "beauf_france_profonde", text: "Un camping entier qui cherche le dernier glaçon", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41022, category: "horreur_cursed", text: "Une famille qui découvre que le dîner est possédé", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+  { id: 41023, category: "scenes", text: "Un entretien d'embauche avec trois recruteurs catastrophiques", mimePlayerCountMin: 3, mimePlayerCountMax: 4 },
+  { id: 41024, category: "absurde_wtf", text: "Un procès où l'accusé est une chaise", mimePlayerCountMin: 3, mimePlayerCountMax: 5 },
+];
+
 export const MIME_EXPRESSIONS: MimeExpression[] = (() => {
   const seen = new Set<string>();
   const out: MimeExpression[] = [];
@@ -2174,11 +2203,13 @@ export const MIME_EXPRESSIONS: MimeExpression[] = (() => {
         id: 30001 + offset + written,
         category: category.id,
         text,
+        mimePlayerCountMin: 1,
+        mimePlayerCountMax: 1,
       });
       written += 1;
     }
   }
-  return out;
+  return [...out, ...MULTI_MIME_EXPRESSIONS];
 })();
 
 function lines(source: string): string[] {

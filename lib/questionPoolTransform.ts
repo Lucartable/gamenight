@@ -25,6 +25,9 @@ export function makeQuestionSnapshot(question: GameQuestion | QuestionPoolItem):
   if (question.gameType === "majority" || question.gameType === "minority") {
     return { ...base, text: question.text, options: question.options };
   }
+  if (question.gameType === "mime_expressions") {
+    return { ...base, text: question.text, mimePlayerCountMin: question.mimePlayerCountMin, mimePlayerCountMax: question.mimePlayerCountMax };
+  }
   return { ...base, text: question.text };
 }
 
@@ -47,7 +50,13 @@ export function questionFromSnapshot(snapshot: QuestionSnapshot | null | undefin
     return { ...base, gameType: "who_of_us", text: snapshot.text } as WhoOfUsGameQuestion & QuestionPoolItem;
   }
   if (snapshot.gameType === "mime_expressions" && snapshot.text) {
-    return { ...base, gameType: "mime_expressions", text: snapshot.text } as MimeExpressionQuestion & QuestionPoolItem;
+    return {
+      ...base,
+      gameType: "mime_expressions",
+      text: snapshot.text,
+      mimePlayerCountMin: snapshot.mimePlayerCountMin,
+      mimePlayerCountMax: snapshot.mimePlayerCountMax,
+    } as MimeExpressionQuestion & QuestionPoolItem;
   }
   if (snapshot.gameType === "jauge" && snapshot.text) {
     return { ...base, gameType: "jauge", text: snapshot.text } as JaugeGameQuestion & QuestionPoolItem;
@@ -58,6 +67,12 @@ export function questionFromSnapshot(snapshot: QuestionSnapshot | null | undefin
 export function questionToSavedPayload(question: GameQuestion | QuestionPoolItem): Record<string, unknown> {
   if (question.gameType === "who_would") return { optionA: question.optionA, optionB: question.optionB };
   if (question.gameType === "majority" || question.gameType === "minority") return { options: question.options };
+  if (question.gameType === "mime_expressions") {
+    return {
+      mimePlayerCountMin: question.mimePlayerCountMin ?? 1,
+      mimePlayerCountMax: question.mimePlayerCountMax ?? 1,
+    };
+  }
   return {};
 }
 
@@ -135,7 +150,23 @@ function payloadToQuestion({
   }
   if (text.trim().length < 4) return null;
   if (gameType === "who_of_us") return { ...base, gameType, text: text.trim() } as WhoOfUsGameQuestion & QuestionPoolItem;
-  if (gameType === "mime_expressions") return { ...base, gameType, text: text.trim() } as MimeExpressionQuestion & QuestionPoolItem;
+  if (gameType === "mime_expressions") {
+    const min = toMimeCount(payload.mimePlayerCountMin ?? payload.mime_player_count_min, 1);
+    const max = Math.max(min, toMimeCount(payload.mimePlayerCountMax ?? payload.mime_player_count_max, min));
+    return {
+      ...base,
+      gameType,
+      text: text.trim(),
+      mimePlayerCountMin: min,
+      mimePlayerCountMax: max,
+    } as MimeExpressionQuestion & QuestionPoolItem;
+  }
   if (gameType === "jauge") return { ...base, gameType, text: text.trim() } as JaugeGameQuestion & QuestionPoolItem;
   return null;
+}
+
+function toMimeCount(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(12, Math.max(1, Math.round(parsed)));
 }

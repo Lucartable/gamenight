@@ -6,6 +6,14 @@ import { PlayerAvatar } from "@/components/playerAvatar";
 import { Button } from "@/components/ui";
 import type { GameType, Player } from "@/types/database";
 
+const MIME_COUNT_PRESETS = [
+  { label: "Solo", detail: "1 mimeur", min: 1, max: 1 },
+  { label: "Duo", detail: "2 mimeurs", min: 2, max: 2 },
+  { label: "Trio", detail: "3 mimeurs", min: 3, max: 3 },
+  { label: "4 joueurs", detail: "Quatuor", min: 4, max: 4 },
+  { label: "2 à 4", detail: "Flexible", min: 2, max: 4 },
+];
+
 export function TransferPanel({
   players,
   busy,
@@ -151,6 +159,10 @@ export function HostCustomQuestionPanel({
   optionA,
   optionB,
   options,
+  mimePlayerCountMin,
+  mimePlayerCountMax,
+  mimeAllowedMin,
+  mimeAllowedMax,
   submitting,
   myQuestionCount,
   liveQuestionCount,
@@ -163,6 +175,7 @@ export function HostCustomQuestionPanel({
   onOptionAChange,
   onOptionBChange,
   onOptionsChange,
+  onMimePlayerCountChange,
   onSubmit,
   onClearPlayedQuestions,
   onClearAllQuestions,
@@ -173,6 +186,10 @@ export function HostCustomQuestionPanel({
   optionA: string;
   optionB: string;
   options: string;
+  mimePlayerCountMin: number;
+  mimePlayerCountMax: number;
+  mimeAllowedMin: number;
+  mimeAllowedMax: number;
   submitting: boolean;
   myQuestionCount: number;
   liveQuestionCount: number;
@@ -185,6 +202,7 @@ export function HostCustomQuestionPanel({
   onOptionAChange: (value: string) => void;
   onOptionBChange: (value: string) => void;
   onOptionsChange: (value: string) => void;
+  onMimePlayerCountChange: (min: number, max: number) => void;
   onSubmit: () => void;
   onClearPlayedQuestions: () => void;
   onClearAllQuestions: () => void;
@@ -229,6 +247,33 @@ export function HostCustomQuestionPanel({
             className="input min-h-20 w-full resize-none rounded-2xl p-3"
             placeholder="Options, une par ligne"
           />
+        )}
+        {gameType === "mime_expressions" && (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Nombre de mimeurs</div>
+            <div className="flex flex-wrap gap-2">
+              {MIME_COUNT_PRESETS
+                .filter((preset) => preset.min >= mimeAllowedMin && preset.max <= mimeAllowedMax)
+                .map((preset) => {
+                  const active = preset.min === mimePlayerCountMin && preset.max === mimePlayerCountMax;
+                  return (
+                    <button
+                      key={`${preset.min}-${preset.max}`}
+                      type="button"
+                      onClick={() => onMimePlayerCountChange(preset.min, preset.max)}
+                      className={`rounded-full border px-3 py-2 text-left text-xs font-black uppercase tracking-[0.12em] transition ${
+                        active
+                          ? "border-neon-cyan bg-neon-cyan/15 text-neon-cyan"
+                          : "border-white/10 bg-white/5 text-white/60 hover:border-white/25"
+                      }`}
+                    >
+                      <span className="block">{preset.label}</span>
+                      <span className="block text-[10px] font-bold normal-case tracking-normal text-white/45">{preset.detail}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
         )}
       </div>
 

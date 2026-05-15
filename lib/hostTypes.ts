@@ -1,10 +1,10 @@
-import type { Room } from "@/types/database";
+import type { JaugeGameState, MimeGameState, Room } from "@/types/database";
 
 /**
  * Sous-ensemble du Room mutable depuis le host page lors des transitions de config.
  * Toutes les vues lobby acceptent ce shape pour leurs callbacks `onUpdateConfig`.
  */
-export type RoomConfigPatch = Partial<
+type BaseRoomConfigPatch = Partial<
   Pick<
     Room,
     | "game_type"
@@ -26,3 +26,11 @@ export type RoomConfigPatch = Partial<
     | "intrus_game_state"
   >
 >;
+
+export type RoomConfigPatch = Omit<
+  BaseRoomConfigPatch,
+  "mime_game_state" | "jauge_game_state"
+> & {
+  mime_game_state?: Room["mime_game_state"] | Partial<MimeGameState> | null;
+  jauge_game_state?: Room["jauge_game_state"] | Partial<JaugeGameState> | null;
+};

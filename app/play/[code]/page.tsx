@@ -24,7 +24,11 @@ import {
   getGameDefinition,
   getQuestionForGame,
 } from "@/lib/gameQuestions";
-import { getMimeGameState, isMimeGame } from "@/lib/mimeGame";
+import {
+  getMimeGameState,
+  getMimePlayerCountModeMeta,
+  isMimeGame,
+} from "@/lib/mimeGame";
 import { getMimeModeMeta } from "@/lib/mimeModes";
 import {
   getJaugeCurrentQuestion,
@@ -73,6 +77,14 @@ interface LocalRating {
   rating: number;
 }
 
+const MIME_COUNT_PRESETS = [
+  { label: "Solo", detail: "1 mimeur", min: 1, max: 1 },
+  { label: "Duo", detail: "2 mimeurs", min: 2, max: 2 },
+  { label: "Trio", detail: "3 mimeurs", min: 3, max: 3 },
+  { label: "4 joueurs", detail: "Quatuor", min: 4, max: 4 },
+  { label: "2 à 4", detail: "Flexible", min: 2, max: 4 },
+];
+
 export default function PlayerPage() {
   const params = useParams<{ code: string }>();
   const code = params.code?.toUpperCase() ?? "";
@@ -87,6 +99,8 @@ export default function PlayerPage() {
   const [questionOptionA, setQuestionOptionA] = useState("");
   const [questionOptionB, setQuestionOptionB] = useState("");
   const [questionOptions, setQuestionOptions] = useState("");
+  const [questionMimeMin, setQuestionMimeMin] = useState(1);
+  const [questionMimeMax, setQuestionMimeMax] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -133,6 +147,24 @@ export default function PlayerPage() {
     () => participants.find((player) => player.id === mimeGameState?.currentMimePlayerId),
     [mimeGameState?.currentMimePlayerId, participants]
   );
+  const currentMimePlayers = useMemo(() => {
+    const ids = mimeGameState?.currentMimePlayerIds?.length
+      ? mimeGameState.currentMimePlayerIds
+      : mimeGameState?.currentMimePlayerId
+        ? [mimeGameState.currentMimePlayerId]
+        : [];
+    const playersById = new Map(participants.map((player) => [player.id, player]));
+    return ids.map((id) => playersById.get(id)).filter((player): player is Player => Boolean(player));
+  }, [mimeGameState?.currentMimePlayerId, mimeGameState?.currentMimePlayerIds, participants]);
+  const playerQuestionAllowedMimeRange = useMemo(() => {
+    const meta = getMimePlayerCountModeMeta(mimeGameState?.mimePlayerCountMode);
+    return { min: meta.min, max: meta.max };
+  }, [mimeGameState?.mimePlayerCountMode]);
+  const playerQuestionMimeBounds = useMemo(() => {
+    const min = clampLocalInt(questionMimeMin, playerQuestionAllowedMimeRange.min, playerQuestionAllowedMimeRange.max);
+    const max = clampLocalInt(questionMimeMax, min, playerQuestionAllowedMimeRange.max);
+    return { min, max };
+  }, [playerQuestionAllowedMimeRange, questionMimeMax, questionMimeMin]);
   const currentJaugeQuestion = useMemo(
     () => getJaugeCurrentQuestion(jaugeGameState, room?.current_question_id),
     [jaugeGameState, room?.current_question_id]
@@ -171,6 +203,11 @@ export default function PlayerPage() {
     setSaveNotice(null);
   }, [currentQ?.id, currentJaugeQuestion?.id]);
 
+  useEffect(() => {
+    setQuestionMimeMin(playerQuestionAllowedMimeRange.min);
+    setQuestionMimeMax(playerQuestionAllowedMimeRange.min);
+  }, [gameType, playerQuestionAllowedMimeRange.min, playerQuestionAllowedMimeRange.max]);
+
   const currentVotes = useMemo(
     () =>
       currentQ && gameType
@@ -197,9 +234,17 @@ export default function PlayerPage() {
       : myRating?.rating ?? null;
   const voteDuration = room?.vote_duration_sec ?? DEFAULT_VOTE_DURATION_SEC;
   const revealDuration = room?.reveal_duration_sec ?? DEFAULT_REVEAL_DURATION_SEC;
+  const mimeCountdownStartedAt =
+    mimeMode && room?.status === "question_active" && mimeGameState?.roundStatus === "preparing"
+      ? mimeGameState.preparationStartedAt
+      : room?.question_started_at ?? null;
+  const mimeCountdownDuration =
+    mimeGameState?.roundStatus === "preparing"
+      ? mimeGameState.preparationDurationSec
+      : mimeGameState?.timerDuration ?? voteDuration;
   const mimeRoundLeft = useCountdown(
-    mimeMode && room?.status === "question_active" ? room.question_started_at : null,
-    mimeGameState?.timerDuration ?? voteDuration
+    mimeMode && room?.status === "question_active" ? mimeCountdownStartedAt : null,
+    mimeCountdownDuration
   );
 
   useEffect(() => {
@@ -356,6 +401,8 @@ export default function PlayerPage() {
       optionA: questionOptionA,
       optionB: questionOptionB,
       options: questionOptions,
+      mimePlayerCountMin: playerQuestionMimeBounds.min,
+      mimePlayerCountMax: playerQuestionMimeBounds.max,
     });
     if (!submission) {
       setVoteError("Question incomplète pour ce mode.");
@@ -381,6 +428,8 @@ export default function PlayerPage() {
       setQuestionOptionA("");
       setQuestionOptionB("");
       setQuestionOptions("");
+      setQuestionMimeMin(playerQuestionAllowedMimeRange.min);
+      setQuestionMimeMax(playerQuestionAllowedMimeRange.min);
       await refresh();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
@@ -485,11 +534,19 @@ export default function PlayerPage() {
           questionOptionA={questionOptionA}
           questionOptionB={questionOptionB}
           questionOptions={questionOptions}
+          questionMimeMin={playerQuestionMimeBounds.min}
+          questionMimeMax={playerQuestionMimeBounds.max}
+          mimeAllowedMin={playerQuestionAllowedMimeRange.min}
+          mimeAllowedMax={playerQuestionAllowedMimeRange.max}
           submittingQuestion={submittingQuestion}
           onQuestionDraftChange={setQuestionDraft}
           onQuestionOptionAChange={setQuestionOptionA}
           onQuestionOptionBChange={setQuestionOptionB}
           onQuestionOptionsChange={setQuestionOptions}
+          onQuestionMimeCountChange={(min, max) => {
+            setQuestionMimeMin(min);
+            setQuestionMimeMax(max);
+          }}
           onSubmitQuestion={submitPlayerQuestion}
         />
       )}
@@ -500,6 +557,7 @@ export default function PlayerPage() {
           state={mimeGameState}
           me={me}
           currentMimePlayer={currentMimePlayer}
+          currentMimePlayers={currentMimePlayers}
           roundLeft={mimeRoundLeft}
           totalRounds={room.total_questions}
         />
@@ -570,6 +628,7 @@ export default function PlayerPage() {
           expression={currentQ as MimeExpressionQuestion}
           state={mimeGameState}
           currentMimePlayer={currentMimePlayer}
+          currentMimePlayers={currentMimePlayers}
           totalRounds={room.total_questions}
         />
       )}
@@ -691,11 +750,16 @@ function Lobby({
   questionOptionA,
   questionOptionB,
   questionOptions,
+  questionMimeMin,
+  questionMimeMax,
+  mimeAllowedMin,
+  mimeAllowedMax,
   submittingQuestion,
   onQuestionDraftChange,
   onQuestionOptionAChange,
   onQuestionOptionBChange,
   onQuestionOptionsChange,
+  onQuestionMimeCountChange,
   onSubmitQuestion,
 }: {
   players: Player[];
@@ -713,11 +777,16 @@ function Lobby({
   questionOptionA: string;
   questionOptionB: string;
   questionOptions: string;
+  questionMimeMin: number;
+  questionMimeMax: number;
+  mimeAllowedMin: number;
+  mimeAllowedMax: number;
   submittingQuestion: boolean;
   onQuestionDraftChange: (value: string) => void;
   onQuestionOptionAChange: (value: string) => void;
   onQuestionOptionBChange: (value: string) => void;
   onQuestionOptionsChange: (value: string) => void;
+  onQuestionMimeCountChange: (min: number, max: number) => void;
   onSubmitQuestion: () => void;
 }) {
   const title = preparingMime
@@ -779,7 +848,7 @@ function Lobby({
               maxLength={180}
               rows={3}
               className="input mt-3 min-h-24 w-full resize-none rounded-2xl p-3"
-              placeholder={gameType === "jauge" ? "À quel point cette personne..." : "Écris ta question..."}
+              placeholder={gameType === "mime_expressions" ? "Scène ou expression à mimer..." : gameType === "jauge" ? "À quel point cette personne..." : "Écris ta question..."}
             />
           )}
           {(gameType === "majority" || gameType === "minority") && (
@@ -790,6 +859,33 @@ function Lobby({
               className="input mt-2 min-h-20 w-full resize-none rounded-2xl p-3"
               placeholder="Options, une par ligne"
             />
+          )}
+          {gameType === "mime_expressions" && (
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+              <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Nombre de mimeurs</div>
+              <div className="flex flex-wrap gap-2">
+                {MIME_COUNT_PRESETS
+                  .filter((preset) => preset.min >= mimeAllowedMin && preset.max <= mimeAllowedMax)
+                  .map((preset) => {
+                    const active = preset.min === questionMimeMin && preset.max === questionMimeMax;
+                    return (
+                      <button
+                        key={`${preset.min}-${preset.max}`}
+                        type="button"
+                        onClick={() => onQuestionMimeCountChange(preset.min, preset.max)}
+                        className={`rounded-full border px-3 py-2 text-left text-xs font-black uppercase tracking-[0.12em] transition ${
+                          active
+                            ? "border-neon-cyan bg-neon-cyan/15 text-neon-cyan"
+                            : "border-white/10 bg-white/5 text-white/60 hover:border-white/25"
+                        }`}
+                      >
+                        <span className="block">{preset.label}</span>
+                        <span className="block text-[10px] font-bold normal-case tracking-normal text-white/45">{preset.detail}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
           )}
           <button
             type="button"
@@ -814,6 +910,7 @@ function MimeRoundScreen({
   state,
   me,
   currentMimePlayer,
+  currentMimePlayers,
   roundLeft,
   totalRounds,
 }: {
@@ -821,18 +918,25 @@ function MimeRoundScreen({
   state: MimeGameState;
   me: Player;
   currentMimePlayer: Player | undefined;
+  currentMimePlayers: Player[];
   roundLeft: number;
   totalRounds: number;
 }) {
   const category = getCategoryForGame("mime_expressions", expression.category);
-  const isMime = me.id === state.currentMimePlayerId;
+  const mimePlayerIds = state.currentMimePlayerIds.length ? state.currentMimePlayerIds : [state.currentMimePlayerId];
+  const isMime = mimePlayerIds.includes(me.id);
   const isInOrder = state.playerOrder.includes(me.id);
   const timeIsHot = roundLeft <= 5;
+  const preparing = state.roundStatus === "preparing";
   const ended = state.roundStatus === "ended" || roundLeft === 0;
   const modeMeta = getMimeModeMeta(state.mimeMode);
+  const mimeNames = currentMimePlayers.length
+    ? currentMimePlayers.map((player) => player.name).join(", ")
+    : currentMimePlayer?.name ?? "Un joueur";
+  const teammateNames = currentMimePlayers.filter((player) => player.id !== me.id).map((player) => player.name);
 
   return (
-    <section key={state.currentMimePlayerId} className="game-panel-enter flex flex-1 flex-col animate-reveal-in">
+    <section key={`${state.currentExpressionId}-${state.roundStatus}`} className="game-panel-enter flex flex-1 flex-col animate-reveal-in">
       <div className="card mb-3 flex flex-wrap items-center justify-between gap-2 p-3 px-4">
         <div className="flex flex-wrap items-center gap-2">
           {category && <span className="chip">{category.emoji} {category.label}</span>}
@@ -851,13 +955,26 @@ function MimeRoundScreen({
           Manche {state.roundNumber} / {totalRounds}
         </div>
         <h2 className="mt-3 text-3xl font-black leading-tight">
-          {isMime ? "À toi de mimer" : `${currentMimePlayer?.name ?? "Un joueur"} mime`}
+          {preparing
+            ? isMime
+              ? "Prépare ton mime"
+              : "Les mimeurs se préparent"
+            : isMime
+              ? currentMimePlayers.length > 1 ? "À vous de mimer" : "À toi de mimer"
+              : `${mimeNames} mime${currentMimePlayers.length > 1 ? "nt" : ""}`}
         </h2>
 
         {isMime ? (
           <div className="mt-6 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-5">
-            <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">Expression à mimer</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">
+              {preparing ? "Expression à préparer" : "Expression à mimer"}
+            </div>
             <div className="mt-3 text-3xl font-black leading-tight">{expression.text}</div>
+            {teammateNames.length > 0 && (
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-semibold text-white/70">
+                Avec : <span className="font-black text-white">{teammateNames.join(", ")}</span>
+              </div>
+            )}
             <div className="mt-4 rounded-xl border border-neon-pink/30 bg-neon-pink/10 p-3 text-left text-sm font-semibold text-neon-pink">
               <span className="block text-[10px] font-black uppercase tracking-widest text-neon-pink/70">
                 {modeMeta.label}
@@ -872,7 +989,12 @@ function MimeRoundScreen({
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="text-xs font-bold uppercase tracking-wider text-white/50">À deviner</div>
             <div className="mt-3 text-xl font-bold text-white/80">
-              Regarde le mime, pas besoin de toucher au téléphone.
+              {preparing
+                ? "Ils se concertent très vite. Le mime démarre dans quelques secondes."
+                : "Regarde le mime, pas besoin de toucher au téléphone."}
+            </div>
+            <div className="mt-3 text-sm font-black text-white">
+              Mimeurs : {mimeNames}
             </div>
             <div className="mt-3 text-xs font-bold uppercase tracking-wider text-neon-pink/80">
               Mode {modeMeta.label}
@@ -899,14 +1021,19 @@ function MimeRevealScreen({
   expression,
   state,
   currentMimePlayer,
+  currentMimePlayers,
   totalRounds,
 }: {
   expression: MimeExpressionQuestion;
   state: MimeGameState;
   currentMimePlayer: Player | undefined;
+  currentMimePlayers: Player[];
   totalRounds: number;
 }) {
   const category = getCategoryForGame("mime_expressions", expression.category);
+  const mimeNames = currentMimePlayers.length
+    ? currentMimePlayers.map((player) => player.name).join(", ")
+    : currentMimePlayer?.name ?? "Joueur absent";
 
   return (
     <section
@@ -932,7 +1059,7 @@ function MimeRevealScreen({
           <div className="mt-3 text-3xl font-black leading-tight sm:text-4xl">{expression.text}</div>
         </div>
         <p className="mt-4 text-sm font-semibold text-white/60">
-          Mime : <span className="font-black text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
+          Mime : <span className="font-black text-white">{mimeNames}</span>
         </p>
       </div>
     </section>
@@ -1434,6 +1561,11 @@ function countSubmittedRatings(requiredPlayers: Player[], ratings: Rating[]): nu
       .map((rating) => rating.voter_player_id)
   );
   return voterIds.size;
+}
+
+function clampLocalInt(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function getWhoWouldStats(players: Player[], votes: Vote[]): WhoWouldStats {

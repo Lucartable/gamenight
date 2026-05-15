@@ -12,12 +12,16 @@ export function buildCustomQuestionSubmission({
   optionA,
   optionB,
   options,
+  mimePlayerCountMin,
+  mimePlayerCountMax,
 }: {
   gameType: GameType;
   text: string;
   optionA: string;
   optionB: string;
   options: string;
+  mimePlayerCountMin?: number;
+  mimePlayerCountMax?: number;
 }): CustomQuestionSubmission | null {
   if (gameType === "who_would") {
     const cleanText = text.trim().replace(/\s+/g, " ");
@@ -38,6 +42,11 @@ export function buildCustomQuestionSubmission({
   }
   const cleanText = text.trim().replace(/\s+/g, " ");
   if (cleanText.length < 4) return null;
+  if (gameType === "mime_expressions") {
+    const min = clampMimeCount(mimePlayerCountMin ?? 1);
+    const max = Math.max(min, clampMimeCount(mimePlayerCountMax ?? min));
+    return { questionText: cleanText, category: "joueurs", payload: { mimePlayerCountMin: min, mimePlayerCountMax: max } };
+  }
   return { questionText: cleanText, category: "joueurs", payload: {} };
 }
 
@@ -69,6 +78,14 @@ function customQuestionSignature(gameType: GameType, text: string, payload: Reco
       : [];
     return `${gameType}:${cleanText}:${options.join("|")}`;
   }
+  if (gameType === "mime_expressions") {
+    const min = typeof payload.mimePlayerCountMin === "number" ? payload.mimePlayerCountMin : 1;
+    const max = typeof payload.mimePlayerCountMax === "number" ? payload.mimePlayerCountMax : min;
+    return `${gameType}:${cleanText}:${min}:${max}`;
+  }
   return `${gameType}:${cleanText}`;
 }
 
+function clampMimeCount(value: number): number {
+  return Math.min(12, Math.max(1, Math.round(value)));
+}

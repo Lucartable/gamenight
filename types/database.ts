@@ -5,7 +5,7 @@ export type IntrusPhase = "clues" | "reveal_clues" | "vote" | "reveal_final" | "
 export type IntrusMode = "unconscious" | "conscious";
 export type Choice = string;
 export type ScoreboardFrequency = "round" | "end";
-export type MimeRoundStatus = "waiting" | "playing" | "ended" | "revealed";
+export type MimeRoundStatus = "waiting" | "preparing" | "playing" | "ended" | "revealed";
 export type JaugeTargetMode = "random" | "arrival" | "custom";
 export type JaugeQuestionMode = "random" | "fixed" | "players";
 export type JaugeAnonymityMode = "visible" | "round_anonymous" | "final_reveal" | "anonymous";
@@ -33,6 +33,8 @@ export interface QuestionSnapshot {
   optionA?: string;
   optionB?: string;
   options?: string[];
+  mimePlayerCountMin?: number;
+  mimePlayerCountMax?: number;
   authorPlayerId?: string | null;
   savedQuestionId?: string | null;
 }
@@ -41,13 +43,18 @@ export interface MimeGameState {
   playerOrder: string[];
   currentMimeIndex: number;
   currentMimePlayerId: string;
+  currentMimePlayerIds: string[];
+  mimePlayerCount: number;
   currentExpressionId: number;
   usedExpressionIds: number[];
   mimeHistory: MimeRoundRecord[];
   roundNumber: number;
   timerDuration: number;
+  preparationDurationSec: number;
+  preparationStartedAt: string | null;
   roundStatus: MimeRoundStatus;
   hostPlayMode: boolean;
+  mimePlayerCountMode?: string;
   mimeMode?: string;
   mimeRuleFlavor?: string;
 }
@@ -55,6 +62,7 @@ export interface MimeGameState {
 export interface MimeRoundRecord {
   roundNumber: number;
   mimePlayerId: string;
+  mimePlayerIds?: string[];
   expressionId: number;
 }
 

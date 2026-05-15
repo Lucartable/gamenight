@@ -18,6 +18,7 @@ export function MimeActiveHostView({
   expression,
   state,
   currentMimePlayer,
+  currentMimePlayers,
   isHostMime,
   isTv = false,
   orderedPlayers,
@@ -26,6 +27,8 @@ export function MimeActiveHostView({
   totalRounds,
   busy,
   onReveal,
+  onStartMimeNow,
+  onExtendPreparation,
   onRestart,
   onNext,
   onEnd,
@@ -34,6 +37,7 @@ export function MimeActiveHostView({
   expression: MimeExpressionQuestion;
   state: NonNullable<Room["mime_game_state"]>;
   currentMimePlayer: Player | undefined;
+  currentMimePlayers: Player[];
   isHostMime: boolean;
   isTv?: boolean;
   orderedPlayers: Player[];
@@ -42,6 +46,8 @@ export function MimeActiveHostView({
   totalRounds: number;
   busy: boolean;
   onReveal: () => void;
+  onStartMimeNow: () => void;
+  onExtendPreparation: () => void;
   onRestart: () => void;
   onNext: () => void;
   onEnd: () => void;
@@ -50,12 +56,16 @@ export function MimeActiveHostView({
   const category = getCategoryForGame("mime_expressions", expression.category);
   const isFinal = state.roundNumber >= totalRounds;
   const timeIsHot = roundLeft <= 5;
+  const preparing = state.roundStatus === "preparing";
   const ended = state.roundStatus === "ended" || roundLeft === 0;
   const showExpression = !state.hostPlayMode || isHostMime;
   const modeMeta = getMimeModeMeta(state.mimeMode);
+  const mimeNames = currentMimePlayers.length
+    ? currentMimePlayers.map((player) => player.name).join(", ")
+    : currentMimePlayer?.name ?? "Joueur absent";
 
   return (
-    <section key={state.currentMimePlayerId} className={`card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in ${isTv ? "tv-reveal-card tv-mime-active" : ""}`}>
+    <section key={`${state.currentExpressionId}-${state.roundStatus}`} className={`card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in ${isTv ? "tv-reveal-card tv-mime-active" : ""}`}>
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
         {category && <span className="chip">{category.emoji} {category.label}</span>}
         <span className="chip border-neon-pink/40 bg-neon-pink/10 text-neon-pink">
@@ -63,7 +73,7 @@ export function MimeActiveHostView({
         </span>
         <span className="chip">Manche {state.roundNumber} / {totalRounds}</span>
         <span className={`chip ${ended ? "border-neon-yellow/50 text-neon-yellow" : "border-neon-cyan/40 text-neon-cyan"}`}>
-          {ended ? "Temps écoulé" : "Mime en cours"}
+          {preparing ? "Préparation" : ended ? "Temps écoulé" : "Mime en cours"}
         </span>
       </div>
 
@@ -77,11 +87,15 @@ export function MimeActiveHostView({
       <div className={`tv-mime-timer text-center text-7xl font-black tabular-nums ${timeIsHot ? "timer-hot text-neon-pink" : "text-white"}`}>
         {roundLeft}
       </div>
-      <div className="text-center text-sm text-white/50">secondes</div>
+      <div className="text-center text-sm text-white/50">
+        {preparing ? "secondes de préparation" : "secondes"}
+      </div>
 
       <div className="tv-mime-player mt-6 rounded-2xl border border-neon-cyan/40 bg-neon-cyan/10 p-5 text-center">
-        <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">Mime actuel</div>
-        <div className="mt-2 text-3xl font-black">{currentMimePlayer?.name ?? "Joueur absent"}</div>
+        <div className="text-xs font-bold uppercase tracking-wider text-neon-cyan">
+          {currentMimePlayers.length > 1 ? `${currentMimePlayers.length} mimeurs` : "Mime actuel"}
+        </div>
+        <div className="mt-2 text-3xl font-black">{mimeNames}</div>
       </div>
 
       {showExpression ? (
@@ -93,15 +107,26 @@ export function MimeActiveHostView({
         <div className="tv-reveal-question mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
           <div className="text-xs font-bold uppercase tracking-wider text-white/50">Expression masquée</div>
           <div className="mt-3 text-xl font-bold text-white/80">
-            Tu peux deviner avec les autres joueurs.
+            {preparing ? "Les mimeurs se concertent, prépare-toi à deviner." : "Tu peux deviner avec les autres joueurs."}
           </div>
+        </div>
+      )}
+
+      {preparing && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <button type="button" disabled={busy} onClick={onStartMimeNow} className="btn-primary">
+            Commencer maintenant
+          </button>
+          <button type="button" disabled={busy} onClick={onExtendPreparation} className="btn-secondary">
+            +10s de préparation
+          </button>
         </div>
       )}
 
       <MimeHostActions
         busy={busy}
         isFinal={isFinal}
-        revealDisabled={state.roundStatus === "revealed"}
+        revealDisabled={state.roundStatus === "revealed" || preparing}
         onReveal={onReveal}
         onRestart={onRestart}
         onNext={onNext}
@@ -125,6 +150,7 @@ export function MimeRevealHostView({
   expression,
   state,
   currentMimePlayer,
+  currentMimePlayers,
   isTv = false,
   orderedPlayers,
   playersOutsideOrder,
@@ -138,6 +164,7 @@ export function MimeRevealHostView({
   expression: MimeExpressionQuestion;
   state: NonNullable<Room["mime_game_state"]>;
   currentMimePlayer: Player | undefined;
+  currentMimePlayers: Player[];
   isTv?: boolean;
   orderedPlayers: Player[];
   playersOutsideOrder: Player[];
@@ -150,6 +177,9 @@ export function MimeRevealHostView({
 }) {
   const category = getCategoryForGame("mime_expressions", expression.category);
   const isFinal = state.roundNumber >= totalRounds;
+  const mimeNames = currentMimePlayers.length
+    ? currentMimePlayers.map((player) => player.name).join(", ")
+    : currentMimePlayer?.name ?? "Joueur absent";
 
   return (
     <section key={`revealed-${state.currentExpressionId}`} className={`card game-panel-enter flex flex-1 flex-col p-5 animate-reveal-in ${isTv ? "tv-reveal-card tv-mime-reveal" : ""}`}>
@@ -163,7 +193,7 @@ export function MimeRevealHostView({
         <div className="text-xs font-bold uppercase tracking-wider text-neon-green">Expression</div>
         <div className="mt-3 text-4xl font-black leading-tight">{expression.text}</div>
         <div className="mt-4 text-white/60">
-          Mime : <span className="font-bold text-white">{currentMimePlayer?.name ?? "Joueur absent"}</span>
+          Mime : <span className="font-bold text-white">{mimeNames}</span>
         </div>
       </div>
 
