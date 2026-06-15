@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IntrusCluesScreen,
   IntrusRevealCluesScreen,
@@ -27,7 +27,7 @@ interface IntrusPlayFlowProps {
   participants: Player[];
   me: Player;
   votes: Vote[];
-  refresh: () => Promise<void>;
+  refresh: (target?: "room" | "votes" | "all") => Promise<void>;
 }
 
 export function IntrusPlayFlow({ room, participants, me, votes, refresh }: IntrusPlayFlowProps) {
@@ -35,6 +35,11 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
   const [submittingClue, setSubmittingClue] = useState(false);
   const [submittingVote, setSubmittingVote] = useState(false);
   const [submittingFinale, setSubmittingFinale] = useState(false);
+  const [optimisticVoteTargetId, setOptimisticVoteTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOptimisticVoteTargetId(null);
+  }, [intrusState?.pairId]);
 
   const myVote = useMemo<Vote | undefined>(() => {
     if (!intrusState) return undefined;
@@ -51,7 +56,11 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
     return votes.filter((vote) => vote.game_type === "intrus" && vote.question_id === intrusState.pairId);
   }, [intrusState, votes]);
 
-  const votesCount = useMemo(() => new Set(intrusVotes.map((v) => v.voter_player_id)).size, [intrusVotes]);
+  const votesCount = useMemo(() => {
+    const voters = new Set(intrusVotes.map((v) => v.voter_player_id));
+    if (optimisticVoteTargetId) voters.add(me.id);
+    return voters.size;
+  }, [intrusVotes, me.id, optimisticVoteTargetId]);
 
   const submitClue = useCallback(
     async (text: string) => {
@@ -66,7 +75,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
           .update({ intrus_game_state: nextState })
           .eq("id", room.id);
         if (error) throw error;
-        await refresh();
+        await refresh("room");
       } finally {
         setSubmittingClue(false);
       }
@@ -85,7 +94,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
         .update({ intrus_game_state: nextState })
         .eq("id", room.id);
       if (error) throw error;
-      await refresh();
+      await refresh("room");
     } finally {
       setSubmittingClue(false);
     }
@@ -111,12 +120,12 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
             { onConflict: "room_id,game_type,question_id,voter_player_id" }
           );
         if (error) throw error;
-        await refresh();
+        setOptimisticVoteTargetId(targetId);
       } finally {
         setSubmittingVote(false);
       }
     },
-    [intrusState, submittingVote, me.id, room.id, refresh]
+    [intrusState, submittingVote, me.id, room.id]
   );
 
   const submitFinale = useCallback(
@@ -139,7 +148,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
           .update({ intrus_game_state: nextState })
           .eq("id", room.id);
         if (error) throw error;
-        await refresh();
+        await refresh("room");
       } finally {
         setSubmittingFinale(false);
       }
@@ -186,7 +195,7 @@ export function IntrusPlayFlow({ room, participants, me, votes, refresh }: Intru
           participants={participants}
           me={me}
           isTv={false}
-          myVoteTargetId={myVote?.selected_player_id ?? null}
+          myVoteTargetId={optimisticVoteTargetId ?? myVote?.selected_player_id ?? null}
           onPickVote={pickVote}
           submittingVote={submittingVote}
           votesCount={votesCount}

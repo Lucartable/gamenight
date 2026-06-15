@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Profile, UserRole } from "@/types/database";
 import { getSupabase } from "./supabase";
+import { PROFILE_SELECT } from "./supabasePayload";
 
 interface UseProfileState {
   userId: string | null;
@@ -36,7 +37,7 @@ export function useProfile(): UseProfileState {
       setProfile(null);
       return;
     }
-    const { data } = await supabase.from("profiles").select("*").eq("id", nextUserId).maybeSingle();
+    const { data } = await supabase.from("profiles").select(PROFILE_SELECT).eq("id", nextUserId).maybeSingle();
     setProfile((data as Profile | null) ?? null);
   }, []);
 

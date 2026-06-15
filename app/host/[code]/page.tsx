@@ -171,8 +171,16 @@ export default function HostPage() {
   const router = useRouter();
   const { room, players, votes, ratings, customQuestions, askedQuestions, loading, error, refresh } = useRoom(code);
   const profileState = useProfile();
-  const { savedQuestions, refresh: refreshSavedQuestions } = useSavedQuestions(room?.game_type, profileState.canManageQuestions);
-  const { packs, packItems, questionIndex } = useQuestionPacks(profileState.canManageQuestions);
+  const questionSourceSettings = useMemo(
+    () => getQuestionSourceSettings(room?.question_source_settings),
+    [room?.question_source_settings]
+  );
+  const shouldLoadPacks =
+    profileState.canManageQuestions && Boolean(room) && (room?.status === "lobby" || questionSourceSettings.usePackQuestions);
+  const shouldLoadSavedQuestions =
+    profileState.canManageQuestions && (questionSourceSettings.useSavedQuestions || questionSourceSettings.usePackQuestions);
+  const { savedQuestions, refresh: refreshSavedQuestions } = useSavedQuestions(room?.game_type, shouldLoadSavedQuestions);
+  const { packs, packItems, questionIndex } = useQuestionPacks(shouldLoadPacks);
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -259,10 +267,6 @@ export default function HostPage() {
   }, [gameType]);
 
   const gameDefinition = getGameDefinition(gameType);
-  const questionSourceSettings = useMemo(
-    () => getQuestionSourceSettings(room?.question_source_settings),
-    [room?.question_source_settings]
-  );
   const selectedPackQuestions = useMemo(
     () =>
       getSelectedPackQuestions({
@@ -718,7 +722,7 @@ export default function HostPage() {
     setActionNotice(null);
     try {
       await action();
-      await refresh();
+      await refresh("room");
     } catch (err) {
       setActionError(describeError(err, "Erreur inconnue."));
     } finally {
@@ -735,7 +739,7 @@ export default function HostPage() {
     try {
       const { error } = await getSupabase().from("rooms").update(patch).eq("id", room.id);
       if (error) throw error;
-      await refresh();
+      await refresh("room");
     } catch (err) {
       setActionError(describeError(err, "Erreur de configuration."));
     } finally {
@@ -1735,7 +1739,6 @@ export default function HostPage() {
         { onConflict: "room_id,game_type,question_id,voter_player_id" }
       );
       if (error) throw error;
-      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur de vote.");
       setOptimisticHostVote(null);
@@ -1766,7 +1769,6 @@ export default function HostPage() {
         { onConflict: "room_id,question_id,voter_player_id" }
       );
       if (error) throw error;
-      await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur de note.");
       setOptimisticHostRating(null);
@@ -1840,7 +1842,7 @@ export default function HostPage() {
       setHostQuestionOptions("");
       setHostMimeQuestionMin(hostQuestionAllowedMimeRange.min);
       setHostMimeQuestionMax(hostQuestionAllowedMimeRange.min);
-      await refresh();
+      await refresh("custom_questions");
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
     } finally {
@@ -1907,7 +1909,7 @@ export default function HostPage() {
           ? "Questions joueurs vidées dans cette room. La bibliothèque n'a pas été modifiée."
           : "Questions joueurs déjà jouées supprimées. Les questions restantes restent dans le mix.",
       );
-      await refresh();
+      await refresh(["custom_questions", "room"]);
     } catch (err) {
       setActionError(describeError(err, "Impossible de vider les questions joueurs."));
     } finally {
@@ -2551,7 +2553,6 @@ export default function HostPage() {
           isTv={tvMode}
           busy={busy}
           runTransition={runTransition}
-          refresh={refresh}
           onBackToLobby={() => void resetToLobby()}
           onChangeGame={() => void returnToGameSelection()}
           onEndGame={requestEndSession}

@@ -44,7 +44,6 @@ interface IntrusHostFlowProps {
   isTv: boolean;
   busy: boolean;
   runTransition: (action: () => Promise<void>) => Promise<void>;
-  refresh: () => Promise<void>;
   onBackToLobby: () => void;
   onChangeGame: () => void;
   onEndGame: () => void;
@@ -59,7 +58,6 @@ export function IntrusHostFlow({
   isTv,
   busy,
   runTransition,
-  refresh,
   onBackToLobby,
   onChangeGame,
   onEndGame,
@@ -131,7 +129,6 @@ export function IntrusHostFlow({
       .update({ intrus_game_state: nextState })
       .eq("id", room.id);
     if (error) throw error;
-    await refresh();
   }
 
   async function startGame() {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "./supabase";
 import type { GameType, QuestionPack, QuestionPackItem, SavedCustomQuestion } from "@/types/database";
+import { QUESTION_PACK_ITEM_SELECT, QUESTION_PACK_SELECT, logSupabasePayload } from "./supabasePayload";
 
 export interface PackQuestionIndexItem {
   id: string;
@@ -27,11 +28,14 @@ export function useQuestionPacks(enabled: boolean) {
     try {
       const supabase = getSupabase();
       const [packsResult, itemsResult, questionsResult] = await Promise.all([
-        supabase.from("question_packs").select("*").order("created_at", { ascending: false }),
-        supabase.from("question_pack_items").select("*"),
+        supabase.from("question_packs").select(QUESTION_PACK_SELECT).order("created_at", { ascending: false }),
+        supabase.from("question_pack_items").select(QUESTION_PACK_ITEM_SELECT),
         supabase.from("saved_custom_questions").select("id, game_type"),
       ]);
 
+      logSupabasePayload("useQuestionPacks.question_packs", packsResult.data);
+      logSupabasePayload("useQuestionPacks.question_pack_items", itemsResult.data);
+      logSupabasePayload("useQuestionPacks.saved_question_index", questionsResult.data);
       setPacks((packsResult.data as QuestionPack[] | null) ?? []);
       setPackItems((itemsResult.data as QuestionPackItem[] | null) ?? []);
       setQuestionIndex((questionsResult.data as PackQuestionIndexItem[] | null) ?? []);
@@ -68,4 +72,3 @@ export function getSelectedPackQuestions({
   );
   return savedQuestions.filter((question) => questionIds.has(question.id));
 }
-

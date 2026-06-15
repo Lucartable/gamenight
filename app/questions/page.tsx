@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { AdminStatusBar } from "@/components/adminStatus";
 import { Button, Card, Chip, Input, Section } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase";
+import { QUESTION_PACK_ITEM_SELECT, QUESTION_PACK_SELECT, logSupabasePayload } from "@/lib/supabasePayload";
 import { useProfile } from "@/lib/useProfile";
 import { useSavedQuestions } from "@/lib/useSavedQuestions";
 import { generateLocalQuestionId } from "@/lib/questionPoolTransform";
@@ -79,9 +80,11 @@ export default function SavedQuestionsPage() {
   const refreshPacks = useCallback(async () => {
     const supabase = getSupabase();
     const [{ data: nextPacks }, { data: nextItems }] = await Promise.all([
-      supabase.from("question_packs").select("*").order("created_at", { ascending: false }),
-      supabase.from("question_pack_items").select("*"),
+      supabase.from("question_packs").select(QUESTION_PACK_SELECT).order("created_at", { ascending: false }),
+      supabase.from("question_pack_items").select(QUESTION_PACK_ITEM_SELECT),
     ]);
+    logSupabasePayload("questions.question_packs", nextPacks);
+    logSupabasePayload("questions.question_pack_items", nextItems);
     setPacks((nextPacks as QuestionPack[] | null) ?? []);
     setPackItems((nextItems as QuestionPackItem[] | null) ?? []);
   }, []);

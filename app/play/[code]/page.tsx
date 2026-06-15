@@ -347,7 +347,6 @@ export default function PlayerPage() {
         { onConflict: "room_id,game_type,question_id,voter_player_id" }
       );
       if (error) throw error;
-      await refresh();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur d'enregistrement du vote.");
       setOptimisticVote(null);
@@ -381,7 +380,6 @@ export default function PlayerPage() {
         { onConflict: "room_id,question_id,voter_player_id" }
       );
       if (error) throw error;
-      await refresh();
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur d'enregistrement de la note.");
       setOptimisticRating(null);
@@ -432,7 +430,7 @@ export default function PlayerPage() {
       setQuestionOptions("");
       setQuestionMimeMin(playerQuestionAllowedMimeRange.min);
       setQuestionMimeMax(playerQuestionAllowedMimeRange.min);
-      await refresh();
+      await refresh("custom_questions");
     } catch (err) {
       setVoteError(err instanceof Error ? err.message : "Erreur d'ajout de question.");
     } finally {
